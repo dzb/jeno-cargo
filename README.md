@@ -81,7 +81,7 @@ mjm init                      # skeleton mjm.toml
 mjm add "org.slf4j:slf4j-api" 2.0.18
 mjm lock                      # resolve, download into ~/.mjm/store, pin sha256
 mjm build                     # javac against declared deps only
-mjm test                      # forked JVM: @MjTest + JUnit Jupiter
+mjm test                      # forked JVM: @MjmTest + JUnit Jupiter
 mjm run com.example.App
 ```
 
@@ -243,7 +243,7 @@ the next invocation.
 | `add` / `remove` | edit a declaration and re-lock |
 | `lock` | resolve, download, pin |
 | `build` | compile against declared deps only |
-| `test` | forked JVM: `@MjTest` + JUnit Jupiter |
+| `test` | forked JVM: `@MjmTest` + JUnit Jupiter |
 | `run` | run on the resolved closure |
 | `tree` / `why` | see the graph and every introduction path |
 | `info [--source]` | everything about one dependency, including its source |
@@ -251,6 +251,7 @@ the next invocation.
 | `bundle` | an installable distribution (bin + lib + setup.sh + tar.gz) |
 | `publish [gh:… \| gitee:…]` | the release triple, with native upload |
 | `update` / `upgrade` | self-upgrade from GitHub Releases |
+| `--offline` (flag) | refuse all network access — store hits only (`lock`, `build`, `test`, …) |
 
 ## Design notes
 

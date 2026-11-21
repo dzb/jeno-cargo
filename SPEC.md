@@ -44,6 +44,22 @@ string-array  = "[" ws basic-string *( "," ws basic-string ) [","] ws "]"
 
 ---
 
+## 1.5 全局旗标
+
+### `--offline`
+
+**禁止本次运行的一切网络访问。** store 里已有的内容照常使用（会话缓存 → 持久索引 → 字节校验）；缺任何东西即失败，错误消息报出缺失的 URL，并说明如何填充。
+
+不是"优先本地"：没有回退到网络的降级路径。让旗标有时说谎比没有旗标更糟。
+
+每个 store 访问都经过同一个判定点（`ArtifactStore.ensure`），所以 `lock` / `build` / `test` / `info --source` 都自动遵守。
+
+**不适用的命令**：`update`、`publish` —— 它们的存在就是联网操作。传入 `--offline` 报用法错误（退出码 2），而不是假装接受。
+
+**为什么可行**：store 有持久化的 URL → digest 索引（`store/index/<sha256(url)>.url`）。没有它，索引未命中会是常态（每个 pom 都被当作"没见过"），`--offline` 必然失败。
+
+---
+
 ## 2. mjm.toml
 
 ### 2.1 节与字段(closed schema)

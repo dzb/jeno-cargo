@@ -60,15 +60,43 @@ public final class ArtifactStore {
 
     private final Path root;
     private final Path locks;
+    /**
+     * URL → digest, persisted: without it every fresh process re-downloads
+     * every pom even when the bytes are already on disk.
+     */
+    private final UrlIndex index;
     private final HttpClient http = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
     /** The digests of everything this session downloaded — the lockfile's source of truth. */
     private final Map<String, String> digestByUrl = new ConcurrentHashMap<>();
 
+    /**
+     * When true, {@link #ensure} answers from the store or fails — it never
+     * touches the network. Set once per process by the CLI ({@code --offline}),
+     * because "may this run reach the network" is a property of the run, not of
+     * one store instance.
+     *
+     * <p>Offline is not "prefer local": a miss is an error naming what is
+     * missing. A silent fallback to the network would make the flag a lie, and
+     * a silent downgrade to a partial build would be worse.
+     */
+    private static volatile boolean offline;
+
+    /** Puts the whole process in offline mode. Called once, from the entry point. */
+    public static void goOffline() {
+        offline = true;
+    }
+
+    /** Whether this process refuses network access. */
+    public static boolean isOffline() {
+        return offline;
+    }
+
     public ArtifactStore(Path root) {
         this.root = root.toAbsolutePath().normalize();
         this.locks = this.root.resolve("locks");
+        this.index = new UrlIndex(this.root);
         try {
             Files.createDirectories(this.locks);
         } catch (IOException e) {
@@ -94,9 +122,22 @@ public final class ArtifactStore {
                 return cached;  // this session already fetched this URL
             }
         }
+        // The durable index answers the same question across processes. A hit
+        // means the bytes are on disk AND we know what they hashed to — no
+        // network, no re-hash.
+        String indexed = index.lookup(url, kind.extension(), root);
+        if (indexed != null) {
+            digestByUrl.put(url, indexed);
+            return root.resolve(indexed + "." + kind.extension());
+        }
+        if (offline) {
+            throw new StoreException(url + " is not in the store and --offline forbids "
+                    + "fetching it — run mjm lock without --offline once to fill the store");
+        }
         byte[] bytes = fetch(url);
         String sha = sha256(bytes);
         digestByUrl.put(url, sha);
+        index.record(url, sha);
         Path target = root.resolve(sha + "." + kind.extension());
         if (Files.exists(target)) {
             return target;  // content-addressed: same digest, same bytes, already stored
