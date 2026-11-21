@@ -124,8 +124,18 @@ key = 坐标,value 形态决定物种:
 **[scripts]**
 
 - key = 任务名,value = 命令字符串
-- 执行方式:经系统 shell(`sh -c` / `cmd /c`),与 npm scripts 一致
+- 执行方式:经系统 shell(`sh -c`),工作目录 = 项目根,与 npm scripts 一致
 - `mj run <script-name>` 优先于 `<main-class>`:先查 [scripts],命中则执行脚本;未命中才走 java 主类路径
+- **注入环境变量**(脚本据此启动项目,无需自己拼 classpath):
+
+  | 变量 | 值 |
+  |---|---|
+  | `MJ_CLASSPATH` | `target/classes` + 闭包中所有 MAIN jar,path-separator 连接。缺 build 产物或 mj.lock 时不设置(脚本仍运行) |
+  | `MJ_HOME` | 项目根目录的绝对路径 |
+
+  例:`launch = "java -cp \"$MJ_CLASSPATH\" com.example.Main"`
+- **额外参数**以位置参数传入:`mj run task a b` → `sh -c "<command>" task a b`,命令里用 `"$1"` `"$2"` 取值(第一个操作数是 shell 的 `$0`,被脚本名占位)
+- 脚本退出码即 `mj run` 的退出码
 
 **[build]**
 

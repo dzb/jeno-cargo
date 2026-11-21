@@ -1,6 +1,5 @@
 package com.jujin.mj.cli;
 
-import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.mj.project.MjProject;
 import com.jujin.mj.project.ProjectReader;
 import com.jujin.mj.store.ArtifactStore;
@@ -12,12 +11,28 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
- * {@code mj run &lt;main-class&gt; [args...]}: runs the program on the full
- * resolved closure plus {@code target/classes} — the runtime side of strict
+ * {@code mj run &lt;main-class&gt; [args...]} — runs the program on the full
+ * resolved closure plus {@code target/classes}: the runtime side of strict
  * visibility (every transitively allowed jar is here, nothing more).
+ *
+ * <p>{@code mj run <script-name>} runs a {@code [scripts]} entry through the
+ * system shell instead. A script inherits the same computed classpath as
+ * environment variables, so it can launch the project without rebuilding it
+ * by hand:
+ *
+ * <pre>
+ *   MJ_CLASSPATH   target/classes + every MAIN jar, path-separator joined
+ *   MJ_HOME        the project directory
+ * </pre>
+ *
+ * <p>Extra arguments after the script name arrive as {@code $1}, {@code $2}…
+ * (the shell's {@code $0} is the script name), so a script reads them with
+ * {@code "$@"} as usual.
  */
 public final class RunCommand implements Command {
 
@@ -38,7 +53,8 @@ public final class RunCommand implements Command {
 
     @Override
     public String summary() {
-        return "run a main class on the resolved closure: mj run <main-class> [args...]";
+        return "run a main class on the resolved closure: mj run <main-class> [args...]"
+                + " (a [scripts] name runs that script instead)";
     }
 
     @Override
@@ -63,45 +79,76 @@ public final class RunCommand implements Command {
         // ergonomic entry point, the main class is the mechanical one.
         String scriptCommand = project.scripts().get(target);
         if (scriptCommand != null) {
-            List<String> scriptArgs = new ArrayList<>();
-            scriptArgs.add("sh");
-            scriptArgs.add("-c");
-            scriptArgs.add(scriptCommand);
-            for (String arg : rest) {
-                scriptArgs.add(arg);
-            }
-            Process process;
-            try {
-                process = new ProcessBuilder(scriptArgs).inheritIO().start();
-            } catch (IOException e) {
-                System.err.println("mj: cannot run script '" + target + "'");
-                return 1;
-            }
-            try {
-                return process.waitFor();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return 1;
-            }
+            return runScript(target, scriptCommand, rest);
         }
 
+        List<String> classpath;
+        try {
+            classpath = classpath();
+        } catch (RuntimeException e) {
+            System.err.println("mj: " + e.getMessage());
+            return 1;
+        }
+
+        List<String> command = new ArrayList<>();
+        command.add("java");
+        command.add("-cp");
+        command.add(String.join(File.pathSeparator, classpath));
+        command.addAll(args);
+        return exec(command, null, "mj run");
+    }
+
+    // ------------------------------------------------------------------
+    // [scripts]
+    // ------------------------------------------------------------------
+
+    private int runScript(String name, String scriptCommand, List<String> rest) {
+        // The classpath is handed to the script rather than imposed on it: a
+        // script may launch java itself, run a test tool, or ignore this
+        // entirely. Absent a lockfile or build output the variables are simply
+        // not set — a script that does not need them still runs.
+        Map<String, String> environment = new LinkedHashMap<>();
+        environment.put("MJ_HOME", projectDir.toAbsolutePath().toString());
+        try {
+            List<String> classpath = classpath();
+            environment.put("MJ_CLASSPATH", String.join(File.pathSeparator, classpath));
+        } catch (RuntimeException e) {
+            System.err.println("mj: running '" + name + "' without MJ_CLASSPATH — " + e.getMessage());
+        }
+
+        List<String> command = new ArrayList<>();
+        command.add("sh");
+        command.add("-c");
+        command.add(scriptCommand);
+        // sh -c <command> <$0> <$1>…: the shell takes the first operand as $0,
+        // so a placeholder keeps the caller's arguments at $1 and beyond.
+        command.add(name);
+        command.addAll(rest);
+        return exec(command, environment, "mj run script '" + name + "'");
+    }
+
+    // ------------------------------------------------------------------
+    // classpath
+    // ------------------------------------------------------------------
+
+    /**
+     * {@code target/classes} followed by every MAIN jar in the closure.
+     * Throws with a next action when the build or the lockfile is missing.
+     */
+    private List<String> classpath() {
         Path output = projectDir.resolve(OUTPUT);
         if (!Files.isDirectory(output)) {
-            System.err.println("mj: " + output + " is missing — run mj build first");
-            return 1;
+            throw new IllegalStateException(output + " is missing — run mj build first");
         }
-
         Path lock = projectDir.resolve("mj.lock");
         if (!Files.exists(lock)) {
-            System.err.println("mj: no mj.lock in " + projectDir + " — run mj lock first");
-            return 1;
+            throw new IllegalStateException("no mj.lock in " + projectDir + " — run mj lock first");
         }
         List<LockedArtifact> locked;
         try {
             locked = LockFileReader.read(Files.readString(lock));
         } catch (IOException e) {
-            System.err.println("mj: cannot read mj.lock");
-            return 1;
+            throw new IllegalStateException("cannot read mj.lock", e);
         }
 
         List<String> classpath = new ArrayList<>();
@@ -112,28 +159,29 @@ public final class RunCommand implements Command {
             }
             Path jar = store.findByDigest(artifact.sha256(), ArtifactStore.Kind.JAR);
             if (jar == null) {
-                System.err.println("mj: " + artifact.id() + "@" + artifact.version()
+                throw new IllegalStateException(artifact.id() + "@" + artifact.version()
                         + " is not in the store — run mj lock");
-                return 1;
             }
             classpath.add(jar.toString());
         }
+        return classpath;
+    }
 
-        List<String> command = new ArrayList<>();
-        command.add("java");
-        command.add("-cp");
-        command.add(String.join(File.pathSeparator, classpath));
-        command.addAll(args);
-
-        Process process;
-        try {
-            process = new ProcessBuilder(command).inheritIO().start();
-        } catch (IOException e) {
-            System.err.println("mj: cannot run java — is a JDK on the PATH?");
-            return 1;
+    private int exec(List<String> command, Map<String, String> environment,
+                     String what) {
+        // a script runs from the project root: relative paths in a script mean
+        // the project, exactly as they do when the user runs mj from there
+        ProcessBuilder builder = new ProcessBuilder(command)
+                .directory(projectDir.toFile())
+                .inheritIO();
+        if (environment != null) {
+            builder.environment().putAll(environment);
         }
         try {
-            return process.waitFor();
+            return builder.start().waitFor();
+        } catch (IOException e) {
+            System.err.println("mj: cannot " + what + " — is a shell/Java on the PATH?");
+            return 1;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return 1;
