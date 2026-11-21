@@ -38,7 +38,7 @@ source = "local:vendor"
 url = "file:///home/dzb/Projects/mj/vendor/org/junit/platform/junit-platform-commons/6.1.3/junit-platform-commons-6.1.3.jar"
 sha256 = "a4774ae923c109544034aeae7c762cf017fbcdd1342403ba90e0921984b608c3"
 meta-sha256 = "f6283fc248d9db9af984c1cc48318d957657fcadaf1eb23652c4f64f5b7741bc"
-depth = 3
+depth = 1
 [[artifacts]]
 id = "org.junit.platform:junit-platform-engine"
 version = "6.1.3"
@@ -46,7 +46,7 @@ source = "local:vendor"
 url = "file:///home/dzb/Projects/mj/vendor/org/junit/platform/junit-platform-engine/6.1.3/junit-platform-engine-6.1.3.jar"
 sha256 = "21ad7ad3a35beda16387979317be1833a72a71d812f9a66ee4b9a7bafb56334c"
 meta-sha256 = "f7e1fbf27a976c01afd707d4e3ca8958f376f943331dda112ceddafcba134787"
-depth = 2
+depth = 1
 [[artifacts]]
 id = "org.junit.platform:junit-platform-launcher"
 version = "6.1.3"
@@ -62,7 +62,7 @@ source = "local:vendor"
 url = "file:///home/dzb/Projects/mj/vendor/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar"
 sha256 = "48e2df636cab6563ced64dcdff8abb2355627cb236ef0bf37598682ddf742f1b"
 meta-sha256 = "08f620dee4d9847641c2b7bc06a3f097d24579819d0f2f7c0cc41cbdf7c5a205"
-depth = 3
+depth = 2
 [[artifacts]]
 id = "org.slf4j:slf4j-api"
 version = "2.0.18"
