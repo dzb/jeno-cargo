@@ -21,6 +21,8 @@ import java.util.stream.Stream;
  * The same install mechanism as the one-liner, so the upgrade is atomic
  * (fresh install to $HOME/.mj/, launcher regenerated, old version replaced).
  *
+ * <p>{@code mj upgrade} is an alias — both verbs dispatch here.
+ *
  * <p>The running process cannot replace its own jar — the upgrade takes
  * effect on the next {@code mj} invocation. This is standard behavior
  * (same as rustup, gh, npm -g).
@@ -42,6 +44,11 @@ public final class UpdateCommand implements Command {
     @Override
     public String name() {
         return "update";
+    }
+
+    @Override
+    public String[] aliases() {
+        return new String[]{"upgrade"};
     }
 
     @Override

@@ -17,6 +17,9 @@ public final class CommandRunner {
         this.commands = List.copyOf(commands);
         for (Command command : commands) {
             byName.put(command.name(), command);
+            for (String alias : command.aliases()) {
+                byName.put(alias, command);
+            }
         }
     }
 
@@ -35,7 +38,10 @@ public final class CommandRunner {
     private int usage() {
         System.out.println("usage: mj <command> [args]");
         for (Command command : commands) {
-            System.out.println("  " + command.name() + "  " + command.summary());
+            String[] aliases = command.aliases();
+            String note = aliases.length == 0 ? ""
+                    : "  (alias: " + String.join(", ", aliases) + ")";
+            System.out.println("  " + command.name() + "  " + command.summary() + note);
         }
         return 2;
     }
