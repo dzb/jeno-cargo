@@ -69,18 +69,9 @@ public final class DistCommand implements Command {
             exit 1
         fi
 
-        TOOLCHAIN_CP=""
-        if [ -d "$MJ_HOME/lib/toolchain" ]; then
-            for jar_dir in "$MJ_HOME/lib/toolchain"/*/; do
-                for jar_file in "$jar_dir"*.jar; do
-                    if [ -f "$jar_file" ]; then
-                        TOOLCHAIN_CP="$TOOLCHAIN_CP:$jar_file"
-                    fi
-                done
-            done
-        fi
-
-        exec "$JAVA" -cp "$MJ_HOME/lib/*:$TOOLCHAIN_CP" %s "$@"
+        # lib/ holds one jar — mj and its skeleton merged. The lifecycle
+        # toolchain under lib/toolchain/ is loaded only by the forked test JVM.
+        exec "$JAVA" -cp "$MJ_HOME/lib/*" %s "$@"
         """;
 
     private static final String SETUP_TEMPLATE = """
@@ -195,22 +186,45 @@ public final class DistCommand implements Command {
             Files.createDirectories(bin);
             Files.createDirectories(lib);
 
-            // the project jar — with the Java-conventional manifest entries
-            if (jar(projectDir.resolve(CLASSES),
-                    lib.resolve(name + "-" + version + ".jar"),
-                    name, version, project.main()) != 0) {
-                System.err.println("mj: cannot jar the build output");
+            // the project as ONE jar: its own classes plus the runtime closure
+            // (freeway, slf4j) merged in. They are mj's skeleton, not swappable
+            // dependencies — a user never picks a different freeway-ioc. The
+            // lifecycle toolchain (junit) is separate: only `mj test` needs it.
+            Map<String, Path> mainJars = UberJar.mainJars(locked, jars);
+            List<Path> toolchainJars = toolchainJars(locked, jars);
+            // the skeleton alone merges; test-only jars go to lib/toolchain
+            List<Path> mergeJars = new ArrayList<>();
+            for (Map.Entry<String, Path> entry : mainJars.entrySet()) {
+                if (!isTestOnly(entry.getKey())) {
+                    mergeJars.add(entry.getValue());
+                }
+            }
+            try {
+                UberJar.write(lib.resolve(name + "-" + version + ".jar"),
+                        new UberJar.Input(projectDir.resolve(CLASSES), mergeJars,
+                                UberJar.labels(locked)),
+                        new UberJar.Header(name, version,
+                                project.main() == null || project.main().isBlank()
+                                        ? null : project.main()));
+            } catch (IOException e) {
+                System.err.println("mj: cannot assemble " + name + ".jar: " + e.getMessage());
                 return 1;
             }
 
-            // the runtime closure — MAIN only; [dev-deps] is not a runtime fact
-            for (LockedArtifact artifact : locked) {
-                if (!artifact.isMain()) {
-                    continue;
+            // the lifecycle toolchain — shipped apart, loaded only by mj test
+            if (!toolchainJars.isEmpty()) {
+                Path toolchainDir = lib.resolve("toolchain");
+                Files.createDirectories(toolchainDir);
+                for (LockedArtifact artifact : locked) {
+                    if (!isTestOnly(artifact.id())) {
+                        continue;
+                    }
+                    Path jar = jars.get(artifact.id());
+                    if (jar != null) {
+                        Files.copy(jar, toolchainDir.resolve(originalName(artifact)),
+                                StandardCopyOption.REPLACE_EXISTING);
+                    }
                 }
-                Path jar = jars.get(artifact.id());
-                String fileName = originalName(artifact);
-                Files.copy(jar, lib.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
             }
 
             // the launcher — main class from [project].main
@@ -323,11 +337,43 @@ public final class DistCommand implements Command {
         }
     }
 
+    /**
+     * The lifecycle toolchain: the jars {@code mj test} injects when the
+     * closure does not already declare them (junit and its platform deps).
+     * They ship in {@code lib/toolchain/} instead of the uber-jar because they
+     * are not part of the running program — a production run never loads one.
+     *
+     * <p>Recognized by group: {@code org.junit.*} and {@code org.opentest4j}.
+     * Anything else in the closure is skeleton and merges into the jar.
+     */
+    private static List<Path> toolchainJars(List<LockedArtifact> locked,
+                                            Map<String, Path> jars) {
+        List<Path> toolchain = new ArrayList<>();
+        for (LockedArtifact artifact : locked) {
+            if (isTestOnly(artifact.id())) {
+                Path jar = jars.get(artifact.id());
+                if (jar != null) {
+                    toolchain.add(jar);
+                }
+            }
+        }
+        return toolchain;
+    }
+
+    /** Jars that exist only to run tests — the lifecycle toolchain. */
+    private static boolean isTestOnly(String id) {
+        return id.startsWith("org.junit.") || id.startsWith("org.opentest4j:");
+    }
+
+    /**
+     * A readable file name for a locked artifact — {@code artifact-version.jar}
+     * derived from the coordinate, not from the URL: store URLs are
+     * content-addressed ({@code <sha256>.jar}) and would ship unreadable names.
+     */
     private static String originalName(LockedArtifact artifact) {
-        String url = artifact.url();
-        String name = url.substring(url.lastIndexOf('/') + 1);
-        return name.isBlank() || !name.contains(".")
-                ? artifact.sha256().substring(0, 12) + ".jar"
-                : name;
+        String id = artifact.id();
+        int colon = id.indexOf(':');
+        String artifactPart = colon < 0 ? id : id.substring(colon + 1);
+        return artifactPart + "-" + artifact.version() + ".jar";
     }
 }
