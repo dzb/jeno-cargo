@@ -14,7 +14,7 @@ import java.util.List;
  *
  * <pre>
  *   mj init                    skeleton mj.toml for the current directory
- *   mj init --from-pom         translate ./pom.xml into mj.toml (reviewed, not
+ *   mj init --pom         translate ./pom.xml into mj.toml (reviewed, not
  *                              imported: every unrepresentable fact is printed)
  * </pre>
  *
@@ -38,16 +38,16 @@ public final class InitCommand implements Command {
 
     @Override
     public String summary() {
-        return "create mj.toml — a skeleton, or --from-pom to migrate a Maven project";
+        return "create mj.toml — a skeleton, or --pom to migrate a Maven project";
     }
 
     @Override
     public int execute(List<String> args) {
-        boolean fromPom = false;
+        boolean migratePom = false;
         boolean force = false;
         for (String arg : args) {
             switch (arg) {
-                case "--from-pom" -> fromPom = true;
+                case "--pom" -> migratePom = true;
                 case "--force" -> force = true;
                 default -> {
                     System.err.println("mj: unknown init option '" + arg + "'");
@@ -63,7 +63,7 @@ public final class InitCommand implements Command {
         }
 
         String toml;
-        if (fromPom) {
+        if (migratePom) {
             Path pom = projectDir.resolve("pom.xml");
             if (!Files.exists(pom)) {
                 System.err.println("mj: no pom.xml in " + projectDir + " to migrate");
@@ -103,7 +103,7 @@ public final class InitCommand implements Command {
         }
 
         System.out.println("created " + target
-                + (fromPom ? " (migrated from pom.xml)" : ""));
+                + (migratePom ? " (migrated from pom.xml)" : ""));
         System.out.println("next: mj add \"group:artifact\" <version>   then   mj lock");
         return 0;
     }

@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * {@code pom.xml} → {@code mj.toml} migration (the {@code mj init --from-pom}
+ * {@code pom.xml} → {@code mj.toml} migration (the {@code mj init --pom}
  * path). This is a translation, not an import: the output is a hand-editable
  * mj.toml a human reviews before the first {@code mj lock}, and anything that
  * has no mj equivalent is reported instead of silently dropped.
