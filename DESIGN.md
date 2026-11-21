@@ -331,8 +331,8 @@ FlowException 快速终止。`--skip-test` 关测试门;`--publish gh:owner/repo
 | `mj build` | ✅ | javac 编译(严格可见性 classpath —— 只含 MAIN 声明);`src/main/resources` 拷入产物 |
 | `mj run <main>` / scripts | ✅ | runtime classpath 运行(排除 dev) |
 | `mj test` | ✅ | fork JVM runner:`@MjTest` + JUnit Platform;classpath 含 MAIN + dev |
-| `mj package` | ✅ | 纯 jar;`--uber` 合并闭包(排除 dev) |
-| `mj dist` | ✅ | 发行目录 + setup.sh + tar.gz |
+| `mj package` | ✅ | 纯 jar;`--uber` 合并闭包(排除 dev);输出 `dist/` |
+| `mj dist` | ✅ | 发行目录 + setup.sh + tar.gz,输出 `dist/` |
 | `mj publish` | ✅ | 三件套(dist/)+ `gh:`/`gitee:` 原生上传;描述符只含 MAIN 依赖 |
 | `mj update` / `mj upgrade` | ✅ | 自升级(alias 同一实现) |
 | `mj release` | ✅ | 生命周期 = freeway-flow 图 |

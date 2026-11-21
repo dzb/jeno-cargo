@@ -60,7 +60,7 @@ java -cp "target/classes:$VJARS" com.jujin.mj.cli.Mj lock
 java -cp "target/classes:$VJARS" com.jujin.mj.cli.Mj build
 java -cp "target/classes:$VJARS" com.jujin.mj.cli.Mj test
 java -cp "target/classes:$VJARS" com.jujin.mj.cli.Mj dist
-gh release create v{ver} target/mj-bin-{ver}.tar.gz --title "mj v{ver}" --notes "…"
+gh release create v{ver} dist/mj-bin-{ver}.tar.gz --title "mj v{ver}" --notes "…"
 ```
 
 修好链条后,下一版回归正常自举(跑一次 `mj update` 让本机也回到链条上)。

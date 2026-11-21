@@ -46,7 +46,7 @@ class ReleaseFlowTest {
 
         assertEquals(0, exit, "the whole lifecycle exits zero");
         assertTrue(Files.exists(dir.resolve("target/test-classes")), "the test stage ran");
-        assertTrue(Files.exists(dir.resolve("target/demo-0.1.0.tar.gz")), "the dist stage ran");
+        assertTrue(Files.exists(dir.resolve("dist/demo-0.1.0.tar.gz")), "the dist stage ran");
     }
 
     @Test
@@ -58,7 +58,7 @@ class ReleaseFlowTest {
         assertEquals(0, exit, "release without tests exits zero");
         assertFalse(Files.exists(dir.resolve("target/test-classes")),
                 "the test gate stayed closed");
-        assertTrue(Files.exists(dir.resolve("target/demo-0.1.0.tar.gz")),
+        assertTrue(Files.exists(dir.resolve("dist/demo-0.1.0.tar.gz")),
                 "the dist stage still ran");
     }
 
@@ -72,7 +72,7 @@ class ReleaseFlowTest {
         }
 
         assertEquals(1, exit, "a failing test fails the release");
-        assertFalse(Files.exists(dir.resolve("target/demo-0.1.0.tar.gz")),
+        assertFalse(Files.exists(dir.resolve("dist/demo-0.1.0.tar.gz")),
                 "dist is never assembled from untested code");
     }
 

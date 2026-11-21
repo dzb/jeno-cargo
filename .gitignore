@@ -1,5 +1,8 @@
-# build output
+# build output — disposable intermediates
 target/
+
+# deliverables — dist directories, jars, tar.gz, publish triples
+dist/
 
 # IDE
 .idea/

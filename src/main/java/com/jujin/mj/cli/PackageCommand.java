@@ -32,7 +32,10 @@ import java.util.stream.Stream;
  *       services combined, signatures dropped. One file, easy to share.</li>
  * </ul>
  *
- * <p>Both write to {@code target/}. The dist directory additionally produces
+ * <p>Both write to {@code dist/} — the one directory that holds
+ * deliverables. {@code target/} keeps only disposable build intermediates
+ * ({@code classes}, {@code test-classes}), so {@code rm -rf target} stays the
+ * safe, familiar gesture. The dist directory additionally produces
  * a tar.gz (the release artifact) and a setup.sh (self-installing).
  */
 public final class PackageCommand implements Command {
@@ -123,7 +126,7 @@ public final class PackageCommand implements Command {
     private int plainJar(MjProject project, String mainClass) {
         String name = project.name();
         String version = project.version();
-        Path output = projectDir.resolve("target/" + name + "-" + version + ".jar");
+        Path output = projectDir.resolve("dist/" + name + "-" + version + ".jar");
         Path classes = projectDir.resolve(CLASSES);
 
         if (!Files.isDirectory(classes)) {
@@ -170,7 +173,7 @@ public final class PackageCommand implements Command {
                         Map<String, Path> jars, String mainClass) {
         String name = project.name();
         String version = project.version();
-        Path output = projectDir.resolve("target/" + name + "-" + version + ".jar");
+        Path output = projectDir.resolve("dist/" + name + "-" + version + ".jar");
         Path classes = projectDir.resolve(CLASSES);
 
         if (!Files.isDirectory(classes)) {

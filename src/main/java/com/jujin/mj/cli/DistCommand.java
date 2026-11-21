@@ -28,12 +28,11 @@ import java.util.stream.Stream;
  * jar-by-jar.
  *
  * <pre>
- *   target/{name}-{version}/
+ *   dist/{name}-{version}/
  *   ├── bin/{name}             POSIX launcher (main class from mj.toml)
  *   ├── lib/
- *   │   ├── {name}-{version}.jar  the project jar
- *   │   ├── &lt;closure jars&gt;        sha-verified dependencies
- *   │   └── toolchain/            lifecycle toolchain (if any)
+ *   │   ├── {name}-{version}.jar  one jar: project + skeleton merged
+ *   │   └── toolchain/            lifecycle toolchain (test-only jars)
  *   ├── setup.sh               self-installing script
  *   └── SHA256SUMS             integrity manifest
  * </pre>
@@ -161,7 +160,7 @@ public final class DistCommand implements Command {
 
         String name = project.name();
         String version = project.version();
-        Path dist = projectDir.resolve("target/" + name + "-" + version);
+        Path dist = projectDir.resolve("dist/" + name + "-" + version);
         Path lib = dist.resolve("lib");
         Path bin = dist.resolve("bin");
 
@@ -259,7 +258,7 @@ public final class DistCommand implements Command {
             Files.writeString(dist.resolve("SHA256SUMS"), sums.toString());
 
             // tar.gz — the release artifact
-            Path tarGz = projectDir.resolve("target/" + name + "-" + version + ".tar.gz");
+            Path tarGz = projectDir.resolve("dist/" + name + "-" + version + ".tar.gz");
             Process tar = new ProcessBuilder("tar", "-czf", tarGz.toString(),
                     "-C", dist.getParent().toString(), dist.getFileName().toString())
                     .inheritIO().start();

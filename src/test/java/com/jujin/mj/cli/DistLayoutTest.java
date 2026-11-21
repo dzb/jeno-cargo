@@ -76,7 +76,7 @@ class DistLayoutTest {
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
         assertEquals(0, new DistCommand(store, dir).execute(List.of()));
 
-        Path lib = dir.resolve("target/demo-1.0.0/lib");
+        Path lib = dir.resolve("dist/demo-1.0.0/lib");
         List<Path> topLevel;
         try (var stream = Files.list(lib)) {
             topLevel = stream.toList();
@@ -114,7 +114,7 @@ class DistLayoutTest {
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
         assertEquals(0, new DistCommand(store, dir).execute(List.of()));
 
-        String launcher = Files.readString(dir.resolve("target/demo-1.0.0/bin/demo"));
+        String launcher = Files.readString(dir.resolve("dist/demo-1.0.0/bin/demo"));
         assertTrue(launcher.contains("-cp \"$MJ_HOME/lib/*\""),
                 "one classpath wildcard, no toolchain: " + launcher);
         String execLine = launcher.lines()
@@ -122,6 +122,44 @@ class DistLayoutTest {
                 .findFirst().orElseThrow();
         assertFalse(execLine.contains("toolchain"),
                 "the running program never needs the test toolchain: " + execLine);
+    }
+
+    @Test
+    void deliverablesLiveInDistNotTarget(@TempDir Path storeDir) throws Exception {
+        Files.createDirectories(dir.resolve("src/main/java/demo"));
+        Files.writeString(dir.resolve("mj.toml"), """
+            [project]
+            name = "demo"
+            version = "1.0.0"
+            """);
+        Files.writeString(dir.resolve("src/main/java/demo/App.java"),
+                "package demo; public final class App {}");
+        Files.writeString(dir.resolve("mj.lock"), "");
+
+        ArtifactStore store = new ArtifactStore(storeDir);
+        assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
+        assertEquals(0, new DistCommand(store, dir).execute(List.of()));
+        assertEquals(0, new PackageCommand(store, dir).execute(List.of("--uber")));
+
+        // the agreement: target/ is disposable intermediates only, so
+        // `rm -rf target` stays the safe, familiar gesture
+        assertTrue(Files.isDirectory(dir.resolve("target/classes")),
+                "compiled classes stay in target/");
+        try (var stream = Files.list(dir.resolve("target"))) {
+            for (Path entry : stream.toList()) {
+                String name = entry.getFileName().toString();
+                assertTrue(name.equals("classes") || name.equals("test-classes"),
+                        "target/ holds intermediates only, found: " + name);
+            }
+        }
+
+        // every deliverable is under dist/
+        assertTrue(Files.exists(dir.resolve("dist/demo-1.0.0.tar.gz")),
+                "the tool distribution archive is a deliverable");
+        assertTrue(Files.isDirectory(dir.resolve("dist/demo-1.0.0")),
+                "the tool distribution directory is a deliverable");
+        assertTrue(Files.exists(dir.resolve("dist/demo-1.0.0.jar")),
+                "the packaged jar is a deliverable");
     }
 
     // ------------------------------------------------------------------
