@@ -315,7 +315,7 @@ git tags。GITHUB_TOKEN 的推送不触发新 run(平台防环),bump commit 无�
 
 ## 8. 构建与命令面(草案)
 
-命令面(以 `mj` 的 usage 输出为准,12 个命令):
+命令面(以 `mj` 的 usage 输出为准):
 
 | 命令 | 状态 | 说明 |
 |---|---|---|
@@ -372,6 +372,10 @@ IoC 接缝(未来扩展点,不引入插件机制):
 ---
 
 ## 11. 里程碑
+
+> 本节是**历史快照**:每条记录该里程碑完成当天的事实,包括当时的测试数与产物大小。
+> 这些数字不随代码演进更新,它们的作用是让人能回溯"那一刻是什么样"。
+> 描述**当前**能力时不要引用这里的计数——当前状态看命令的 usage 输出与 CI。
 
 - **M1a** ✅ 完成(2026-11-21):freeway-commons `toml` 包(SPEC §1 文法,40 测试)+ boot 配置级联接入 `.toml`;freeway 全仓 7 模块测试绿
 - **M1b** ✅ 完成(2026-11-21):mj 骨架(groupId `com.jujin8.mj`,JDK 25,依赖 freeway-commons)+ pom 解码器(`Poms`/`PomXml`/模型,23 测试)——parent 链递归、属性插值 fixpoint(`${revision}` 支持)、DM/BOM 合并、依赖过滤(compile/runtime、非 optional)、子集拒绝(ranges/snapshots/打包类型/坐标不一致/循环父链/DOCTYPE)全部落地

@@ -1,6 +1,6 @@
 ## mj — modern java manager
 
-[![Version](https://img.shields.io/badge/version-0.1.4-blue)](https://github.com/dzb/mj-cargo/releases) [![JDK](https://img.shields.io/badge/JDK-25%2B-orange)](https://jdk.java.net/25/) ![runtime deps](https://img.shields.io/badge/runtime%20deps-0-brightgreen) ![tests](https://img.shields.io/badge/tests-145%20passing-brightgreen)
+[![Latest release](https://img.shields.io/github/v/release/dzb/mj-cargo?label=release)](https://github.com/dzb/mj-cargo/releases/latest) [![JDK](https://img.shields.io/badge/JDK-25%2B-orange)](https://jdk.java.net/25/) ![runtime deps](https://img.shields.io/badge/runtime%20deps-0-brightgreen)
 
 A package manager and build tool for Java, built to replace Maven for the
 Freeway ecosystem — and then to outgrow that role.
@@ -11,7 +11,7 @@ release before it. That is not a slogan; it is the only way mj is ever built.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dzb/mj-cargo/master/setup.sh | bash
-mj --version          # mj 0.1.4 — modern java manager
+mj --version          # mj <version> — modern java manager
 ```
 
 **Docs** · [DESIGN.md](DESIGN.md) (14 ADRs, every decision traceable) · [SPEC.md](SPEC.md) (closed schemas) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs)
@@ -192,10 +192,10 @@ the resource. No version string is hand-maintained in source.
 ## The distribution
 
 ```
-mj-0.1.4/
+mj-<version>/
 ├── bin/mj                       launcher
 ├── lib/
-│   ├── mj-0.1.4.jar             mj + freeway + slf4j, one uber-jar
+│   ├── mj-<version>.jar         mj + freeway + slf4j, one uber-jar
 │   └── toolchain/               junit — loaded only by the forked test JVM
 ├── setup.sh
 └── SHA256SUMS
@@ -251,9 +251,9 @@ make someone re-decide.
 
 ## Status
 
-**v0.1.4 · 145 tests · self-hosting end to end.** mj builds, tests, packages,
-publishes and upgrades itself, and builds all seven freeway modules
-(2,173 tests across them) in CI.
+**Self-hosting end to end.** mj builds, tests, packages, publishes and
+upgrades itself, and builds every freeway module in CI. The test suite is
+green on every push that touches code — the badge above tracks the release.
 
 Not yet done, and known: `mj clean`, `mj outdated`, JUnit XML reports for CI
 tooling. A discovery/index layer is deliberately deferred until there is an
