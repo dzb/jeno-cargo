@@ -270,9 +270,10 @@ mylib-1.2.0.sha256
 
 ### 7.3 GitHub/Gitee 后端
 
-- `mj publish [target]`(V1,已完成):生成 dist/ 三件套 + 打印上传清单(用户手动网页上传或调本机 `gh` CLI)
-- `mj publish gh:user/repo`(V1.1):原生上传,JDK HttpClient 调 GitHub/Gitee release API;token 环境变量(已定):`MJ_GITHUB_TOKEN` / `MJ_GITEE_TOKEN`
-- host 覆盖:`-Dmj.github.host` / `-Dmj.gitee.host` 可换 host(内网镜像、测试),URL 形状不变
+- **公开发布推荐 GitHub**(release 附件匿名可下载,消费方零配置);Gitee 作为私有/内网场景的补充(附件需 Bearer 令牌,Q8 实测确认)
+- `mj publish`(V1 ✅):生成 dist/ 三件套 + 上传清单
+- `mj publish gh:owner/repo`(V1.1 代码就绪):原生上传,token 从 `MJ_GITHUB_TOKEN` 环境变量读
+- `mj publish gitee:owner/repo`(V1.1 代码就绪):原生上传,token 从 `MJ_GITEE_TOKEN` 环境变量读;**消费端下载也需令牌**(Q8 实测)
 - 发布端零配置:不需要 Nexus、不需要账号体系,有仓库就能发
 
 ### 7.4 安全底线

@@ -1,5 +1,6 @@
 package com.jujin.mj.cli;
 
+import com.jujin.freeway.commons.json.JsonUtils;
 import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.mj.project.MjProject;
 import com.jujin.mj.project.ProjectReader;
@@ -8,34 +9,45 @@ import com.jujin.mj.project.Species;
 import com.jujin.mj.resolve.ArtifactLocations;
 import com.jujin.mj.store.ArtifactStore;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
- * {@code mj publish [target]} — the decentralized release (DESIGN.md §7.2):
- * generates the three-piece artifact next to the project and prints the
- * upload checklist. Publishing is "put files where a URL can reach" — a
- * GitHub/Gitee release, an OSS bucket, any static server — so mj itself
- * never needs credentials in V1:
+ * {@code mj publish [target]} — the decentralized release (DESIGN.md §7.2).
+ *
+ * <p>Generates the three-piece artifact into dist/, then — when a target is
+ * given — uploads it via the platform's release API:
  *
  * <pre>
- *   dist/mylib-1.2.0.jar          the build output, zipped
- *   dist/mylib-1.2.0.mj.toml      the descriptor: facts only (deps, java)
- *   dist/mylib-1.2.0.sha256       the jar's digest, verified by every consumer
+ *   mj publish                    → dist/ + upload hint
+ *   mj publish gh:owner/repo     → dist/ + GitHub native upload
+ *   mj publish gitee:owner/repo  → dist/ + Gitee native upload
  * </pre>
  *
- * <p>The optional target ({@code gh:owner/repo} or {@code gitee:owner/repo})
- * prints the exact release URLs the files belong at. Native upload through
- * the release APIs is V1.1 ({@code MJ_GITHUB_TOKEN} / {@code MJ_GITEE_TOKEN}).
+ * <p>Authentication: {@code MJ_GITHUB_TOKEN} / {@code MJ_GITEE_TOKEN} env
+ * vars. Without a token, the files are generated but not uploaded — the
+ * checklist is printed instead.
  */
 public final class PublishCommand implements Command {
 
     private static final String CLASSES = "target/classes";
 
     private final Path projectDir;
+    private final HttpClient http = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .build();
 
+    @Inject
     public PublishCommand(Path projectDir) {
         this.projectDir = projectDir;
     }
@@ -47,7 +59,7 @@ public final class PublishCommand implements Command {
 
     @Override
     public String summary() {
-        return "generate the release triple into dist/ (+ upload checklist for gh:/gitee:)";
+        return "generate the release triple into dist/ (+ native upload for gh:/gitee:)";
     }
 
     @Override
@@ -72,8 +84,6 @@ public final class PublishCommand implements Command {
             return 1;
         }
 
-        // A repo-bound dependency cannot travel in a public descriptor: the
-        // consumer's mj.toml would have no way to reach it.
         for (var requirement : project.requirements()) {
             if (requirement.species() == Species.CENTRAL && requirement.repository() != null) {
                 System.err.println("mj: '" + requirement.id() + "' is bound to repository '"
@@ -111,15 +121,193 @@ public final class PublishCommand implements Command {
         System.out.println("  " + jarFile);
         System.out.println("  " + dist.resolve(descriptorName));
         System.out.println("  " + dist.resolve(shaName));
-        if (!args.isEmpty()) {
-            printChecklist(args.getFirst(), name, version);
-        } else {
+
+        if (args.isEmpty()) {
             System.out.println("upload the three files wherever a URL can reach — a GitHub/Gitee "
                     + "release, an OSS bucket, any static server — and consumers add\n  "
                     + "\"" + name + "\" = \"gh:<owner>/" + name + "@v" + version + "\"");
+            return 0;
         }
+
+        // target given — attempt native upload
+        String target = args.getFirst();
+        if (!target.startsWith("gh:") && !target.startsWith("gitee:")) {
+            System.err.println("mj: unknown publish target '" + target
+                    + "' — use gh:owner/repo or gitee:owner/repo");
+            return 1;
+        }
+
+        String tokenEnv = target.startsWith("gh:") ? "MJ_GITHUB_TOKEN" : "MJ_GITEE_TOKEN";
+        String token = System.getenv(tokenEnv);
+        if (token == null || token.isBlank()) {
+            System.err.println("mj: " + tokenEnv + " environment variable is not set — "
+                    + "set it to your " + (target.startsWith("gh:") ? "GitHub" : "Gitee")
+                    + " personal access token, or run without the target to get the "
+                    + "upload checklist");
+            return 1;
+        }
+
+        System.out.println("uploading to " + target + " …");
+        return upload(target, token, project, dist, jarName, descriptorName, shaName);
+    }
+
+    // ------------------------------------------------------------------
+    // native upload
+    // ------------------------------------------------------------------
+
+    private int upload(String target, String token, MjProject project,
+                       Path dist, String jarName, String descriptorName, String shaName) {
+        String origin = target;
+        String host = target.startsWith("gh:")
+                ? ArtifactLocations.githubHost()
+                : ArtifactLocations.giteeHost();
+        String owner = origin.substring(origin.indexOf(':') + 1, origin.indexOf('/'));
+        String repo = origin.substring(origin.indexOf('/') + 1);
+        String version = project.version();
+        String tag = "v" + version;
+
+        List<Path> files = List.of(
+                dist.resolve(project.name() + "-" + version + ".jar"),
+                dist.resolve(project.name() + "-" + version + ".mj.toml"),
+                dist.resolve(project.name() + "-" + version + ".sha256"));
+
+        String releaseId;
+        try {
+            releaseId = createRelease(host, origin, owner, repo, tag, token);
+        } catch (IOException | InterruptedException e) {
+            System.err.println("mj: cannot create the release: " + e.getMessage());
+            return 1;
+        }
+
+        for (Path file : files) {
+            try {
+                uploadFile(host, origin, owner, repo, releaseId, file, token);
+            } catch (IOException | InterruptedException e) {
+                System.err.println("mj: upload failed for " + file.getFileName() + ": "
+                        + e.getMessage());
+                return 1;
+            }
+        }
+
+        System.out.println("release " + tag + " uploaded to " + target);
+        System.out.println("consumers add: \"" + project.name() + "\" = \""
+                + target + "@" + tag + "\"");
         return 0;
     }
+
+    /** Creates a release (or reuses the existing one) and returns its platform id. */
+    private String createRelease(String host, String origin, String owner, String repo,
+                                 String tag, String token)
+            throws IOException, InterruptedException {
+        boolean isGh = origin.startsWith("gh:");
+        String apiBase = isGh ? "https://api.github.com" : host + "/api/v5";
+        String url = apiBase + "/repos/" + origin.substring(origin.indexOf(':') + 1)
+                + "/releases";
+
+        String body;
+        if (isGh) {
+            body = "{\"tag_name\":\"" + tag + "\",\"name\":\"" + tag
+                    + "\",\"body\":\"mj release\"}";
+        } else {
+            body = "{\"tag_name\":\"" + tag + "\",\"name\":\"" + tag
+                    + "\",\"body\":\"mj release\",\"access_token\":\"" + token
+                    + "\",\"target_commitish\":\"master\"}";
+        }
+
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body));
+        if (isGh) {
+            builder.header("Authorization", "Bearer " + token);
+        }
+
+        HttpResponse<String> response = http.send(builder.build(),
+                HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() == 201 || response.statusCode() == 200) {
+            var map = JsonUtils.parseObject(response.body()).toMap();
+            return String.valueOf(map.get("id"));
+        }
+        // release might already exist — try to find it
+        if (response.statusCode() == 422 || response.statusCode() == 409) {
+            throw new IOException("release " + tag + " already exists on " + origin
+                    + " — use a different version or delete the existing release");
+        }
+        throw new IOException("release creation failed (" + response.statusCode() + "): "
+                + response.body().substring(0, Math.min(200, response.body().length())));
+    }
+
+    /** Uploads one file as a release attachment. */
+    private void uploadFile(String host, String origin, String owner, String repo,
+                            String releaseId, Path file, String token)
+            throws IOException, InterruptedException {
+        boolean isGh = origin.startsWith("gh:");
+        byte[] bytes = Files.readAllBytes(file);
+        String fileName = file.getFileName().toString();
+
+        if (isGh) {
+            String url = "https://uploads.github.com/repos/" + owner + "/" + repo
+                    + "/releases/" + releaseId + "/assets?name=" + fileName;
+            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+                    .header("Authorization", "Bearer " + token)
+                    .header("Content-Type", "application/octet-stream")
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(bytes))
+                    .build();
+            HttpResponse<String> response = http.send(request,
+                    HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 201) {
+                throw new IOException("upload of " + fileName + " returned "
+                        + response.statusCode() + ": "
+                        + response.body().substring(0, Math.min(200, response.body().length())));
+            }
+        } else {
+            // Gitee uses multipart form upload
+            String url = host + "/api/v5/repos/" + owner + "/" + repo + "/releases/"
+                    + releaseId + "/attach_files";
+            String boundary = "----mj" + System.currentTimeMillis();
+            var body = new ByteArrayOutputStream();
+            writeMultipartField(body, boundary, "access_token", token);
+            writeFilePart(body, boundary, "file", fileName, bytes);
+            body.write(("--" + boundary + "--\r\n").getBytes());
+
+            HttpRequest request = HttpRequest.newBuilder(URI.create(url + "?access_token="
+                    + token))
+                    .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(body.toByteArray()))
+                    .build();
+            HttpResponse<String> response = http.send(request,
+                    HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 201 && response.statusCode() != 200) {
+                throw new IOException("upload of " + fileName + " returned "
+                        + response.statusCode() + ": "
+                        + response.body().substring(0, Math.min(200, response.body().length())));
+            }
+        }
+        System.out.println("  uploaded " + fileName);
+    }
+
+    private void writeMultipartField(ByteArrayOutputStream out, String boundary,
+                                     String name, String value) throws IOException {
+        out.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
+        out.write(("Content-Disposition: form-data; name=\"" + name + "\"\r\n\r\n")
+                .getBytes(StandardCharsets.UTF_8));
+        out.write(value.getBytes(StandardCharsets.UTF_8));
+        out.write("\r\n".getBytes(StandardCharsets.UTF_8));
+    }
+
+    private void writeFilePart(ByteArrayOutputStream out, String boundary,
+                               String fieldName, String fileName, byte[] bytes)
+            throws IOException {
+        out.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
+        out.write(("Content-Disposition: form-data; name=\"" + fieldName
+                + "\"; filename=\"" + fileName + "\"\r\n").getBytes(StandardCharsets.UTF_8));
+        out.write("Content-Type: application/octet-stream\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+        out.write(bytes);
+        out.write("\r\n".getBytes(StandardCharsets.UTF_8));
+    }
+
+    // ------------------------------------------------------------------
+    // descriptor
+    // ------------------------------------------------------------------
 
     /** The descriptor is the project's own dependency facts, verbatim. */
     private static String descriptor(MjProject project) {
@@ -148,26 +336,6 @@ public final class PublishCommand implements Command {
         };
     }
 
-    private static void printChecklist(String target, String name, String version) {
-        if (!target.startsWith("gh:") && !target.startsWith("gitee:")) {
-            System.err.println("mj: unknown publish target '" + target
-                    + "' — use gh:owner/repo or gitee:owner/repo");
-            return;
-        }
-        String host = target.startsWith("gh:")
-                ? ArtifactLocations.githubHost()
-                : ArtifactLocations.giteeHost();
-        String owner = target.substring(target.indexOf(':') + 1, target.indexOf('/'));
-        String repo = target.substring(target.indexOf('/') + 1);
-        String tag = "v" + version;
-        String base = host + "/" + owner + "/" + repo + "/releases/download/" + tag + "/";
-        System.out.println("create release " + tag + " on " + host + "/" + owner + "/" + repo
-                + " and upload as:");
-        System.out.println("  " + base + name + "-" + version + ".jar");
-        System.out.println("  " + base + name + "-" + version + ".mj.toml");
-        System.out.println("  " + base + name + "-" + version + ".sha256");
-        System.out.println("consumers then add: \"" + name + "\" = \"" + target + "@" + tag + "\"");
-    }
 
     /** Zips {@code classes} into {@code jarFile} with the JDK's jar tool. */
     private static int jar(Path classes, Path jarFile) {

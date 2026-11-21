@@ -48,9 +48,11 @@ class PublishTest {
                 "native requirements round-trip with their tag");
         assertFalse(descriptor.contains("[repos]"), "a descriptor carries facts, not rules");
 
-        assertEquals(0, new PublishCommand(dir).execute(
+        // a target without a token triggers the upload path and fails —
+        // the checklist is now printed only when no target is given
+        assertEquals(1, new PublishCommand(dir).execute(
                         List.of("gh:acme/demo")),
-                "a target turns the triple into an upload checklist");
+                "a target without a token prompts for MJ_GITHUB_TOKEN");
     }
 
     @Test
