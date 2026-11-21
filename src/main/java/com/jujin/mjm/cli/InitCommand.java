@@ -42,7 +42,7 @@ public final class InitCommand implements Command {
     }
     @Override
     public String usage() {
-        return "";
+        return "[--pom] [--force]";
     }
 
 

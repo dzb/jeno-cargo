@@ -60,6 +60,11 @@ public final class UpdateCommand implements Command {
     }
 
     @Override
+    public boolean supportsOffline() {
+        return false;
+    }
+
+    @Override
     public String summary() {
         return "check for a newer release and self-upgrade";
     }

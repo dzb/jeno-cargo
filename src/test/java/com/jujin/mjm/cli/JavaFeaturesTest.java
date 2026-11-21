@@ -148,23 +148,23 @@ class JavaFeaturesTest {
         Files.writeString(dir.resolve("src/test/java/demo/FastTest.java"), """
             package demo;
 
-            import com.jujin.mjm.test.MjTest;
-            import com.jujin.mjm.test.MjAssert;
+            import com.jujin.mjm.test.MjmTest;
+            import com.jujin.mjm.test.MjmAssert;
 
             public class FastTest {
-                @MjTest
-                void ok() { MjAssert.true_(true); }
+                @MjmTest
+                void ok() { MjmAssert.true_(true); }
             }
             """);
         Files.writeString(dir.resolve("src/test/java/demo/SlowTest.java"), """
             package demo;
 
-            import com.jujin.mjm.test.MjTest;
-            import com.jujin.mjm.test.MjAssert;
+            import com.jujin.mjm.test.MjmTest;
+            import com.jujin.mjm.test.MjmAssert;
 
             public class SlowTest {
-                @MjTest
-                void fails() { MjAssert.equals(1, 2); }
+                @MjmTest
+                void fails() { MjmAssert.equals(1, 2); }
             }
             """);
         Files.writeString(dir.resolve("mjm.lock"), "");

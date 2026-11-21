@@ -43,11 +43,32 @@ public final class CommandRunner {
         // `mjm <command> --help` is a request for that command's syntax, not an
         // argument to it — the one convention every CLI shares.
         List<String> rest = List.of(args).subList(1, args.length);
+
+        // --offline is a property of the run, applied before the command sees
+        // its arguments: every store access below this point obeys it.
+        boolean offline = rest.contains("--offline");
+        if (offline) {
+            if (!command.supportsOffline()) {
+                System.err.println("mjm: " + command.name() + " needs the network by design — "
+                        + "--offline does not apply");
+                return 2;
+            }
+            com.jujin.mjm.store.ArtifactStore.goOffline();
+            List<String> filtered = new java.util.ArrayList<>(rest);
+            filtered.remove("--offline");
+            rest = filtered;
+        }
         if (rest.size() == 1 && (rest.getFirst().equals("--help") || rest.getFirst().equals("-h"))) {
             String syntax = command.usage();
-            System.out.println("usage: mjm " + label(command)
+            System.out.println("usage: mjm " + command.name()
                     + (syntax.isEmpty() ? "" : " " + syntax));
-            System.out.println("       " + command.summary());
+            String[] aliases = command.aliases();
+            if (aliases.length > 0) {
+                System.out.println("       " + command.summary()
+                        + " (also: " + String.join(", ", aliases) + ")");
+            } else {
+                System.out.println("       " + command.summary());
+            }
             return 0;
         }
         return command.execute(rest);
@@ -64,6 +85,9 @@ public final class CommandRunner {
         for (Command command : commands) {
             System.out.println("  " + pad(label(command), column) + command.summary());
         }
+        System.out.println();
+        System.out.println("  --offline            refuse all network access (store hits only; "
+                + "not for update/publish)");
         return 2;
     }
 

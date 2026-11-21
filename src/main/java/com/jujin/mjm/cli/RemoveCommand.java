@@ -52,7 +52,7 @@ public final class RemoveCommand implements Command {
     @Override
     public int execute(List<String> args) {
         if (args.size() != 1) {
-            System.err.println("mjm: mj remove needs exactly one dependency id — "
+            System.err.println("mjm: remove needs exactly one dependency id — "
                     + "mjm remove \"group:artifact\"");
             return 2;
         }

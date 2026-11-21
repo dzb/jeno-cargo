@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * The built-in runner (node:test's shape): compile src/test/java against the
- * closure plus mj itself, run every @MjTest, one line per failure, exit 1 on
+ * closure plus mj itself, run every @MjmTest, one line per failure, exit 1 on
  * any failure.
  */
 class TestRunnerTest {
@@ -30,19 +30,19 @@ class TestRunnerTest {
         Files.writeString(dir.resolve("src/test/java/demo/Tests.java"), """
             package demo;
 
-            import com.jujin.mjm.test.MjTest;
-            import com.jujin.mjm.test.MjAssert;
-            import com.jujin.mjm.test.MjBeforeEach;
+            import com.jujin.mjm.test.MjmTest;
+            import com.jujin.mjm.test.MjmAssert;
+            import com.jujin.mjm.test.MjmBeforeEach;
 
             public class Tests {
-                @MjBeforeEach
-                void setUp() { MjAssert.true_(true); }
+                @MjmBeforeEach
+                void setUp() { MjmAssert.true_(true); }
 
-                @MjTest
-                void passes() { MjAssert.equals("a", "a"); }
+                @MjmTest
+                void passes() { MjmAssert.equals("a", "a"); }
 
-                @MjTest
-                void fails() { MjAssert.equals(1, 2); }
+                @MjmTest
+                void fails() { MjmAssert.equals(1, 2); }
             }
             """);
         lock();
@@ -52,7 +52,7 @@ class TestRunnerTest {
             exit = new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of());
         }
 
-        assertEquals(1, exit, "a failing @MjTest fails the command");
+        assertEquals(1, exit, "a failing @MjmTest fails the command");
     }
 
     @Test
@@ -61,18 +61,18 @@ class TestRunnerTest {
         Files.writeString(dir.resolve("src/test/java/demo/Tests.java"), """
             package demo;
 
-            import com.jujin.mjm.test.MjTest;
-            import com.jujin.mjm.test.MjAssert;
+            import com.jujin.mjm.test.MjmTest;
+            import com.jujin.mjm.test.MjmAssert;
 
             public class Tests {
-                @MjTest
-                void one() { MjAssert.true_(true); }
+                @MjmTest
+                void one() { MjmAssert.true_(true); }
 
-                @MjTest
-                void two() { MjAssert.false_(false); }
+                @MjmTest
+                void two() { MjmAssert.false_(false); }
 
-                @MjTest
-                void three() { MjAssert.notNull("x"); }
+                @MjmTest
+                void three() { MjmAssert.notNull("x"); }
             }
             """);
         lock();

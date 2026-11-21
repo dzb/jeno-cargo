@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.stream.Stream;
 
 /**
- * The test bootstrap that runs in a forked JVM — mj test forks a new JVM
+ * The test bootstrap that runs in a forked JVM — mjm test forks a new JVM
  * with the test classpath and invokes this class. The forked JVM's classpath
  * IS the test classpath: test classes, code under test, closure jars, and
  * the junit toolchain. No mj process classes leak in, so there are no
@@ -24,18 +24,18 @@ import java.util.stream.Stream;
  *
  * <p>Supports two runners:
  * <ul>
- *   <li>{@code @MjTest} — built-in, zero-dep, failures are any thrown exception</li>
+ *   <li>{@code @MjmTest} — built-in, zero-dep, failures are any thrown exception</li>
  *   <li>JUnit Jupiter ({@code org.junit.jupiter.api.Test}) — via the Platform Launcher</li>
  * </ul>
  *
- * <p>Usage: {@code java -cp <test-cp> com.jujin.mjm.test.MjTestFork <test-classes-dir>}
+ * <p>Usage: {@code java -cp <test-cp> com.jujin.mjm.test.MjmTestFork <test-classes-dir>}
  * Exit code: 0 = all passed, 1 = any failure.
  */
-public final class MjTestFork {
+public final class MjmTestFork {
 
     public static void main(String[] args) throws Exception {
         if (args.length < 1) {
-            System.err.println("usage: MjTestFork <test-classes-dir>");
+            System.err.println("usage: MjmTestFork <test-classes-dir>");
             System.exit(2);
         }
         Path testClasses = Path.of(args[0]);
@@ -53,7 +53,7 @@ public final class MjTestFork {
                         .replaceAll("\\.class$", "");
                 try {
                     Class<?> loaded = Class.forName(binary);
-                    if (hasAnnotation(loaded, MjTest.class)) {
+                    if (hasAnnotation(loaded, MjmTest.class)) {
                         mjTests.add(loaded);
                     } else if (hasAnnotation(loaded, org.junit.jupiter.api.Test.class)) {
                         jupiterTests.add(loaded);
@@ -67,21 +67,21 @@ public final class MjTestFork {
         int passed = 0;
         int failed = 0;
 
-        // ---- @MjTest runner ----
+        // ---- @MjmTest runner ----
         for (Class<?> testClass : mjTests) {
-            for (Method test : annotated(testClass, MjTest.class)) {
+            for (Method test : annotated(testClass, MjmTest.class)) {
                 String name = testClass.getName() + "." + test.getName();
                 try {
                     test.setAccessible(true);
                     var ctor = testClass.getDeclaredConstructor();
                     ctor.setAccessible(true);
                     Object instance = ctor.newInstance();
-                    for (Method before : annotated(testClass, MjBeforeEach.class)) {
+                    for (Method before : annotated(testClass, MjmBeforeEach.class)) {
                         before.setAccessible(true);
                         before.invoke(instance);
                     }
                     test.invoke(instance);
-                    for (Method after : annotated(testClass, MjAfterEach.class)) {
+                    for (Method after : annotated(testClass, MjmAfterEach.class)) {
                         after.setAccessible(true);
                         after.invoke(instance);
                     }

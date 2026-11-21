@@ -217,7 +217,7 @@ public final class ProjectReader {
      * the same shapes and rules as the {@code [deps]} table, without a file.
      */
     public static Requirement parseRequirement(String key, String value) {
-        return requirement(key, value, null, "mj add");
+        return requirement(key, value, null, "mjm add");
     }
 
     // ------------------------------------------------------------------

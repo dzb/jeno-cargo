@@ -55,7 +55,7 @@ public final class WhyCommand implements Command {
     @Override
     public int execute(List<String> args) {
         if (args.isEmpty()) {
-            System.err.println("mjm: mj why needs an id — mj why <group:artifact> (or a name)");
+            System.err.println("mjm: why needs an id — mjm why <group:artifact> (or a name)");
             return 2;
         }
         String target = args.getFirst();

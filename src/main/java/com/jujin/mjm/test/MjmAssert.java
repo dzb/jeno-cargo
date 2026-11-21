@@ -5,9 +5,9 @@ package com.jujin.mjm.test;
  * {@link AssertionError}, which is exactly what the runner treats as a
  * failure; anything thrown fails a test.
  */
-public final class MjAssert {
+public final class MjmAssert {
 
-    private MjAssert() {}
+    private MjmAssert() {}
 
     public static void equals(Object expected, Object actual) {
         if (!java.util.Objects.equals(expected, actual)) {

@@ -5,8 +5,8 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/** Runs before every {@link MjTest} method of the same class. */
+/** Runs before every {@link MjmTest} method of the same class. */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
-public @interface MjBeforeEach {
+public @interface MjmBeforeEach {
 }

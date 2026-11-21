@@ -64,8 +64,8 @@ public final class RunCommand implements Command {
     @Override
     public int execute(List<String> args) {
         if (args.isEmpty()) {
-            System.err.println("mjm: mj run needs a main class or a script name — "
-                    + "mjm run <main-class> [args...] | mj run <script-name>");
+            System.err.println("mjm: run needs a main class or a script name — "
+                    + "mjm run <main-class> [args...] | mjm run <script-name>");
             return 2;
         }
         String target = args.get(0);

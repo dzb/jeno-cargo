@@ -74,12 +74,12 @@ public final class InfoCommand implements Command {
             } else if (id == null) {
                 id = arg;
             } else {
-                System.err.println("mjm: mj info takes one dependency id — mj info \"group:artifact\"");
+                System.err.println("mjm: info takes one dependency id — mjm info \"group:artifact\"");
                 return 2;
             }
         }
         if (id == null) {
-            System.err.println("mjm: mj info needs a dependency id — mj info \"group:artifact\"");
+            System.err.println("mjm: info needs a dependency id — mjm info \"group:artifact\"");
             return 2;
         }
         final String wanted = id;
@@ -96,7 +96,7 @@ public final class InfoCommand implements Command {
                 .findFirst()
                 .orElse(null);
         if (artifact == null) {
-            System.err.println("mjm: '" + wanted + "' is not in the closure — mj why " + wanted
+            System.err.println("mjm: '" + wanted + "' is not in the closure — mjm why " + wanted
                     + " shows what is");
             return 1;
         }

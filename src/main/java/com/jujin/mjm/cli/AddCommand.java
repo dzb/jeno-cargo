@@ -66,8 +66,8 @@ public final class AddCommand implements Command {
     @Override
     public int execute(List<String> args) {
         if (args.isEmpty() || args.size() > 2) {
-            System.err.println("mjm: mj add needs a key and an optional value — "
-                    + "mjm add \"group:artifact\" 1.2.3 | mj add mylib gh:owner/repo@v1.0.0");
+            System.err.println("mjm: add needs a key and an optional value — "
+                    + "mjm add \"group:artifact\" 1.2.3 | mjm add mylib gh:owner/repo@v1.0.0");
             return 2;
         }
         String key = args.get(0);

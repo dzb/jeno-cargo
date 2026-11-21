@@ -49,18 +49,18 @@ class SourceResourcesTest {
         Files.writeString(dir.resolve("src/test/java/demo/Tests.java"), """
             package demo;
 
-            import com.jujin.mjm.test.MjTest;
-            import com.jujin.mjm.test.MjAssert;
+            import com.jujin.mjm.test.MjmTest;
+            import com.jujin.mjm.test.MjmAssert;
 
             public class Tests {
-                @MjTest
+                @MjmTest
                 void mainResourceIsOnTheClasspath() throws Exception {
-                    MjAssert.equals("greeting=hello", resource("demo/app.properties"));
+                    MjmAssert.equals("greeting=hello", resource("demo/app.properties"));
                 }
 
-                @MjTest
+                @MjmTest
                 void testResourceIsOnTheClasspath() throws Exception {
-                    MjAssert.equals("scope=test", resource("demo/test.properties"));
+                    MjmAssert.equals("scope=test", resource("demo/test.properties"));
                 }
 
                 private String resource(String name) throws Exception {

@@ -52,7 +52,13 @@ public final class Mjm {
             while (cause.getCause() != null && cause.getCause() != cause) {
                 cause = cause.getCause();
             }
-            System.err.println("mjm: " + cause.getMessage());
+            // An exception with no message must still name itself — "mjm: null"
+            // tells the user nothing and looks like a mjm bug rather than the
+            // real failure.
+            String message = cause.getMessage();
+            System.err.println("mjm: " + (message == null || message.isBlank()
+                    ? cause.getClass().getSimpleName()
+                    : message));
             System.exit(1);
             return;
         }

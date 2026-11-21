@@ -6,7 +6,7 @@ import com.jujin.mjm.project.ProjectReader;
 import com.jujin.mjm.store.ArtifactStore;
 import com.jujin.mjm.store.LockFileReader;
 import com.jujin.mjm.store.LockedArtifact;
-import com.jujin.mjm.test.MjTest;
+import com.jujin.mjm.test.MjmTest;
 
 import java.io.File;
 import java.io.IOException;
@@ -21,12 +21,12 @@ import java.util.stream.Stream;
  * {@code mjm test} — compiles test sources, then forks a separate JVM to
  * execute them. The forked JVM's classpath IS the test classpath: test
  * classes, code under test, closure jars, junit toolchain, and mj's test API
- * ({@code MjTestFork}). No mj process classes leak in — zero classloader
+ * ({@code MjmTestFork}). No mj process classes leak in — zero classloader
  * identity issues.
  *
- * <p>Two runners in the forked JVM ({@code MjTestFork}):
+ * <p>Two runners in the forked JVM ({@code MjmTestFork}):
  * <ul>
- *   <li>{@code @MjTest} — built-in, zero-dep</li>
+ *   <li>{@code @MjmTest} — built-in, zero-dep</li>
  *   <li>JUnit Jupiter — via the Platform Launcher</li>
  * </ul>
  */
@@ -58,7 +58,7 @@ public final class TestCommand implements Command {
 
     @Override
     public String summary() {
-        return "compile and run src/test/java — @MjTest and JUnit Jupiter";
+        return "compile and run src/test/java — @MjmTest and JUnit Jupiter";
     }
 
     @Override
@@ -88,7 +88,7 @@ public final class TestCommand implements Command {
         command.add("java");
         command.add("-cp");
         command.add(String.join(File.pathSeparator, runClasspath));
-        command.add("com.jujin.mjm.test.MjTestFork");
+        command.add("com.jujin.mjm.test.MjmTestFork");
         command.add(testOutput.toString());
 
         try {
@@ -270,7 +270,7 @@ public final class TestCommand implements Command {
 
     private static Path runtimeLocation() {
         try {
-            return Path.of(MjTest.class.getProtectionDomain().getCodeSource()
+            return Path.of(MjmTest.class.getProtectionDomain().getCodeSource()
                     .getLocation().toURI());
         } catch (Exception e) {
             return Path.of("");

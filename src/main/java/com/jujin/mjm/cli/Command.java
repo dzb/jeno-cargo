@@ -32,6 +32,16 @@ public interface Command {
         return "";
     }
 
+    /**
+     * Whether {@code --offline} is meaningful for this command. Defaults to
+     * true for commands that read the store; commands whose entire purpose is
+     * a network call (update, publish, the add search) override it to false —
+     * accepting the flag there would only promise something they cannot do.
+     */
+    default boolean supportsOffline() {
+        return true;
+    }
+
     /** The one-line summary the usage listing shows — it never repeats the name. */
     String summary();
 
