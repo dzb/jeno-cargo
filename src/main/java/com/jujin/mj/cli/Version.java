@@ -24,49 +24,32 @@ import java.util.Properties;
  * kept because it is the Java convention, but the resource is what actually
  * carries the value in every layout.
  *
- * <p>The embedded constant is the bootstrap fallback: during a self-hosting
- * build the compiler may be an older mj that does not yet generate the
- * resource, and the binary must still know what it is. It is also the value
- * a source checkout reports before anything is built.
+ * <p>There is no embedded fallback: the build always writes the resource
+ * before compiling, so a binary that cannot find it was not built by mj. That
+ * case reports {@link #UNKNOWN} rather than inventing a number — a wrong
+ * version is worse than an honest {@code dev}.
  */
 public final class Version {
 
     /** The resource path the build writes. */
     static final String RESOURCE = "/META-INF/mj/version.properties";
 
-    /**
-     * The bootstrap fallback — a transition scaffold, not a declaration.
-     *
-     * <p>It exists for exactly one release cycle: v0.1.2 is compiled by the
-     * v0.1.1 toolchain, which does not yet generate the version resource, so
-     * the binary must still be able to name itself. From v0.1.3 on the
-     * toolchain generates the resource before compiling, and this constant
-     * is deleted.
-     *
-     * <p>Never edit this to change mj's version: the one declaration is
-     * {@code mj.toml [project].version}.
-     */
-    private static final String BOOTSTRAP_FALLBACK = "0.1.2";
-
-    /** Reported when neither the resource nor the fallback is usable. */
+    /** Reported when the resource is absent — a binary mj did not build. */
     static final String UNKNOWN = "dev";
 
     private static final String CURRENT = resolve();
 
     private Version() {}
 
-    /** The running mj's version — the build's value, else the fallback. */
+    /** The running mj's version, or {@link #UNKNOWN} when the build wrote none. */
     public static String current() {
         return CURRENT;
     }
 
     private static String resolve() {
         String fromResource = readResource();
-        if (fromResource != null && !fromResource.isBlank()) {
-            return fromResource.strip();
-        }
-        return BOOTSTRAP_FALLBACK == null || BOOTSTRAP_FALLBACK.isBlank()
-                ? UNKNOWN : BOOTSTRAP_FALLBACK;
+        return fromResource == null || fromResource.isBlank()
+                ? UNKNOWN : fromResource.strip();
     }
 
     private static String readResource() {

@@ -114,9 +114,13 @@ class VersionTest {
     }
 
     @Test
-    void theRuntimeVersionIsNeverBlank() {
+    void theRuntimeVersionComesFromTheGeneratedResource() {
+        // mj test runs off target/classes, which the build stamped — so the
+        // version is the declared one, not a scaffold and not "dev"
         assertFalse(Version.current().isBlank(), "a running mj always names itself");
         assertFalse(Version.UNKNOWN.equals(Version.current()),
-                "the bootstrap fallback covers a missing resource");
+                "the build wrote the resource, so there is nothing to guess");
+        assertTrue(Version.current().matches("\\d+\\.\\d+\\.\\d+.*"),
+                "a semver-shaped version, got " + Version.current());
     }
 }
