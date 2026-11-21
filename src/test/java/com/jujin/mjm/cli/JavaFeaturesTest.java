@@ -224,7 +224,7 @@ class JavaFeaturesTest {
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
         assertEquals(0, new PackageCommand(store, dir).execute(List.of("--uber")));
 
-        Path jar = dir.resolve("dist/demo-1.0.0.jar");
+        Path jar = dir.resolve("dist/demo-1.0.0-uber.jar");
         try (var zip = new java.util.zip.ZipFile(jar.toFile())) {
             var manifest = new java.util.jar.Manifest(
                     zip.getInputStream(zip.getEntry("META-INF/MANIFEST.MF")));

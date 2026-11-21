@@ -60,7 +60,7 @@ class PackageTest {
                 .execute(List.of("--uber", "--main", "demo.Main"));
 
         assertEquals(0, exit);
-        Path uber = dir.resolve("dist/demo-1.0.0.jar");
+        Path uber = dir.resolve("dist/demo-1.0.0-uber.jar");
         assertTrue(Files.exists(uber), "the uber-jar carries the versioned name");
         try (ZipFile zip = new ZipFile(uber.toFile())) {
             assertNotNull(zip.getEntry("demo/Main.class"), "project classes are in");
@@ -136,7 +136,7 @@ class PackageTest {
         int exit = new PackageCommand(store, dir).execute(List.of("--uber"));
 
         assertEquals(0, exit);
-        try (ZipFile zip = new ZipFile(dir.resolve("dist/demo-1.0.0.jar").toFile())) {
+        try (ZipFile zip = new ZipFile(dir.resolve("dist/demo-1.0.0-uber.jar").toFile())) {
             String services = read(zip, "META-INF/services/com.example.Svc");
             assertTrue(services.contains("com.example.ImplA"), "line-merged from lib-a");
             assertTrue(services.contains("com.example.ImplB"), "line-merged from lib-b");

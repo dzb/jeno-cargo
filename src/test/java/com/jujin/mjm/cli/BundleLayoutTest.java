@@ -158,7 +158,7 @@ class DistLayoutTest {
                 "the tool distribution archive is a deliverable");
         assertTrue(Files.isDirectory(dir.resolve("dist/demo-1.0.0")),
                 "the tool distribution directory is a deliverable");
-        assertTrue(Files.exists(dir.resolve("dist/demo-1.0.0.jar")),
+        assertTrue(Files.exists(dir.resolve("dist/demo-1.0.0-uber.jar")),
                 "the packaged jar is a deliverable");
     }
 

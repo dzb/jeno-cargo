@@ -95,7 +95,8 @@ public final class PackageCommand implements Command {
             var mjToml = projectDir.resolve("mjm.toml");
             var mjLock = projectDir.resolve("mjm.lock");
             if (!Files.exists(mjToml)) {
-                System.err.println("mjm: cannot read mjm.toml in " + projectDir);
+                System.err.println("mjm: no mjm.toml in " + projectDir
+                    + " — run mjm init to create one");
                 return 1;
             }
             project = ProjectReader.parse(Files.readString(mjToml));
@@ -179,7 +180,10 @@ public final class PackageCommand implements Command {
                         Map<String, Path> jars, String mainClass) {
         String name = project.name();
         String version = project.version();
-        Path output = projectDir.resolve("dist/" + name + "-" + version + ".jar");
+        // distinct from the plain jar: the two carry different bytes, and one
+        // silently overwriting the other means a release ships whichever ran
+        // last. The classifier convention is Maven's (-uber), not a new one.
+        Path output = projectDir.resolve("dist/" + name + "-" + version + "-uber.jar");
         Path classes = projectDir.resolve(CLASSES);
 
         if (!Files.isDirectory(classes)) {
