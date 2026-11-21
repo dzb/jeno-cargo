@@ -10,9 +10,16 @@ import com.jujin.freeway.ioc.Freeway;
  */
 public final class Mj {
 
+    /** mj's own version — matches the mj.toml [project].version at release time. */
+    public static final String VERSION = "0.1.0";
+
     private Mj() {}
 
     public static void main(String[] args) {
+        if (args.length == 1 && (args[0].equals("--version") || args[0].equals("-v"))) {
+            System.out.println("mj " + VERSION + " — modern java manager");
+            return;
+        }
         int exit;
         try (Container container = Freeway.create(new MjModule())) {
             exit = container.get(CommandRunner.class).run(args);
