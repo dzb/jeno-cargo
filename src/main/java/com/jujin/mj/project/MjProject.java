@@ -1,0 +1,50 @@
+package com.jujin.mj.project;
+
+import java.util.List;
+import java.util.Map;
+
+/**
+ * A parsed mj.toml — SPEC.md §2's closed schema as data. Values that were
+ * validated: coordinate shapes, semver tags, https URLs, the depth budget.
+ * Everything downstream (resolver, lockfile, build) consumes this record and
+ * never re-reads the file.
+ *
+ * @param javaVersion  the {@code [java].version} major, or null when unset
+ * @param maxDepth     the dependency-chain budget, 1–255, default 2
+ * @param repos        named repositories (name → https base URL), plus nothing
+ *                     for Central — Central is always the implicit default
+ */
+public record MjProject(
+        String name,
+        String version,
+        Integer javaVersion,
+        int maxDepth,
+        List<Requirement> requirements,
+        Map<String, String> overrides,
+        Map<String, String> scripts,
+        Map<String, String> repos,
+        List<String> buildParameters) {
+
+    public MjProject {
+        if (requirements == null) {
+            requirements = List.of();
+        }
+        requirements = List.copyOf(requirements);
+        if (overrides == null) {
+            overrides = Map.of();
+        }
+        overrides = Map.copyOf(overrides);
+        if (scripts == null) {
+            scripts = Map.of();
+        }
+        scripts = Map.copyOf(scripts);
+        if (repos == null) {
+            repos = Map.of();
+        }
+        repos = Map.copyOf(repos);
+        if (buildParameters == null) {
+            buildParameters = List.of();
+        }
+        buildParameters = List.copyOf(buildParameters);
+    }
+}
