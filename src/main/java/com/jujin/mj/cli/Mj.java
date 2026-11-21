@@ -11,7 +11,7 @@ import com.jujin.freeway.ioc.Freeway;
 public final class Mj {
 
     /** mj's own version — matches the mj.toml [project].version at release time. */
-    public static final String VERSION = "0.1.0";
+    public static final String VERSION = "0.2.0";
 
     private Mj() {}
 
