@@ -301,6 +301,14 @@ push master / tag v*  →  GitHub Actions
   4. 仅 tag 触发:mj dist → gh release create v{version} mj-bin-{version}.tar.gz
 ```
 
+**本地同一链条一条命令**:`mj release` —— 生命周期即 freeway-flow 图(DESIGN.md §9 延伸):
+`lock → build → verify → test → dist → publish`,门控(verify/test/publish)是图上的节点级
+`when` 条件而非 if 链,任务节点经容器按 id 解析(`@release-lock` …),任一阶段失败即
+FlowException 快速终止。`--skip-test` 关测试门;`--publish gh:owner/repo` 开库发布门;
+`verify` 门只在 CI tag 推送时开(GITHUB_REF_TYPE),三处版本一致性由流程自身把关。
+CI 的 lock/build/test/dist 四步在 v0.3.0 起可塌缩为一步 `mj release`(上一个 release 必须已
+自带该命令)。
+
 - 每次推 master 都跑完整 dogfood 构建 + 测试(磨刀石常磨)
 - 自举链断裂的逃生舱(旧 mj 读不了新 mj.toml 等):本机 Maven 引导
   (`mvn -DskipTests package` → `java -cp target/classes:…` 跑 Mj)→ `mj dist` → `gh release upload` 手工补发

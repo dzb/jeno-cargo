@@ -34,6 +34,8 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/dzb/mj-cargo/master/setup.sh | bash
           echo "$HOME/.mj/bin" >> "$GITHUB_PATH"
 
+      # v0.3.0 起,这里的 lock/build/test(+ tag 的 verify/dist)可塌缩为一步
+      # `mj release` —— 前提是"上一个 release"已自带该命令(自举链约束)。
       - name: lock
         run: mj lock
 

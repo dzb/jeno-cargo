@@ -1,5 +1,6 @@
 package com.jujin.mj.cli;
 
+import com.jujin.freeway.flow.FlowModule;
 import com.jujin.freeway.ioc.Container;
 import com.jujin.freeway.ioc.Freeway;
 
@@ -21,7 +22,7 @@ public final class Mj {
             return;
         }
         int exit;
-        try (Container container = Freeway.create(new MjModule())) {
+        try (Container container = Freeway.create(new MjModule(), new FlowModule())) {
             exit = container.get(CommandRunner.class).run(args);
         } catch (RuntimeException e) {
             // The deepest cause carries the next action; the wrappers only

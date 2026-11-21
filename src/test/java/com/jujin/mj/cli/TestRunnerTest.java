@@ -7,10 +7,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -50,7 +48,7 @@ class TestRunnerTest {
         lock();
 
         int exit;
-        try (var central = serveVendoredToolchain()) {
+        try (var central = VendoredToolchain.start()) {
             exit = new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of());
         }
 
@@ -80,7 +78,7 @@ class TestRunnerTest {
         lock();
 
         int exit;
-        try (var central = serveVendoredToolchain()) {
+        try (var central = VendoredToolchain.start()) {
             exit = new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of());
         }
 
@@ -108,7 +106,7 @@ class TestRunnerTest {
         lock();
 
         int exit;
-        try (var central = serveVendoredToolchain()) {
+        try (var central = VendoredToolchain.start()) {
             exit = new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of());
         }
 
@@ -133,7 +131,7 @@ class TestRunnerTest {
         lock();
 
         int exit;
-        try (var central = serveVendoredToolchain()) {
+        try (var central = VendoredToolchain.start()) {
             exit = new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of());
         }
 
@@ -146,50 +144,6 @@ class TestRunnerTest {
         lock();
         assertEquals(0, new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of()),
                 "a project without src/test/java has nothing to run");
-    }
-
-    /**
-     * Serves the vendored junit toolchain as a loopback Central for the
-     * exploded-mode toolchain download. Tests never touch the real Central —
-     * CI runners share IP space and get rate-limited (429).
-     */
-    private AutoCloseable serveVendoredToolchain() throws IOException {
-        com.sun.net.httpserver.HttpServer central =
-                com.sun.net.httpserver.HttpServer.create(
-                        new InetSocketAddress("localhost", 0), 0);
-        Map<String, byte[]> jars = new LinkedHashMap<>();
-        for (String[] coordinate : new String[][]{
-                {"org/junit/jupiter", "junit-jupiter-api", "6.1.3"},
-                {"org/junit/jupiter", "junit-jupiter-engine", "6.1.3"},
-                {"org/junit/platform", "junit-platform-launcher", "6.1.3"},
-                {"org/junit/platform", "junit-platform-engine", "6.1.3"},
-                {"org/junit/platform", "junit-platform-commons", "6.1.3"},
-                {"org/opentest4j", "opentest4j", "1.3.0"}}) {
-            String path = "/" + coordinate[0] + "/" + coordinate[1] + "/" + coordinate[2] + "/"
-                    + coordinate[1] + "-" + coordinate[2] + ".jar";
-            jars.put(path, java.nio.file.Files.readAllBytes(
-                    java.nio.file.Path.of("vendor",
-                            coordinate[0], coordinate[1], coordinate[2],
-                            coordinate[1] + "-" + coordinate[2] + ".jar")));
-        }
-        central.createContext("/", exchange -> {
-            byte[] body = jars.get(exchange.getRequestURI().getPath());
-            if (body == null) {
-                exchange.sendResponseHeaders(404, -1);
-                return;
-            }
-            exchange.sendResponseHeaders(200, body.length);
-            try (var out = exchange.getResponseBody()) {
-                out.write(body);
-            }
-        });
-        central.start();
-        System.setProperty("mj.central.base",
-                "http://localhost:" + central.getAddress().getPort() + "/");
-        return () -> {
-            central.stop(0);
-            System.clearProperty("mj.central.base");
-        };
     }
 
     private void project() throws IOException {

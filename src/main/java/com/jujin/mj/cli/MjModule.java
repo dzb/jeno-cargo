@@ -1,5 +1,7 @@
 package com.jujin.mj.cli;
 
+import com.jujin.freeway.flow.FlowEngine;
+import com.jujin.freeway.flow.TaskHandler;
 import com.jujin.freeway.ioc.ModuleEx;
 import com.jujin.freeway.ioc.Binder;
 import com.jujin.mj.pom.PomSource;
@@ -52,5 +54,26 @@ public final class MjModule implements ModuleEx {
                         projectDir));
         binder.contribute(Command.class).addDeferred("update",
                 c -> new UpdateCommand());
+        binder.contribute(Command.class).addDeferred("release",
+                c -> new ReleaseCommand(c.get(FlowEngine.class)));
+        // the release lifecycle stages — the flow graph resolves them by id
+        binder.bind(TaskHandler.class)
+                .to(c -> new ReleaseCommand.Lock(c.get(LockService.class), projectDir))
+                .id("release-lock");
+        binder.bind(TaskHandler.class)
+                .to(c -> new ReleaseCommand.Build(c.get(ArtifactStore.class), projectDir))
+                .id("release-build");
+        binder.bind(TaskHandler.class)
+                .to(c -> new ReleaseCommand.Verify(c.get(ArtifactStore.class), projectDir))
+                .id("release-verify");
+        binder.bind(TaskHandler.class)
+                .to(c -> new ReleaseCommand.Test(c.get(ArtifactStore.class), projectDir))
+                .id("release-test");
+        binder.bind(TaskHandler.class)
+                .to(c -> new ReleaseCommand.Dist(c.get(ArtifactStore.class), projectDir))
+                .id("release-dist");
+        binder.bind(TaskHandler.class)
+                .to(c -> new ReleaseCommand.Publish(projectDir))
+                .id("release-publish");
     }
 }
