@@ -58,6 +58,9 @@ CI 依次执行:装上一个 release → `mj lock/build/test` → 三处版本�
 - **setup.sh 永不用改**:动态解析 latest(releases/latest 重定向),新版本发完,
   一行安装命令自动指向新版。
 - **重发安全**:release 已存在时 CI 先删后建(保留 tag),规避附件 CDN 缓存。
+- **次序红线**:release(含附件)必须先于 tag 存在——tag 一落地 CI 立刻开跑,
+  第一步就要下载 latest 的附件;用 `gh release create v{ver} --target master`
+  同时建 release 与 tag,附件在 create 调用里一并给出,不留竞态窗口。
 
 ### 5. 用户侧升级(零操作约定)
 

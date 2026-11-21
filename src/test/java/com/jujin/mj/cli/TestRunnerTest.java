@@ -106,7 +106,6 @@ class TestRunnerTest {
         com.sun.net.httpserver.HttpServer central =
                 com.sun.net.httpserver.HttpServer.create(
                         new InetSocketAddress("localhost", 0), 0);
-        String home = System.getProperty("user.home");
         Map<String, byte[]> jars = new LinkedHashMap<>();
         for (String[] coordinate : new String[][]{
                 {"org/junit/jupiter", "junit-jupiter-api", "6.1.3"},
@@ -118,7 +117,7 @@ class TestRunnerTest {
             String path = "/" + coordinate[0] + "/" + coordinate[1] + "/" + coordinate[2] + "/"
                     + coordinate[1] + "-" + coordinate[2] + ".jar";
             jars.put(path, java.nio.file.Files.readAllBytes(
-                    java.nio.file.Path.of(home, ".m2/repository",
+                    java.nio.file.Path.of("vendor",
                             coordinate[0], coordinate[1], coordinate[2],
                             coordinate[1] + "-" + coordinate[2] + ".jar")));
         }
@@ -165,7 +164,6 @@ class TestRunnerTest {
         com.sun.net.httpserver.HttpServer central =
                 com.sun.net.httpserver.HttpServer.create(
                         new InetSocketAddress("localhost", 0), 0);
-        String home = System.getProperty("user.home");
         Map<String, byte[]> jars = new LinkedHashMap<>();
         for (String[] coordinate : new String[][]{
                 {"org/junit/jupiter", "junit-jupiter-api", "6.1.3"},
@@ -177,7 +175,7 @@ class TestRunnerTest {
             String path = "/" + coordinate[0] + "/" + coordinate[1] + "/" + coordinate[2] + "/"
                     + coordinate[1] + "-" + coordinate[2] + ".jar";
             jars.put(path, java.nio.file.Files.readAllBytes(
-                    java.nio.file.Path.of(home, ".m2/repository",
+                    java.nio.file.Path.of("vendor",
                             coordinate[0], coordinate[1], coordinate[2],
                             coordinate[1] + "-" + coordinate[2] + ".jar")));
         }
