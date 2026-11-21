@@ -1,25 +1,14 @@
 package com.jujin.mj.cli;
 
 import com.jujin.freeway.ioc.annotation.Inject;
-import com.jujin.mj.project.Species;
 import com.jujin.mj.resolve.ArtifactLocations;
 import com.jujin.mj.store.ArtifactStore;
+import com.jujin.mj.store.LockFileReader;
 import com.jujin.mj.store.LockedArtifact;
-import com.jujin.mj.test.MjAfterEach;
-import com.jujin.mj.test.MjBeforeEach;
 import com.jujin.mj.test.MjTest;
-import org.junit.platform.engine.DiscoverySelector;
-import org.junit.platform.engine.discovery.DiscoverySelectors;
-import org.junit.platform.launcher.LauncherDiscoveryRequest;
-import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder;
-import org.junit.platform.launcher.core.LauncherFactory;
-import org.junit.platform.launcher.listeners.SummaryGeneratingListener;
 
 import java.io.File;
-import java.lang.annotation.Annotation;
 import java.io.IOException;
-import java.lang.reflect.Method;
-import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -27,33 +16,30 @@ import java.util.List;
 import java.util.stream.Stream;
 
 /**
- * {@code mj test} — two runners behind one command:
+ * {@code mj test} — compiles test sources, then forks a separate JVM to
+ * execute them. The forked JVM's classpath IS the test classpath: test
+ * classes, code under test, closure jars, junit toolchain, and mj's test API
+ * ({@code MjTestFork}). No mj process classes leak in — zero classloader
+ * identity issues.
  *
- * <ol>
- *   <li><b>the built-in runner</b> (node:test's shape) for {@code @MjTest}
- *       classes — failures are any thrown exception</li>
- *   <li><b>the JUnit Platform</b> (Launcher + Jupiter engine) for existing
- *       {@code org.junit.jupiter.api.Test} classes — being able to run the
- *       tests a project already has is the point, so adopting mj never
- *       abandons test assets</li>
- * </ol>
- *
- * <p>The JUnit toolchain (jupiter api/engine + platform launcher, one frozen
- * version mj manages) is injected into the test classpath and downloaded
- * through the store like every other dependency — sha256 pinned, auditable.
- * When the closure already declares {@code org.junit.jupiter:junit-jupiter-api},
- * the closure's version wins and nothing is injected (one id, one version).
+ * <p>Two runners in the forked JVM ({@code MjTestFork}):
+ * <ul>
+ *   <li>{@code @MjTest} — built-in, zero-dep</li>
+ *   <li>JUnit Jupiter — via the Platform Launcher</li>
+ * </ul>
  */
 public final class TestCommand implements Command {
 
     private static final String TEST_SOURCES = "src/test/java";
     private static final String TEST_OUTPUT = "target/test-classes";
 
-    /** The JUnit toolchain mj manages: one frozen version, store-pinned. */
     private static final List<String[]> JUNIT_TOOLCHAIN = List.of(
             new String[]{"org.junit.jupiter", "junit-jupiter-api", "6.1.3"},
             new String[]{"org.junit.jupiter", "junit-jupiter-engine", "6.1.3"},
-            new String[]{"org.junit.platform", "junit-platform-launcher", "6.1.3"});
+            new String[]{"org.junit.platform", "junit-platform-launcher", "6.1.3"},
+            new String[]{"org.junit.platform", "junit-platform-engine", "6.1.3"},
+            new String[]{"org.junit.platform", "junit-platform-commons", "6.1.3"},
+            new String[]{"org.opentest4j", "opentest4j", "1.3.0"});
 
     private final ArtifactStore store;
     private final Path projectDir;
@@ -91,100 +77,31 @@ public final class TestCommand implements Command {
             return 1;
         }
 
-        List<Class<?>> allClasses = discover(classpath(toolchain, true));
-        List<Class<?>> mjClasses = new ArrayList<>();
-        List<Class<?>> jupiterClasses = new ArrayList<>();
-        for (Class<?> loaded : allClasses) {
-            if (hasAnnotation(loaded, MjTest.class)) {
-                mjClasses.add(loaded);
-            } else if (hasAnnotation(loaded, org.junit.jupiter.api.Test.class)) {
-                jupiterClasses.add(loaded);
-            }
-        }
+        // fork a separate JVM — complete classloader isolation from the mj process
+        List<String> runClasspath = classpath(toolchain, true);
+        Path testOutput = projectDir.resolve(TEST_OUTPUT);
 
-        int passed = 0;
-        int failures = 0;
-        if (!mjClasses.isEmpty()) {
-            int[] result = runMjTests(mjClasses);
-            passed += result[0];
-            failures += result[1];
-        }
-        if (!jupiterClasses.isEmpty()) {
-            int[] result = runJupiterTests(jupiterClasses);
-            passed += result[0];
-            failures += result[1];
-        }
+        List<String> command = new ArrayList<>();
+        command.add("java");
+        command.add("-cp");
+        command.add(String.join(File.pathSeparator, runClasspath));
+        command.add("com.jujin.mj.test.MjTestFork");
+        command.add(testOutput.toString());
 
-        System.out.println("tests: " + (passed + failures) + ", passed: " + passed
-                + ", failed: " + failures);
-        return failures == 0 ? 0 : 1;
+        try {
+            Process process = new ProcessBuilder(command).inheritIO().start();
+            return process.waitFor();
+        } catch (IOException e) {
+            System.err.println("mj: cannot fork test JVM: " + e.getMessage());
+            return 1;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return 1;
+        }
     }
 
     // ------------------------------------------------------------------
-    // the built-in @MjTest runner
-    // ------------------------------------------------------------------
-
-    private int[] runMjTests(List<Class<?>> testClasses) {
-        int passed = 0;
-        List<String> failures = new ArrayList<>();
-        for (Class<?> testClass : testClasses) {
-            for (Method test : annotated(testClass, MjTest.class)) {
-                String name = testClass.getName() + "." + test.getName();
-                try {
-                    // package-private test classes and methods are the norm;
-                    // the runner is the privileged caller
-                    test.setAccessible(true);
-                    var constructor = testClass.getDeclaredConstructor();
-                    constructor.setAccessible(true);
-                    Object instance = constructor.newInstance();
-                    for (Method before : annotated(testClass, MjBeforeEach.class)) {
-                        before.setAccessible(true);
-                        before.invoke(instance);
-                    }
-                    test.invoke(instance);
-                    for (Method after : annotated(testClass, MjAfterEach.class)) {
-                        after.setAccessible(true);
-                        after.invoke(instance);
-                    }
-                    passed++;
-                    System.out.println("  ok  " + name);
-                } catch (Throwable failure) {
-                    failures.add(name);
-                    Throwable cause = failure.getCause() != null ? failure.getCause() : failure;
-                    System.out.println("  FAIL " + name + ": " + cause);
-                }
-            }
-        }
-        return new int[]{passed, failures.size()};
-    }
-
-    // ------------------------------------------------------------------
-    // the JUnit Platform branch
-    // ------------------------------------------------------------------
-
-    private int[] runJupiterTests(List<Class<?>> testClasses) {
-        List<DiscoverySelector> selectors = new ArrayList<>();
-        for (Class<?> testClass : testClasses) {
-            selectors.add(DiscoverySelectors.selectClass(testClass));
-        }
-        LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
-                .selectors(selectors)
-                .build();
-        SummaryGeneratingListener listener = new SummaryGeneratingListener();
-        LauncherFactory.create().execute(request, listener);
-
-        var summary = listener.getSummary();
-        summary.getFailures().forEach(failure -> System.out.println("  FAIL "
-                + failure.getTestIdentifier().getDisplayName() + ": "
-                + failure.getException()));
-        System.out.println("  jupiter: " + summary.getTestsSucceededCount() + " passed, "
-                + summary.getTestsFailedCount() + " failed");
-        return new int[]{(int) summary.getTestsSucceededCount(),
-                (int) summary.getTotalFailureCount()};
-    }
-
-    // ------------------------------------------------------------------
-    // classpath: closure + target/classes + mj + the JUnit toolchain
+    // classpath assembly
     // ------------------------------------------------------------------
 
     private List<String> classpath(List<Path> toolchain, boolean includeTestOutput) {
@@ -200,7 +117,7 @@ public final class TestCommand implements Command {
                 entries.add(jar.toString());
             }
         }
-        entries.add(runtimeLocation().toString());  // the @MjTest API rides with the tool
+        entries.add(runtimeLocation().toString());
         for (Path jar : toolchain) {
             entries.add(jar.toString());
         }
@@ -208,12 +125,10 @@ public final class TestCommand implements Command {
     }
 
     /**
-     * The JUnit toolchain, from the distribution when mj runs from one
-     * ({@code lib/toolchain/} next to the mj jar — shipped, offline, no
-     * download) and from the store otherwise (the exploded development
-     * layout). Injection applies only to the store path, and only when the
-     * closure does not already declare junit-jupiter-api — one id, one
-     * version (SPEC.md §4.2).
+     * The JUnit toolchain: shipped jars (lib/toolchain/) when running from a
+     * distribution; store-downloaded jars in the exploded development layout.
+     * Injected only when the closure does not already declare
+     * junit-jupiter-api — one id, one version (SPEC.md §4.2).
      */
     public List<Path> toolchainPaths() {
         Path shipped = shippedToolchain();
@@ -237,7 +152,7 @@ public final class TestCommand implements Command {
             }
         }
         if (declaredInClosure) {
-            return paths;  // the closure owns the JUnit version
+            return paths;
         }
         for (String[] coordinate : JUNIT_TOOLCHAIN) {
             String url = ArtifactLocations.mavenFile(ArtifactLocations.centralBase(),
@@ -247,15 +162,10 @@ public final class TestCommand implements Command {
         return paths;
     }
 
-    /**
-     * {@code lib/toolchain/} next to the mj runtime — present when mj runs
-     * from a distribution ({@code lib/mj.jar}), absent in the exploded
-     * development layout.
-     */
     private Path shippedToolchain() {
         Path runtime = runtimeLocation();
         if (!runtime.toString().endsWith(".jar")) {
-            return null;  // exploded development layout — no distribution lib/
+            return null;
         }
         Path toolchain = runtime.getParent().resolve("toolchain");
         return Files.isDirectory(toolchain) ? toolchain : null;
@@ -263,8 +173,7 @@ public final class TestCommand implements Command {
 
     private List<LockedArtifact> lock() {
         try {
-            return com.jujin.mj.store.LockFileReader.read(
-                    Files.readString(projectDir.resolve("mj.lock")));
+            return LockFileReader.read(Files.readString(projectDir.resolve("mj.lock")));
         } catch (IOException e) {
             throw new IllegalStateException("cannot read mj.lock", e);
         }
@@ -299,89 +208,6 @@ public final class TestCommand implements Command {
             System.err.println("mj: test compilation failed");
         }
         return exit == 0;
-    }
-
-    private List<Class<?>> discover(List<String> classpath) {
-        List<URL> urls = new ArrayList<>();
-        // the compile output is the discovery root — it did not exist when the
-        // compile classpath was assembled, so it joins the loader here
-        try {
-            urls.add(projectDir.resolve(TEST_OUTPUT).toUri().toURL());
-            for (String entry : classpath) {
-                urls.add(Path.of(entry).toUri().toURL());
-            }
-        } catch (IOException e) {
-            throw new IllegalStateException("cannot assemble the test classpath", e);
-        }
-        // 项目类与测试类必须同一个加载器(package-private 才互通),且
-        // 自身优先——否则父(工具 uber-jar)里的同名库会遮蔽被测类。
-        // 平台与测试 API(org.junit.* / mj runtime / JDK)委托父,保持单份。
-        ClassLoader loader = new java.net.URLClassLoader(
-                urls.toArray(URL[]::new), getClass().getClassLoader()) {
-            @Override
-            protected Class<?> loadClass(String name, boolean resolve)
-                    throws ClassNotFoundException {
-                Class<?> loaded = findLoadedClass(name);
-                if (loaded == null) {
-                    if (delegates(name)) {
-                        return super.loadClass(name, resolve);
-                    }
-                    loaded = findClass(name);
-                }
-                if (resolve) {
-                    resolveClass(loaded);
-                }
-                return loaded;
-            }
-
-            private boolean delegates(String name) {
-                return name.startsWith("java.") || name.startsWith("javax.")
-                        || name.startsWith("jdk.") || name.startsWith("sun.")
-                        || name.startsWith("org.junit.") || name.startsWith("org.opentest4j.")
-                        || name.startsWith("com.jujin.mj.")
-                        || name.startsWith("com.jujin.freeway.ioc.");
-            }
-        };
-        List<Class<?>> classes = new ArrayList<>();
-        Path output = projectDir.resolve(TEST_OUTPUT);
-        try (Stream<Path> stream = Files.walk(output)) {
-            for (Path classFile : stream.filter(Files::isRegularFile)
-                    .filter(path -> path.toString().endsWith(".class"))
-                    .toList()) {
-                String binary = output.relativize(classFile).toString()
-                        .replace(File.separatorChar, '.')
-                        .replaceAll("\\.class$", "");
-                try {
-                    classes.add(loader.loadClass(binary));
-                } catch (ClassNotFoundException | NoClassDefFoundError ignored) {
-                    // a companion class with unresolvable links — only classes
-                    // carrying tests matter
-                }
-            }
-        } catch (IOException e) {
-            throw new IllegalStateException("cannot scan " + output, e);
-        }
-        return classes;
-    }
-
-    private static boolean hasAnnotation(Class<?> type, Class<? extends Annotation> annotation) {
-        for (Method method : type.getDeclaredMethods()) {
-            if (method.isAnnotationPresent(annotation)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static List<Method> annotated(Class<?> type,
-                                          Class<? extends Annotation> annotation) {
-        List<Method> found = new ArrayList<>();
-        for (Method method : type.getDeclaredMethods()) {
-            if (method.isAnnotationPresent(annotation)) {
-                found.add(method);
-            }
-        }
-        return found;
     }
 
     private List<String> sources(Path root) {

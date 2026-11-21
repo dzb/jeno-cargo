@@ -109,15 +109,18 @@ class TestRunnerTest {
         String home = System.getProperty("user.home");
         Map<String, byte[]> jars = new LinkedHashMap<>();
         for (String[] coordinate : new String[][]{
-                {"org/junit/jupiter", "junit-jupiter-api"},
-                {"org/junit/jupiter", "junit-jupiter-engine"},
-                {"org/junit/platform", "junit-platform-launcher"}}) {
-            String path = "/" + coordinate[0] + "/" + coordinate[1] + "/6.1.3/"
-                    + coordinate[1] + "-6.1.3.jar";
+                {"org/junit/jupiter", "junit-jupiter-api", "6.1.3"},
+                {"org/junit/jupiter", "junit-jupiter-engine", "6.1.3"},
+                {"org/junit/platform", "junit-platform-launcher", "6.1.3"},
+                {"org/junit/platform", "junit-platform-engine", "6.1.3"},
+                {"org/junit/platform", "junit-platform-commons", "6.1.3"},
+                {"org/opentest4j", "opentest4j", "1.3.0"}}) {
+            String path = "/" + coordinate[0] + "/" + coordinate[1] + "/" + coordinate[2] + "/"
+                    + coordinate[1] + "-" + coordinate[2] + ".jar";
             jars.put(path, java.nio.file.Files.readAllBytes(
                     java.nio.file.Path.of(home, ".m2/repository",
-                            coordinate[0], coordinate[1], "6.1.3",
-                            coordinate[1] + "-6.1.3.jar")));
+                            coordinate[0], coordinate[1], coordinate[2],
+                            coordinate[1] + "-" + coordinate[2] + ".jar")));
         }
         central.createContext("/", exchange -> {
             byte[] body = jars.get(exchange.getRequestURI().getPath());
@@ -165,15 +168,18 @@ class TestRunnerTest {
         String home = System.getProperty("user.home");
         Map<String, byte[]> jars = new LinkedHashMap<>();
         for (String[] coordinate : new String[][]{
-                {"org/junit/jupiter", "junit-jupiter-api"},
-                {"org/junit/jupiter", "junit-jupiter-engine"},
-                {"org/junit/platform", "junit-platform-launcher"}}) {
-            String path = "/" + coordinate[0] + "/" + coordinate[1] + "/6.1.3/"
-                    + coordinate[1] + "-6.1.3.jar";
+                {"org/junit/jupiter", "junit-jupiter-api", "6.1.3"},
+                {"org/junit/jupiter", "junit-jupiter-engine", "6.1.3"},
+                {"org/junit/platform", "junit-platform-launcher", "6.1.3"},
+                {"org/junit/platform", "junit-platform-engine", "6.1.3"},
+                {"org/junit/platform", "junit-platform-commons", "6.1.3"},
+                {"org/opentest4j", "opentest4j", "1.3.0"}}) {
+            String path = "/" + coordinate[0] + "/" + coordinate[1] + "/" + coordinate[2] + "/"
+                    + coordinate[1] + "-" + coordinate[2] + ".jar";
             jars.put(path, java.nio.file.Files.readAllBytes(
                     java.nio.file.Path.of(home, ".m2/repository",
-                            coordinate[0], coordinate[1], "6.1.3",
-                            coordinate[1] + "-6.1.3.jar")));
+                            coordinate[0], coordinate[1], coordinate[2],
+                            coordinate[1] + "-" + coordinate[2] + ".jar")));
         }
         central.createContext("/", exchange -> {
             byte[] body = jars.get(exchange.getRequestURI().getPath());
