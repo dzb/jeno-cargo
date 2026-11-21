@@ -61,6 +61,15 @@ public final class DescriptorReader {
             javaVersion = requireInteger(javaSection, "java", "version");
         }
 
+        // identity facts — optional, immutable, read only by `mj info`
+        String summary = optionalString(projectSection, "project", "summary");
+        String homepage = optionalString(projectSection, "project", "homepage");
+        String license = optionalString(projectSection, "project", "license");
+        if (homepage != null && !homepage.startsWith("https://")) {
+            throw new ProjectException("descriptor [project].homepage must be an https URL, got "
+                    + homepage);
+        }
+
         List<Requirement> requirements = List.of();
         Map<String, Object> depsSection = optionalSection(root, "deps");
         if (depsSection != null) {
@@ -80,7 +89,20 @@ public final class DescriptorReader {
             }
         }
 
-        return new Descriptor(name, version, javaVersion, requirements, retract);
+        return new Descriptor(name, version, javaVersion, requirements, retract,
+                summary, homepage, license);
+    }
+
+    private static String optionalString(Map<String, Object> section, String sectionName, String key) {
+        Object value = section.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (!(value instanceof String string) || string.isBlank()) {
+            throw new ProjectException("descriptor [" + sectionName + "]." + key
+                    + " must be a non-blank string when present");
+        }
+        return string;
     }
 
     private static Map<String, Object> section(Map<String, Object> root, String name) {

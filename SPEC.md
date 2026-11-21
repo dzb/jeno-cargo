@@ -178,6 +178,9 @@ gitee:{owner}/{repo}@{tag}
 [project]
 name = "mylib"            # 必填;必须与文件名 artifact 段一致,否则报错
 version = "1.2.0"         # 必填;必须与文件名 version 段一致,否则报错
+summary = "..."           # 可选;一句话说明这个库是做什么的(供 mj info 展示)
+homepage = "https://..."  # 可选;必须 https;项目主页
+license = "Apache-2.0"    # 可选;SPDX 标识符
 
 [java]
 version = 21              # 可选;语义同 §2.1 [java]
@@ -195,6 +198,9 @@ version = 21              # 可选;语义同 §2.1 [java]
 ### 3.3 语义
 
 描述符 `[deps]` 参与消费方闭包与深度预算,与消费方直接依赖同等对待。
+
+`[project]` 的 `summary` / `homepage` / `license` 是**标识事实**:发布后不可变、不参与解析、
+仅由 `mj info` 读取展示。它们与 `[deps]` 同属"发布物里的事实",不是规则。
 
 ### 3.4 [retract](可选节,吸收自 Go modules)
 

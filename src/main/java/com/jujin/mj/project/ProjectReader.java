@@ -58,6 +58,16 @@ public final class ProjectReader {
         String version = requireString(projectSection, "project", "version");
         String main = projectSection.containsKey("main")
                 ? requireString(projectSection, "project", "main") : null;
+        // identity facts — optional; they travel into the published descriptor
+        String summary = projectSection.containsKey("summary")
+                ? requireString(projectSection, "project", "summary") : null;
+        String homepage = projectSection.containsKey("homepage")
+                ? requireString(projectSection, "project", "homepage") : null;
+        if (homepage != null && !homepage.startsWith("https://")) {
+            throw new ProjectException("[project].homepage must be an https URL, got " + homepage);
+        }
+        String license = projectSection.containsKey("license")
+                ? requireString(projectSection, "project", "license") : null;
 
         Integer javaVersion = null;
         Map<String, Object> javaSection = optionalSection(root, "java");
@@ -170,7 +180,8 @@ public final class ProjectReader {
         }
 
         return new MjProject(name, version, main, javaVersion, maxDepth, requirements,
-                overrides, scripts, repos, buildParameters, devRequirements);
+                overrides, scripts, repos, buildParameters, devRequirements,
+                summary, homepage, license);
     }
 
     /**

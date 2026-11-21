@@ -362,6 +362,17 @@ public final class PublishCommand implements Command {
         out.append("[project]\n");
         out.append("name = \"").append(project.name()).append("\"\n");
         out.append("version = \"").append(project.version()).append("\"\n");
+        // identity facts travel with the release: they are what `mj info`
+        // shows a stranger who is deciding whether to depend on this
+        if (project.summary() != null) {
+            out.append("summary = \"").append(escape(project.summary())).append("\"\n");
+        }
+        if (project.homepage() != null) {
+            out.append("homepage = \"").append(escape(project.homepage())).append("\"\n");
+        }
+        if (project.license() != null) {
+            out.append("license = \"").append(escape(project.license())).append("\"\n");
+        }
         if (project.javaVersion() != null) {
             out.append("\n[java]\nversion = ").append(project.javaVersion()).append('\n');
         }
@@ -373,6 +384,11 @@ public final class PublishCommand implements Command {
             }
         }
         return out.toString();
+    }
+
+    /** TOML basic-string escaping for the identity facts (quotes, backslashes). */
+    private static String escape(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private static String requirementValue(Requirement requirement) {

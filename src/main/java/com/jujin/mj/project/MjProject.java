@@ -29,7 +29,10 @@ public record MjProject(
         Map<String, String> scripts,
         Map<String, String> repos,
         List<String> buildParameters,
-        List<Requirement> devRequirements) {
+        List<Requirement> devRequirements,
+        String summary,
+        String homepage,
+        String license) {
 
     public MjProject {
         if (requirements == null) {
