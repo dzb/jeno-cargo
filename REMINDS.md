@@ -112,3 +112,46 @@ manifest 结构),都要检查 CI 里那步用的是不是新代码。`--version`
 - JUnit XML 测试报告 —— CI 的 checks UI 需要
 
 这些在 `DESIGN.md §13` 的吸收清单里,不是债,是待办。
+
+---
+
+## 6. `publish` 与 `release` 的命名歧义
+
+**位置**:`PublishCommand` / `ReleaseCommand`
+
+**现状**:两个词在英文里几乎同义,但在 mj 里指两件不同的事:
+
+| 命令 | 做什么 | 产出去哪 |
+|---|---|---|
+| `mj publish [gh:…]` | 只发**库**的三件套(jar + 描述符 + sha256) | `dist/`,上传到 Release |
+| `mj release [--publish …]` | 跑**全流程** lock → build → verify → test → dist,可选地顺带 publish | `target/`(发行目录 + tar.gz),以及 `dist/` |
+
+**实际关系**:`release` 的图里有一个 `publish` 阶段(默认关闭,`--publish`
+才开),它调用的就是 `PublishCommand` 本身。所以 `release --publish X` **同时**
+产出可执行发行目录和库三件套——落在两个不同目录,给两种不同消费者。
+
+**为什么让人困惑**:`mj release --publish gh:acme/widget` 读起来像同义反复。
+真实语义是"跑完整流水线,并在最后把库也发出去",但名字没有传达这个包含关系。
+
+**为什么暂不改名**:
+- `publish` 对齐业界惯例(npm publish、cargo publish),不该动
+- `release` 在 mj 的自举语境里已特指"发版这条链",`--publish` 旗标本身暗示了包含关系
+- 改名要同时动命令、`mj release` 的旗标、CI、README、RELEASE.md,收益是"少困惑一秒"
+
+**更值得做的替代**:不动命令名,而是**让 `release` 的输出说清它产出了什么**。
+现在 dist 阶段打印 `dist /path`,publish 阶段打印三件套路径,但没有任何一行说
+"这两个是不同的东西,给不同的人用"。在 release 结束时加一段总结:
+
+```
+release v0.1.5 complete:
+  tool distribution  target/mj-0.1.5.tar.gz   (for `curl | bash` users)
+  library triple     dist/mj-0.1.5.{jar,mj.toml,sha256}   (for `mj add` consumers)
+```
+
+**触发重新决定的条件**:
+- 有人(包括未来的我)在 README 或 issue 里把两者混为一谈
+- `release` 增加更多可选阶段,使"它到底发了什么"更难从命令名推断
+- 出现第三种发布目标(索引、镜像、签名仓库),`--publish` 的单值旗标撑不住时
+
+**成本**:改名是低风险但低收益的机械改动;加输出总结是极小改动且直接消解困惑。
+**后者优先**。
