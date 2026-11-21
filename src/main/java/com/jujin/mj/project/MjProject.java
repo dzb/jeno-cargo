@@ -13,6 +13,10 @@ import java.util.Map;
  * @param maxDepth        the dependency-chain budget, 1–255, default 2
  * @param repos           named repositories (name → https base URL), plus nothing
  *                        for Central — Central is always the implicit default
+ * @param processors      {@code [build].processors} — annotation-processor
+ *                        coordinates, resolved as their own closure and put on
+ *                        javac's {@code -processorpath}; empty means javac's
+ *                        default (the classpath)
  * @param devRequirements {@code [dev-deps]} — test-only requirements; they
  *                        resolve into mj.lock but never reach the compile
  *                        visibility, the runtime classpath or a published
@@ -32,7 +36,9 @@ public record MjProject(
         List<Requirement> devRequirements,
         String summary,
         String homepage,
-        String license) {
+        String license,
+        List<String> processors,
+        List<Requirement> processorRequirements) {
 
     public MjProject {
         if (requirements == null) {
@@ -59,5 +65,13 @@ public record MjProject(
             buildParameters = List.of();
         }
         buildParameters = List.copyOf(buildParameters);
+        if (processors == null) {
+            processors = List.of();
+        }
+        processors = List.copyOf(processors);
+        if (processorRequirements == null) {
+            processorRequirements = List.of();
+        }
+        processorRequirements = List.copyOf(processorRequirements);
     }
 }

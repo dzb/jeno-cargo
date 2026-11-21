@@ -100,10 +100,15 @@ public final class LockFileReader {
         if (value == null) {
             return Scope.MAIN;
         }
-        if (!(value instanceof String text) || !text.equals("dev")) {
-            throw new StoreException("mj.lock: 'scope' is either absent (main) or the string "
-                    + "\"dev\" — got " + value);
+        if (!(value instanceof String text)) {
+            throw new StoreException("mj.lock: 'scope' is absent (main), \"dev\" or "
+                    + "\"processor\" — got " + value);
         }
-        return Scope.DEV;
+        return switch (text) {
+            case "dev" -> Scope.DEV;
+            case "processor" -> Scope.PROCESSOR;
+            default -> throw new StoreException("mj.lock: 'scope' is absent (main), \"dev\" "
+                    + "or \"processor\" — got \"" + text + "\"");
+        };
     }
 }

@@ -12,5 +12,13 @@ package com.jujin.mj.resolve;
  */
 public enum Scope {
     MAIN,
-    DEV
+    DEV,
+    /**
+     * Annotation-processor reach ({@code [build].processors}). Resolves into
+     * the lockfile and is handed to javac's {@code -processorpath}, and
+     * nowhere else: not the compile classpath (a processor is not an API), not
+     * the runtime closure, not a published descriptor. An artifact reachable
+     * from MAIN is MAIN — production reach always wins.
+     */
+    PROCESSOR
 }

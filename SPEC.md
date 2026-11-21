@@ -59,7 +59,7 @@ string-array  = "[" ws basic-string *( "," ws basic-string ) [","] ws "]"
 
 | 字段 | 类型 | 必填 | 规则 |
 |---|---|---|---|
-| `version` | 整数 | 否 | 目标 major 版本。编译:`javac --release N`;编译与运行要求当前 JDK major **>= N**(允许更高 JDK,字节码由 `--release` 保证)。缺省 = 不设限 |
+| `version` | 整数 | 否 | 目标 major 版本。编译:`javac --release N`(主码与测试码同目标);要求当前 JDK major **>= N**,否则构建失败。缺省 = 不设限 |
 
 > 注:mj 自身基于 Freeway(JDK 25+),运行 mj 需要一个 ≥25 的 JDK;用户项目可通过 `--release` 目标更低版本。
 
@@ -69,7 +69,7 @@ key = 坐标,value 形态决定物种:
 
 | 值形态 | 物种 | 要求 |
 |---|---|---|
-| `"1.2.3"` | central | 版本字符串非空、无空白;**禁止 version ranges**(`[1.0,2.0)`) |
+| `"1.2.3"` | central | 版本字符串非空、无空白;**禁止 version ranges**(`[1.0,2.0)`)。带 classifier 的依赖沿 pom 传递时,classifier 是身份的一部分(`group:artifact:classifier`),URL 为 `artifact-version-classifier.jar` |
 | `"gh:owner/repo@tag"` / `"gitee:owner/repo@tag"` | mj 原生 | tag 为可选 `v` 前缀 + semver;展开规则见 §2.2 |
 | `"https://…/x.jar"` | 裸 URL(叶子) | 必须 https、以 `.jar` 结尾 |
 
@@ -129,9 +129,21 @@ key = 坐标,value 形态决定物种:
 
 **[build]**
 
-- key = `parameters`(唯一支持的键),value = 字符串数组,每项是追加到 javac 的旗标
-- 用途:项目需要 `-parameters` 等编译器旗标时声明,freeway 系 BeanIntrospector 依赖参数名
-- 缺省 = 空数组(javac 默认行为);未知键 → 报错
+| 键 | 类型 | 规则 |
+|---|---|---|
+| `parameters` | 字符串数组 | 追加到 javac 的旗标,如 `-parameters`(freeway 系 BeanIntrospector 依赖参数名) |
+| `processors` | 字符串数组 | 注解处理器坐标 `group:artifact:version`(版本必填——处理器是构建工具,不是由消费者选版本的库)。解析进同一张锁图,`scope = "processor"`,只进 `javac -processorpath`,不进编译 classpath、运行闭包或发布描述符 |
+
+缺省 = 空数组;未知键 → 报错
+
+**[test]**
+
+| 键 | 类型 | 规则 |
+|---|---|---|
+| `include` | 字符串数组 | 只编译/运行匹配的测试源;`*` 匹配任意字符;空 = 全部 |
+| `exclude` | 字符串数组 | 跳过匹配的测试源;排除优先于包含 |
+
+匹配对象是文件名或相对路径(surefire 的 `*Slow*` 写法可用)。
 
 未知节、未知键 → 报错。
 

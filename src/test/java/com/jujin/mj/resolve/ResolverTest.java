@@ -64,6 +64,81 @@ class ResolverTest {
     }
 
     // ------------------------------------------------------------------
+    // classifiers
+    // ------------------------------------------------------------------
+
+    @Test
+    void aClassifiedDependencyKeepsItsClassifierInTheJarUrl() {
+        // the declaring pom asks for the native sibling, not the base jar
+        ResolvedGraph graph = Resolver.resolve(project("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [deps]
+            "com.example:app" = "1.0.0"
+            """), pomSource(
+                "com.example:app:1.0.0", pom("com.example", "app", "1.0.0", """
+                    <dependencies>
+                      <dependency>
+                        <groupId>io.netty</groupId>
+                        <artifactId>netty-transport-native-epoll</artifactId>
+                        <version>4.1.0</version>
+                        <classifier>linux-x86_64</classifier>
+                      </dependency>
+                    </dependencies>
+                    """),
+                "io.netty:netty-transport-native-epoll:4.1.0",
+                pom("io.netty", "netty-transport-native-epoll", "4.1.0", "")),
+            descriptorSource());
+
+        ResolvedGraph.ResolvedArtifact nativeDep = graph.artifacts().stream()
+                .filter(a -> a.id().startsWith("io.netty:netty-transport-native-epoll"))
+                .findFirst().orElseThrow();
+        assertTrue(nativeDep.id().endsWith(":linux-x86_64"),
+                "the classifier is part of the identity: " + nativeDep.id());
+        assertTrue(nativeDep.jarUrl().endsWith(
+                        "netty-transport-native-epoll-4.1.0-linux-x86_64.jar"),
+                "the download URL names the classified artifact: " + nativeDep.jarUrl());
+    }
+
+    @Test
+    void baseAndClassifiedArtifactsAreDistinctNodes() {
+        // one pom asks for both the base jar and its -sources sibling; they
+        // must not collapse into one node, or the closure picks one at random
+        ResolvedGraph graph = Resolver.resolve(project("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [deps]
+            "com.example:app" = "1.0.0"
+            """), pomSource(
+                "com.example:app:1.0.0", pom("com.example", "app", "1.0.0", """
+                    <dependencies>
+                      <dependency>
+                        <groupId>com.example</groupId>
+                        <artifactId>lib</artifactId>
+                        <version>2.0.0</version>
+                      </dependency>
+                      <dependency>
+                        <groupId>com.example</groupId>
+                        <artifactId>lib</artifactId>
+                        <version>2.0.0</version>
+                        <classifier>sources</classifier>
+                      </dependency>
+                    </dependencies>
+                    """),
+                "com.example:lib:2.0.0", pom("com.example", "lib", "2.0.0", "")),
+            descriptorSource());
+
+        assertEquals(2, graph.artifacts().stream()
+                        .filter(a -> a.id().startsWith("com.example:lib")).count(),
+                "base and classified are two nodes: " + graph.artifacts().stream()
+                        .map(ResolvedGraph.ResolvedArtifact::id).toList());
+    }
+
+    // ------------------------------------------------------------------
     // [dev-deps] — scope semantics
     // ------------------------------------------------------------------
 

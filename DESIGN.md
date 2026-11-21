@@ -323,9 +323,9 @@ git tags。GITHUB_TOKEN 的推送不触发新 run(平台防环),bump commit 无�
 | `mj lock` | ✅ | 解析并写出 mj.lock |
 | `mj tree` | ✅ | 依赖树 + 深度标注(dev 工件标 `, dev`) |
 | `mj why <dep>` | ✅ | 谁引入的、占多少深度预算 |
-| `mj build` | ✅ | javac 编译(严格可见性 classpath —— 只含 MAIN 声明);`src/main/resources` 拷入产物 |
+| `mj build` | ✅ | javac 编译(严格可见性 classpath —— 只含 MAIN 声明);`--release N` 目标化字节码;`-processorpath` 注入处理器;`src/main/resources` 拷入产物 |
 | `mj run <main>` / scripts | ✅ | runtime classpath 运行(排除 dev) |
-| `mj test` | ✅ | fork JVM runner:`@MjTest` + JUnit Platform;classpath 含 MAIN + dev |
+| `mj test` | ✅ | fork JVM runner:`@MjTest` + JUnit Platform;classpath 含 MAIN + dev;`[test]` include/exclude 过滤源 |
 | `mj package` | ✅ | 纯 jar;`--uber` 合并闭包(排除 dev);输出 `dist/` |
 | `mj bundle` | ✅ | 发行目录 + setup.sh + tar.gz,输出 `dist/`(应用自用;库不需要) |
 | `mj publish` | ✅ | 三件套(dist/)+ `gh:`/`gitee:` 原生上传;描述符只含 MAIN 依赖 |

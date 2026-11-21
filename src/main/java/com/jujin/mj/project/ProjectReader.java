@@ -44,7 +44,10 @@ public final class ProjectReader {
             }
             switch (entry.getKey()) {
                 case "project", "java", "deps", "dev-deps", "repos", "limits", "overrides",
-                     "scripts", "build" -> { }
+                     "scripts", "build", "test" -> { }
+
+                // [test] is read by TestCommand (include/exclude patterns);
+                // validating its keys here would duplicate that owner
                 default -> throw new ProjectException("unknown section [" + entry.getKey()
                         + "] — mj.toml is a closed schema (SPEC.md §2)");
             }
@@ -158,30 +161,49 @@ public final class ProjectReader {
         }
 
         List<String> buildParameters = new ArrayList<>();
+        List<String> processors = new ArrayList<>();
         Map<String, Object> buildSection = optionalSection(root, "build");
         if (buildSection != null) {
             for (Map.Entry<String, Object> entry : buildSection.entrySet()) {
-                if (!entry.getKey().equals("parameters")) {
-                    throw new ProjectException("[build]." + entry.getKey()
-                            + " — the only supported key is 'parameters' (a string array "
-                            + "of additional javac flags)");
-                }
-                if (!(entry.getValue() instanceof List<?> flags)) {
-                    throw new ProjectException("[build].parameters must be a string array");
-                }
-                for (Object flag : flags) {
-                    if (!(flag instanceof String stringFlag) || stringFlag.isBlank()) {
-                        throw new ProjectException("[build].parameters entries must be "
-                                + "non-blank strings (javac flags)");
+                switch (entry.getKey()) {
+                    case "parameters" -> {
+                        for (String flag : stringArray(entry.getValue(), "[build].parameters")) {
+                            buildParameters.add(flag);
+                        }
                     }
-                    buildParameters.add(stringFlag);
+                    case "processors" -> {
+                        for (String coordinate : stringArray(entry.getValue(),
+                                "[build].processors")) {
+                            processors.add(coordinate);
+                        }
+                    }
+                    default -> throw new ProjectException("[build]." + entry.getKey()
+                            + " — the supported keys are 'parameters' (javac flags) and "
+                            + "'processors' (annotation-processor coordinates)");
                 }
             }
         }
 
+        // [build].processors entries are "group:artifact:version" coordinates —
+        // the version is mandatory there because a processor is a build tool,
+        // not a library whose version the consumer should choose
+        List<Requirement> processorRequirements = new ArrayList<>();
+        for (String coordinate : processors) {
+            int first = coordinate.indexOf(':');
+            int second = first < 0 ? -1 : coordinate.indexOf(':', first + 1);
+            if (second < 0) {
+                throw new ProjectException("[build].processors entry '" + coordinate
+                        + "' must be group:artifact:version");
+            }
+            String processorId = coordinate.substring(0, second);
+            String processorVersion = coordinate.substring(second + 1);
+            processorRequirements.add(
+                    requirement(processorId, processorVersion, null, "build.processors"));
+        }
+
         return new MjProject(name, version, main, javaVersion, maxDepth, requirements,
                 overrides, scripts, repos, buildParameters, devRequirements,
-                summary, homepage, license);
+                summary, homepage, license, processors, processorRequirements);
     }
 
     /**
@@ -329,6 +351,21 @@ public final class ProjectReader {
     @SuppressWarnings("unchecked")
     private static Map<String, Object> asStringKeyed(Map<?, ?> group) {
         return (Map<String, Object>) group;
+    }
+
+    /** A non-empty array of non-blank strings — {@code [build]} keys share this shape. */
+    private static List<String> stringArray(Object value, String where) {
+        if (!(value instanceof List<?> entries)) {
+            throw new ProjectException(where + " must be a string array");
+        }
+        List<String> result = new ArrayList<>();
+        for (Object entry : entries) {
+            if (!(entry instanceof String text) || text.isBlank()) {
+                throw new ProjectException(where + " entries must be non-blank strings");
+            }
+            result.add(text);
+        }
+        return result;
     }
 
     private static String requireString(Map<String, Object> section, String sectionName, String key) {

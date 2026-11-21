@@ -32,6 +32,29 @@ class ArtifactLocationsTest {
     }
 
     @Test
+    void aClassifierSitsBetweenVersionAndExtension() {
+        // Maven's layout: netty-4.1.0-linux-x86_64.jar — the classifier is a
+        // dash-separated segment, not an extension prefix. Getting this wrong
+        // silently downloads the base jar instead of the native one.
+        assertEquals(
+                "https://repo.maven.apache.org/maven2/io/netty/netty-transport-native-epoll/"
+                        + "4.1.0/netty-transport-native-epoll-4.1.0-linux-x86_64.jar",
+                ArtifactLocations.mavenFile(ArtifactLocations.CENTRAL_BASE,
+                        "io.netty", "netty-transport-native-epoll", "4.1.0",
+                        "linux-x86_64", "jar"));
+    }
+
+    @Test
+    void aNullClassifierProducesTheBaseJarName() {
+        assertEquals(
+                ArtifactLocations.mavenFile(ArtifactLocations.CENTRAL_BASE,
+                        "com.example", "lib-a", "1.0.0", "jar"),
+                ArtifactLocations.mavenFile(ArtifactLocations.CENTRAL_BASE,
+                        "com.example", "lib-a", "1.0.0", null, "jar"),
+                "no classifier and an explicit null agree");
+    }
+
+    @Test
     void localBasesBecomeFileUrls() {
         String url = ArtifactLocations.mavenFile("local:/home/dev/.m2/repository",
                 "com.example", "lib-a", "1.0.0", "jar");

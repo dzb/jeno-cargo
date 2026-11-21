@@ -71,6 +71,15 @@ final class UberJar {
                 attributes.put(new Attributes.Name("mj-Dependencies"),
                         String.join(" ", input.dependencyLabels()));
             }
+            // A multi-release jar only gets its META-INF/versions/* classes
+            // honored when the manifest says so. The flag is set when any
+            // merged jar carried versioned entries; without it those classes
+            // are dead weight, and with it set for a jar that has none the JVM
+            // just finds nothing to override — both harmless, but only one is
+            // correct for a jar that does carry them.
+            if (carriesVersionedEntries(input.jars())) {
+                attributes.put(new Attributes.Name("Multi-Release"), "true");
+            }
             out.putNextEntry(new ZipEntry("META-INF/MANIFEST.MF"));
             manifest.write(out);
             out.closeEntry();
@@ -113,6 +122,21 @@ final class UberJar {
                         String.join("\n", service.getValue()).getBytes());
             }
         }
+    }
+
+    /** Whether any of these jars carries {@code META-INF/versions/} entries. */
+    private static boolean carriesVersionedEntries(List<Path> jars) throws IOException {
+        for (Path jar : jars) {
+            try (JarInputStream in = new JarInputStream(Files.newInputStream(jar))) {
+                JarEntry entry;
+                while ((entry = in.getNextJarEntry()) != null) {
+                    if (entry.getName().startsWith("META-INF/versions/")) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private static void writeEntry(ZipOutputStream out, String name, byte[] bytes)

@@ -2,6 +2,7 @@ package com.jujin.mj.cli;
 
 import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.mj.resolve.ArtifactLocations;
+import com.jujin.mj.project.ProjectReader;
 import com.jujin.mj.store.ArtifactStore;
 import com.jujin.mj.store.LockFileReader;
 import com.jujin.mj.store.LockedArtifact;
@@ -13,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -65,7 +67,8 @@ public final class TestCommand implements Command {
             System.err.println("mj: no mj.lock in " + projectDir + " — run mj lock first");
             return 1;
         }
-        List<String> testSources = sources(projectDir.resolve(TEST_SOURCES));
+        List<String> testSources = sources(projectDir.resolve(TEST_SOURCES),
+                Filter.from(projectDir));
         if (testSources.isEmpty()) {
             System.out.println("no tests under " + projectDir.resolve(TEST_SOURCES));
             return 0;
@@ -173,6 +176,90 @@ public final class TestCommand implements Command {
         return Files.isDirectory(toolchain) ? toolchain : null;
     }
 
+    /**
+     * {@code [test].include} / {@code [test].exclude} patterns from mj.toml.
+     * Maven's surefire has the same pair; without them a project cannot skip
+     * integration-style tests that need a running service.
+     */
+    private static final class Filter {
+        final List<String> include;
+        final List<String> exclude;
+
+        Filter(List<String> include, List<String> exclude) {
+            this.include = include;
+            this.exclude = exclude;
+        }
+
+        static Filter from(Path projectDir) {
+            try {
+                Map<String, Object> root = com.jujin.freeway.commons.toml.TomlUtils.parse(
+                        Files.readString(projectDir.resolve("mj.toml")));
+                Object section = root.get("test");
+                if (!(section instanceof Map<?, ?> test)) {
+                    return new Filter(List.of(), List.of());
+                }
+                return new Filter(strings(test.get("include")), strings(test.get("exclude")));
+            } catch (IOException | RuntimeException e) {
+                return new Filter(List.of(), List.of());
+            }
+        }
+
+        private static List<String> strings(Object value) {
+            if (!(value instanceof List<?> entries)) {
+                return List.of();
+            }
+            List<String> result = new ArrayList<>();
+            for (Object entry : entries) {
+                if (entry instanceof String text && !text.isBlank()) {
+                    result.add(text);
+                }
+            }
+            return result;
+        }
+
+        /** A source path is kept when it matches no exclude and, if includes exist, one include. */
+        boolean keeps(String path) {
+            String name = Path.of(path).getFileName().toString();
+            for (String pattern : exclude) {
+                if (matches(pattern, name) || matches(pattern, path)) {
+                    return false;
+                }
+            }
+            if (include.isEmpty()) {
+                return true;
+            }
+            for (String pattern : include) {
+                if (matches(pattern, name) || matches(pattern, path)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /** {@code *} matches any run of characters — the shape surefire users expect. */
+        private static boolean matches(String pattern, String candidate) {
+            StringBuilder regex = new StringBuilder();
+            for (char c : pattern.toCharArray()) {
+                if (c == '*') {
+                    regex.append(".*");
+                } else {
+                    regex.append(java.util.regex.Pattern.quote(String.valueOf(c)));
+                }
+            }
+            return candidate.matches(regex.toString());
+        }
+    }
+
+    /** {@code [java].version} from mj.toml, or null — the test compile target. */
+    private Integer projectJavaVersion() {
+        try {
+            return ProjectReader.parse(Files.readString(projectDir.resolve("mj.toml")))
+                    .javaVersion();
+        } catch (IOException | RuntimeException e) {
+            return null;
+        }
+    }
+
     private List<LockedArtifact> lock() {
         try {
             return LockFileReader.read(Files.readString(projectDir.resolve("mj.lock")));
@@ -221,6 +308,12 @@ public final class TestCommand implements Command {
         command.add(output.toString());
         command.add("-cp");
         command.add(String.join(File.pathSeparator, classpath));
+        // test code compiles for the same target as the code under test
+        Integer javaVersion = projectJavaVersion();
+        if (javaVersion != null) {
+            command.add("--release");
+            command.add(String.valueOf(javaVersion));
+        }
         command.addAll(sources);
         int exit = compiler.run(null, null, null, command.toArray(String[]::new));
         if (exit != 0) {
@@ -231,7 +324,7 @@ public final class TestCommand implements Command {
         return true;
     }
 
-    private List<String> sources(Path root) {
+    private List<String> sources(Path root, Filter filter) {
         if (!Files.isDirectory(root)) {
             return List.of();
         }
@@ -240,6 +333,7 @@ public final class TestCommand implements Command {
                     .filter(Files::isRegularFile)
                     .filter(path -> path.toString().endsWith(".java"))
                     .map(Path::toString)
+                    .filter(filter::keeps)
                     .sorted()
                     .toList();
         } catch (IOException e) {

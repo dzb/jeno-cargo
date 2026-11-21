@@ -57,9 +57,22 @@ public final class ArtifactLocations {
      */
     public static String mavenFile(
             String base, String group, String artifactId, String version, String extension) {
-        String path = group.replace('.', '/') + "/" + artifactId + "/" + version + "/"
-                + artifactId + "-" + version + "." + extension;
-        return file(base, path);
+        return mavenFile(base, group, artifactId, version, null, extension);
+    }
+
+    /**
+     * The Maven repository layout with an optional classifier:
+     * {@code artifact-version-classifier.ext}. Maven puts the classifier
+     * between version and extension — {@code netty-4.1.0-linux-x86_64.jar},
+     * never {@code netty-4.1.0.linux-x86_64.jar}. Dropping it silently fetches
+     * the base jar, which for a native dependency is the wrong artifact.
+     */
+    public static String mavenFile(String base, String group, String artifactId,
+                                   String version, String classifier, String extension) {
+        String file = artifactId + "-" + version
+                + (classifier == null || classifier.isBlank() ? "" : "-" + classifier)
+                + "." + extension;
+        return file(base, group.replace('.', '/') + "/" + artifactId + "/" + version + "/" + file);
     }
 
     /**

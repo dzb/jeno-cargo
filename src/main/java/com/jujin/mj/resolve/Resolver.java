@@ -136,6 +136,13 @@ public final class Resolver {
                         List.of(display(requirement.id(), requirement.version())),
                         true, Set.of(), requirement));
             }
+            // annotation processors: their own reach, resolved like any other
+            // coordinate so the lockfile pins and verifies them
+            for (Requirement requirement : project.processorRequirements()) {
+                queue.add(constraint(requirement.id(), requirement.version(),
+                        List.of(display(requirement.id(), requirement.version())),
+                        false, Set.of(), requirement));
+            }
             while (!queue.isEmpty()) {
                 Constraint current = queue.poll();
                 if (!expand(current)) {
@@ -231,10 +238,8 @@ public final class Resolver {
                         Pom pom = Poms.decode(template.group(), template.artifactId(),
                                 version, repositoryBase, pomSource);
                         List<Edge> edges = pom.dependencies().stream()
-                                .map(dependency -> new Edge(new Requirement(
-                                        dependency.key(), Species.CENTRAL, dependency.groupId(),
-                                        dependency.artifactId(), dependency.version(),
-                                        template.repository(), null, null, null, null),
+                                .map(dependency -> new Edge(
+                                        centralRequirement(dependency, template.repository()),
                                         Set.copyOf(dependency.exclusions())))
                                 .toList();
                         yield new Metadata(edges, Map.of());
@@ -268,6 +273,25 @@ public final class Resolver {
             }
         }
 
+        /**
+         * One Central requirement from a decoded pom dependency. A classifier
+         * is part of the identity ({@code group:artifact:classifier}): the base
+         * jar and its {@code -native}/{@code -sources} siblings are different
+         * artifacts with different URLs, and collapsing them onto one id would
+         * make the graph pick one at random.
+         */
+        private static Requirement centralRequirement(PomDependency dependency,
+                                                      String repository) {
+            String classifier = dependency.classifier();
+            boolean plain = classifier == null || classifier.isBlank();
+            String id = plain
+                    ? dependency.key()
+                    : dependency.key() + ":" + classifier;
+            return new Requirement(id, Species.CENTRAL, dependency.groupId(),
+                    dependency.artifactId(), dependency.version(), repository,
+                    null, null, null, null, plain ? null : classifier);
+        }
+
         /** Whether any inherited exclusion removes this target from the subtree. */
         private static boolean excluded(Set<PomDependency.Exclusion> exclusions, Requirement target) {
             if (exclusions.isEmpty() || target.species() != Species.CENTRAL) {
@@ -286,7 +310,8 @@ public final class Resolver {
             }
             return new Requirement(requirement.id(), requirement.species(),
                     requirement.group(), requirement.artifactId(), requirement.version(),
-                    parent.template().repository(), null, null, null, null);
+                    parent.template().repository(), null, null, null, null,
+                    requirement.classifier());
         }
 
         // ----------------------------------------------------------------
@@ -408,21 +433,9 @@ public final class Resolver {
             // artifacts exclusively reachable from [dev-deps] are DEV. The
             // walk runs over the walked edges — the same graph the lockfile
             // records.
-            Set<String> mainReachable = new HashSet<>();
-            Deque<String> frontier = new ArrayDeque<>();
-            for (Requirement requirement : project.requirements()) {
-                if (mainReachable.add(requirement.id())) {
-                    frontier.add(requirement.id());
-                }
-            }
-            while (!frontier.isEmpty()) {
-                String current = frontier.poll();
-                for (String child : children.getOrDefault(current, List.of())) {
-                    if (mainReachable.add(child)) {
-                        frontier.add(child);
-                    }
-                }
-            }
+            Set<String> mainReachable = reachable(children, project.requirements());
+            Set<String> processorReachable =
+                    reachable(children, project.processorRequirements());
 
 
             Depths depths = new Depths(selected, children, declaredIds);
@@ -464,7 +477,9 @@ public final class Resolver {
                 artifacts.add(new ResolvedGraph.ResolvedArtifact(id, version, species, source,
                         jarUrl(template, version), metadataUrl(template, version),
                         depths.depth(id), declaredIds.contains(id),
-                        mainReachable.contains(id) ? Scope.MAIN : Scope.DEV));
+                        mainReachable.contains(id) ? Scope.MAIN
+                                : processorReachable.contains(id) ? Scope.PROCESSOR
+                                : Scope.DEV));
             }
             List<ResolvedGraph.ResolvedArtifact> direct = artifacts.stream()
                     .filter(ResolvedGraph.ResolvedArtifact::declared)
@@ -473,11 +488,32 @@ public final class Resolver {
                     Map.copyOf(children));
         }
 
+        /** Everything reachable from a set of roots over the walked edges. */
+        private static Set<String> reachable(Map<String, List<String>> children,
+                                             List<Requirement> roots) {
+            Set<String> reached = new HashSet<>();
+            Deque<String> frontier = new ArrayDeque<>();
+            for (Requirement requirement : roots) {
+                if (reached.add(requirement.id())) {
+                    frontier.add(requirement.id());
+                }
+            }
+            while (!frontier.isEmpty()) {
+                String current = frontier.poll();
+                for (String child : children.getOrDefault(current, List.of())) {
+                    if (reached.add(child)) {
+                        frontier.add(child);
+                    }
+                }
+            }
+            return reached;
+        }
+
         private String jarUrl(Requirement template, String version) {
             String base = ArtifactLocations.repositoryBase(project.repos(), template.repository());
             return switch (template.species()) {
                 case CENTRAL -> ArtifactLocations.mavenFile(base, template.group(),
-                        template.artifactId(), version, "jar");
+                        template.artifactId(), version, template.classifier(), "jar");
                 case GH -> ArtifactLocations.releaseFile(ArtifactLocations.githubHost(),
                         template.owner(), template.repo(), template.tag(), version, "jar");
                 case GITEE -> ArtifactLocations.releaseFile(ArtifactLocations.giteeHost(),

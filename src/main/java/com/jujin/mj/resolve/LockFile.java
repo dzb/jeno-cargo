@@ -28,6 +28,8 @@ public final class LockFile {
             out.append("depth = ").append(artifact.depth()).append('\n');
             if (artifact.scope() == Scope.DEV) {
                 out.append("scope = \"dev\"\n");
+            } else if (artifact.scope() == Scope.PROCESSOR) {
+                out.append("scope = \"processor\"\n");
             }
         }
         return out.toString();

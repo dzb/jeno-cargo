@@ -60,6 +60,21 @@ public final class BuildCommand implements Command {
         List<LockedArtifact> locked = readLock();
         MjProject project = readProject();
 
+        // SPEC §2.1: [java].version means (a) produce bytecode for that major
+        // via --release, and (b) require the running JDK to be at least that.
+        // Skipping (a) would let mj compile against a newer API than the
+        // declared target while the published descriptor claims the target —
+        // a claim the bytes would not honor.
+        if (project.javaVersion() != null) {
+            int running = Runtime.version().feature();
+            if (running < project.javaVersion()) {
+                System.err.println("mj: this project targets Java "
+                        + project.javaVersion() + " but mj runs on Java " + running
+                        + " — run mj on a newer JDK, or lower [java].version");
+                return 1;
+            }
+        }
+
         Map<String, Path> jarById;
         try {
             jarById = store.verifiedJars(locked);
@@ -107,6 +122,22 @@ public final class BuildCommand implements Command {
         // — what a debugger and a decompiler need to make `mj source` trees
         // line up with the bytes
         command.add("-g");
+        // annotation processors ride on -processorpath: they are build tools,
+        // not an API, so they must never appear on the compile classpath
+        List<String> processorPath = new ArrayList<>();
+        for (LockedArtifact artifact : locked) {
+            if (artifact.scope() == com.jujin.mj.resolve.Scope.PROCESSOR) {
+                processorPath.add(jarById.get(artifact.id()).toString());
+            }
+        }
+        if (!processorPath.isEmpty()) {
+            command.add("-processorpath");
+            command.add(String.join(File.pathSeparator, processorPath));
+        }
+        if (project.javaVersion() != null) {
+            command.add("--release");
+            command.add(String.valueOf(project.javaVersion()));
+        }
         command.addAll(project.buildParameters());
         command.addAll(sources);
         int exit = compiler.run(null, null, null, command.toArray(String[]::new));
