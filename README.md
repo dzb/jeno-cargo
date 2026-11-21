@@ -133,8 +133,9 @@ binary-first ecosystem, still fall back to the publisher's own sources jar.)
 
 ## Publishing: no registry
 
-There is no mj registry. Publishing is uploading three files where a URL can
-reach them:
+There is no mj registry, and no center it knows about. **A repository is a URL.**
+
+Publishing is uploading three files where a URL can reach them:
 
 ```
 mylib-1.2.0.jar
@@ -142,15 +143,34 @@ mylib-1.2.0.mj.toml     ← the descriptor: its own deps, java requirement, iden
 mylib-1.2.0.sha256
 ```
 
-- `gh:owner/repo@v1.2.3` → GitHub Releases
-- `gitee:owner/repo@v1.2.3` → Gitee Releases
-- `https://…/x.jar` → any static server, a bare leaf
-- `local:/path` → a Maven-layout directory (bootstrap and air-gapped builds)
+| Where | Consumed as | How it is published |
+|---|---|---|
+| GitHub Releases | `gh:owner/repo@v1.2.3` | `mj publish gh:owner/repo` |
+| Gitee Releases | `gitee:owner/repo@v1.2.3` | `mj publish gitee:owner/repo` |
+| **your own host** (any http/https, LAN included) | `[repos]` + `[deps.<name>]` | `mj publish https://my.host/repo/` — Maven layout, HTTP PUT |
+| a local directory | `local:/path` | `cp dist/* …` (mj reads it; nothing to upload) |
+| any static server | a bare `https://…/x.jar` leaf | upload the jar your way |
+
+The http(s) path is the general one: `mj publish https://my.host/repo/` writes
+`group/path/artifact/version/artifact-version.{jar,mj.toml,sha256}` — the same
+layout `[repos]` already reads — and PUTs each file. Any server accepting HTTP
+PUT works (nginx with dav_module, Apache mod_dav, most object-storage
+gateways). `MJ_PUBLISH_TOKEN` adds a bearer token when the host wants one.
+
+mj speaks exactly one upload protocol on purpose. It cannot know every host's
+API, and an adapter per backend is how a build tool turns into a deployment
+platform. GitHub and Gitee get native upload because their release APIs are
+stable and public; everything else takes the three files and whatever transfer
+tool you already trust.
 
 The descriptor travels with the jar, so a published library is a **full
 citizen**: its dependencies participate in the consumer's closure and depth
 budget exactly like a direct dependency. A bare jar with no descriptor is a
 leaf.
+
+Because a repository is just a URL, moving a library — from GitHub to your own
+server, from a company registry to a mirror — changes one line in `[repos]`. No
+account migration, no re-publishing under a new namespace.
 
 Determinism does not depend on the host. `mj.lock` pins **two** digests per
 artifact — the bytes and the metadata. A release asset can be deleted,

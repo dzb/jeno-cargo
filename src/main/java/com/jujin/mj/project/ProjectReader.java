@@ -58,6 +58,12 @@ public final class ProjectReader {
         if (!NAME.matcher(name).matches()) {
             throw new ProjectException("[project].name '" + name + "' must match [a-z][a-z0-9-]*");
         }
+        String group = projectSection.containsKey("group")
+                ? requireString(projectSection, "project", "group") : null;
+        if (group != null && !group.matches("[a-zA-Z0-9][a-zA-Z0-9._-]*")) {
+            throw new ProjectException("[project].group '" + group
+                    + "' must be a reverse-DNS id (letters, digits, dot, dash, underscore)");
+        }
         String version = requireString(projectSection, "project", "version");
         String main = projectSection.containsKey("main")
                 ? requireString(projectSection, "project", "main") : null;
@@ -201,7 +207,7 @@ public final class ProjectReader {
                     requirement(processorId, processorVersion, null, "build.processors"));
         }
 
-        return new MjProject(name, version, main, javaVersion, maxDepth, requirements,
+        return new MjProject(name, group, version, main, javaVersion, maxDepth, requirements,
                 overrides, scripts, repos, buildParameters, devRequirements,
                 summary, homepage, license, processors, processorRequirements);
     }

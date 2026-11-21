@@ -9,6 +9,11 @@ import java.util.Map;
  * Everything downstream (resolver, lockfile, build) consumes this record and
  * never re-reads the file.
  *
+ * @param group           the {@code [project].group} — a reverse-DNS id
+ *                        ({@code com.jujin8.mj}); null when unset. Required by
+ *                        a Maven-layout publish (the path is group-based) and
+ *                        carried into the published descriptor so consumers
+ *                        address the library as {@code group:artifact}
  * @param javaVersion     the {@code [java].version} major, or null when unset
  * @param maxDepth        the dependency-chain budget, 1–255, default 2
  * @param repos           named repositories (name → https base URL), plus nothing
@@ -24,6 +29,7 @@ import java.util.Map;
  */
 public record MjProject(
         String name,
+        String group,
         String version,
         String main,
         Integer javaVersion,

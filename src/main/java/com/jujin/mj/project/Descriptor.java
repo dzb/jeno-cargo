@@ -19,12 +19,16 @@ import java.util.Map;
  * @param name      must equal the artifact name the consumer asked for
  * @param version   must equal the version the consumer asked for
  * @param javaVersion nullable — unset means no requirement
+ * @param group     nullable — the reverse-DNS group, so a consumer can address
+ *                  the artifact as {@code group:artifact}; absent in
+ *                  descriptors published before the field existed
  * @param summary   nullable — one line: what the library is for
  * @param homepage  nullable — a browsable project page (https)
  * @param license   nullable — an SPDX identifier (Apache-2.0, MIT, …)
  */
 public record Descriptor(
         String name,
+        String group,
         String version,
         Integer javaVersion,
         List<Requirement> requirements,
@@ -47,6 +51,6 @@ public record Descriptor(
     /** Back-compat: a descriptor with no identity facts. */
     public Descriptor(String name, String version, Integer javaVersion,
                       List<Requirement> requirements, Map<String, String> retract) {
-        this(name, version, javaVersion, requirements, retract, null, null, null);
+        this(name, null, version, javaVersion, requirements, retract, null, null, null);
     }
 }

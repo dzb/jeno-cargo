@@ -62,6 +62,7 @@ public final class DescriptorReader {
         }
 
         // identity facts — optional, immutable, read only by `mj info`
+        String group = optionalString(projectSection, "project", "group");
         String summary = optionalString(projectSection, "project", "summary");
         String homepage = optionalString(projectSection, "project", "homepage");
         String license = optionalString(projectSection, "project", "license");
@@ -89,7 +90,7 @@ public final class DescriptorReader {
             }
         }
 
-        return new Descriptor(name, version, javaVersion, requirements, retract,
+        return new Descriptor(name, group, version, javaVersion, requirements, retract,
                 summary, homepage, license);
     }
 

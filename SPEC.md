@@ -53,6 +53,7 @@ string-array  = "[" ws basic-string *( "," ws basic-string ) [","] ws "]"
 | 字段 | 类型 | 必填 | 规则 |
 |---|---|---|---|
 | `name` | 字符串 | 是 | `^[a-z][a-z0-9-]*$`(用作 mj 原生发布的 artifact 名) |
+| `group` | 字符串 | 否 | 反向域名 id(`com.jujin8.mj`)。发布到 http(s) 主机的 **Maven 布局必需**(路径按 group 展开),并写入描述符供消费方以 `group:artifact` 引用 |
 | `version` | 字符串 | 是 | mj 原生发布时必须 semver(§2.4) |
 
 **[java]**

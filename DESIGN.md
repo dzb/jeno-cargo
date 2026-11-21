@@ -271,6 +271,8 @@ mylib-1.2.0.sha256
 ### 7.3 GitHub/Gitee 后端
 
 - **公开发布推荐 GitHub**(release 附件匿名可下载,消费方零配置);Gitee 作为私有/内网场景的补充(附件需 Bearer 令牌,Q8 实测确认)
+- **自建主机是一等目标**:`mj publish https://my.host/repo/` 按 Maven 布局(`group/path/artifact/version/`)PUT 三件套——与 `[repos]` 读取的布局完全一致,局域网 http 同样适用。上传协议只有一个(PUT/WebDAV),不为每个后端写适配器
+- 迁库只改一行 `[repos]`:从 GitHub 到自建服务器、从公司仓库到镜像,不需要账号迁移或重新发布
 - `mj publish`(V1 ✅):生成 dist/ 三件套 + 上传清单
 - `mj publish gh:owner/repo`(V1.1 代码就绪):原生上传,token 从 `MJ_GITHUB_TOKEN` 环境变量读
 - `mj publish gitee:owner/repo`(V1.1 代码就绪):原生上传,token 从 `MJ_GITEE_TOKEN` 环境变量读;**消费端下载也需令牌**(Q8 实测)
@@ -328,7 +330,7 @@ git tags。GITHUB_TOKEN 的推送不触发新 run(平台防环),bump commit 无�
 | `mj test` | ✅ | fork JVM runner:`@MjTest` + JUnit Platform;classpath 含 MAIN + dev;`[test]` include/exclude 过滤源 |
 | `mj package` | ✅ | 纯 jar;`--uber` 合并闭包(排除 dev);输出 `dist/` |
 | `mj bundle` | ✅ | 发行目录 + setup.sh + tar.gz,输出 `dist/`(应用自用;库不需要) |
-| `mj publish` | ✅ | 三件套(dist/)+ `gh:`/`gitee:` 原生上传;描述符只含 MAIN 依赖 |
+| `mj publish` | ✅ | 三件套(dist/);`gh:`/`gitee:` 原生上传;**任意 http(s) 主机 → Maven 布局 + HTTP PUT**;描述符只含 MAIN 依赖 |
 | `mj update` / `mj upgrade` | ✅ | 自升级(alias 同一实现) |
 | ~~`mj release`~~ | **已删除** | 生命周期属于项目自己的 CI;mj 只提供单步机制 |
 | `mj init` / `mj remove` / `mj clean` | **缺口** | 曾误标 ✅,实际未实现(见 §12 吸收清单) |

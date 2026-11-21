@@ -137,9 +137,12 @@ public final class PublishCommand implements Command {
 
         // target given — attempt native upload
         String target = args.getFirst();
+        if (target.startsWith("https://") || target.startsWith("http://")) {
+            return uploadToHost(target, project, dist, jarName, descriptorName, shaName);
+        }
         if (!target.startsWith("gh:") && !target.startsWith("gitee:")) {
             System.err.println("mj: unknown publish target '" + target
-                    + "' — use gh:owner/repo or gitee:owner/repo");
+                    + "' — use gh:owner/repo, gitee:owner/repo, or an http(s) base URL");
             return 1;
         }
 
@@ -155,6 +158,82 @@ public final class PublishCommand implements Command {
 
         System.out.println("uploading to " + target + " …");
         return upload(target, token, project, dist, jarName, descriptorName, shaName);
+    }
+
+    // ------------------------------------------------------------------
+    // http(s) host — Maven layout, HTTP PUT
+    // ------------------------------------------------------------------
+
+    /**
+     * Publishes the triple to an arbitrary http(s) host using Maven's
+     * repository layout: {@code base/group/path/artifact/version/artifact-version.ext}.
+     * The same layout {@code [repos]} reads, so a library published here is
+     * consumed with nothing more than a {@code [repos]} entry — no platform,
+     * no account, no registry.
+     *
+     * <p>Upload is HTTP PUT (WebDAV semantics). It works against any server
+     * that accepts PUT — nginx with dav_module, Apache mod_dav, most object
+     * storage gateways. mj speaks exactly one upload protocol on purpose: it
+     * cannot know every host's API, and inventing an adapter per backend is
+     * how a build tool becomes a deployment platform.
+     *
+     * <p>Requires {@code [project].group}: the layout is group-based, and
+     * without one there is no path to write to.
+     */
+    private int uploadToHost(String base, MjProject project, Path dist,
+                             String jarName, String descriptorName, String shaName) {
+        if (project.group() == null) {
+            System.err.println("mj: publishing to " + base + " needs [project].group — "
+                    + "a Maven layout is group-based (group/path/artifact/version/)");
+            return 1;
+        }
+        String root = base.endsWith("/") ? base : base + "/";
+        String directory = project.group().replace('.', '/') + "/" + project.name()
+                + "/" + project.version() + "/";
+
+        List<Path> files = List.of(
+                dist.resolve(jarName),
+                dist.resolve(descriptorName),
+                dist.resolve(shaName));
+        for (Path file : files) {
+            String url = root + directory + file.getFileName();
+            try {
+                put(url, Files.readAllBytes(file));
+            } catch (IOException | InterruptedException e) {
+                System.err.println("mj: PUT " + url + " failed — " + e.getMessage());
+                System.err.println("  the host must accept HTTP PUT (WebDAV); a plain static "
+                        + "server rejects it");
+                return 1;
+            }
+            System.out.println("  PUT " + url);
+        }
+
+        System.out.println("published to " + base + " — consume it with:");
+        System.out.println("  [repos]");
+        System.out.println("  mine = \"" + root + "\"");
+        System.out.println("  [deps.mine]");
+        System.out.println("  \"" + project.group() + ":" + project.name() + "\" = \""
+                + project.version() + "\"");
+        return 0;
+    }
+
+    /** One PUT, treating 200/201/204 as success. */
+    private void put(String url, byte[] bytes) throws IOException, InterruptedException {
+        String token = System.getenv("MJ_PUBLISH_TOKEN");
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
+                .header("Content-Type", "application/octet-stream")
+                .PUT(HttpRequest.BodyPublishers.ofByteArray(bytes));
+        if (token != null && !token.isBlank()) {
+            builder.header("Authorization", "Bearer " + token);
+        }
+        HttpResponse<String> response = http.send(builder.build(),
+                HttpResponse.BodyHandlers.ofString());
+        int status = response.statusCode();
+        if (status != 200 && status != 201 && status != 204) {
+            throw new IOException("server answered " + status
+                    + (response.body().isBlank() ? "" : ": " + response.body().substring(
+                            0, Math.min(200, response.body().length()))));
+        }
     }
 
     // ------------------------------------------------------------------
@@ -366,6 +445,9 @@ public final class PublishCommand implements Command {
         StringBuilder out = new StringBuilder();
         out.append("[project]\n");
         out.append("name = \"").append(project.name()).append("\"\n");
+        if (project.group() != null) {
+            out.append("group = \"").append(escape(project.group())).append("\"\n");
+        }
         out.append("version = \"").append(project.version()).append("\"\n");
         // identity facts travel with the release: they are what `mj info`
         // shows a stranger who is deciding whether to depend on this
