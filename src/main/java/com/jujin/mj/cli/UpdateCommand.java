@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 /**
- * {@code mj upgrade}: checks GitHub Releases for a newer version and
+ * {@code mj update}: checks GitHub Releases for a newer version and
  * self-upgrades — download the tar.gz, extract, run install.sh. The same
  * install.sh mechanism as the one-liner, so the upgrade is atomic
  * (new version dir, launcher regenerated, old version left for rollback).
@@ -25,7 +25,7 @@ import java.util.stream.Stream;
  * effect on the next {@code mj} invocation. This is standard behavior
  * (same as rustup, gh, npm -g).
  */
-public final class UpgradeCommand implements Command {
+public final class UpdateCommand implements Command {
 
     /** The GitHub repo that hosts mj's releases. */
     private static final String RELEASES_API =
@@ -36,12 +36,12 @@ public final class UpgradeCommand implements Command {
             .build();
 
     @Inject
-    public UpgradeCommand() {
+    public UpdateCommand() {
     }
 
     @Override
     public String name() {
-        return "upgrade";
+        return "update";
     }
 
     @Override

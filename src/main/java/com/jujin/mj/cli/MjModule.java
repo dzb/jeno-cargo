@@ -50,7 +50,7 @@ public final class MjModule implements ModuleEx {
         binder.contribute(Command.class).addDeferred("add",
                 c -> new AddCommand(c.get(LockService.class), c.get(ArtifactStore.class),
                         projectDir));
-        binder.contribute(Command.class).addDeferred("upgrade",
-                c -> new UpgradeCommand());
+        binder.contribute(Command.class).addDeferred("update",
+                c -> new UpdateCommand());
     }
 }
