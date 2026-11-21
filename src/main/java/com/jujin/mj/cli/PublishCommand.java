@@ -1,5 +1,6 @@
 package com.jujin.mj.cli;
 
+import com.jujin.freeway.commons.json.JsonObject;
 import com.jujin.freeway.commons.json.JsonUtils;
 import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.mj.project.MjProject;
@@ -227,13 +228,55 @@ public final class PublishCommand implements Command {
             var map = JsonUtils.parseObject(response.body()).toMap();
             return String.valueOf(map.get("id"));
         }
-        // release might already exist — try to find it
+        // release might already exist — attach to it (one repo, many modules
+        // of the same version share one release)
         if (response.statusCode() == 422 || response.statusCode() == 409) {
+            String existing = findReleaseId(isGh, host, owner, repo, tag, token);
+            if (existing != null) {
+                System.out.println("release " + tag + " already exists on " + origin
+                        + " — attaching to it");
+                return existing;
+            }
             throw new IOException("release " + tag + " already exists on " + origin
-                    + " — use a different version or delete the existing release");
+                    + " but could not be looked up — use a different version or "
+                    + "delete the existing release");
         }
         throw new IOException("release creation failed (" + response.statusCode() + "): "
                 + response.body().substring(0, Math.min(200, response.body().length())));
+    }
+
+    /** Looks up an existing release by tag; null when none is reachable. */
+    private String findReleaseId(boolean isGh, String host, String owner, String repo,
+                                 String tag, String token)
+            throws IOException, InterruptedException {
+        String url = (isGh ? "https://api.github.com" : host + "/api/v5")
+                + "/repos/" + owner + "/" + repo + "/releases/tags/" + tag;
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url)).GET();
+        if (isGh) {
+            builder.header("Authorization", "Bearer " + token);
+        }
+        HttpResponse<String> response = http.send(builder.build(),
+                HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() != 200) {
+            return null;
+        }
+        String body = response.body();
+        try {
+            var map = JsonUtils.parseObject(body).toMap();
+            return map.get("id") == null ? null : String.valueOf(map.get("id"));
+        } catch (RuntimeException notAnObject) {
+            // some platforms answer an array for the by-tag lookup
+            try {
+                var array = JsonUtils.parseArray(body);
+                if (!array.isEmpty() && array.get(0) instanceof JsonObject first
+                        && first.toMap().get("id") != null) {
+                    return String.valueOf(first.toMap().get("id"));
+                }
+            } catch (RuntimeException ignored) {
+                // fall through
+            }
+            return null;
+        }
     }
 
     /** Uploads one file as a release attachment. */

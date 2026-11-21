@@ -320,20 +320,23 @@ FlowException 快速终止。`--skip-test` 关测试门;`--publish gh:owner/repo
 
 ## 8. 构建与命令面(草案)
 
-命令面:
+命令面(以 `mj` 的 usage 输出为准,12 个命令):
 
-| 命令 | V1 | 说明 |
+| 命令 | 状态 | 说明 |
 |---|---|---|
-| `mj init` | ✅ | 生成 mj.toml 骨架 |
-| `mj add <dep> [ver]` | ✅ | 写入 [deps] 并立即解析;精确版本 + maven-metadata.xml 列版本;模糊搜索用 freeway-commons JSON(已解禁,排期 M5) |
-| `mj remove <dep>` | ✅ | |
+| `mj add <dep> [ver]` | ✅ | 写入 [deps] 并立即解析;精确版本 + maven-metadata.xml 列版本;裸名走 Central 索引搜索 |
 | `mj lock` | ✅ | 解析并写出 mj.lock |
-| `mj tree` | ✅ | 依赖树 + 深度标注 |
+| `mj tree` | ✅ | 依赖树 + 深度标注(dev 工件标 `, dev`) |
 | `mj why <dep>` | ✅ | 谁引入的、占多少深度预算 |
-| `mj build` | ✅ | javac 编译(严格可见性 classpath);产物 manifest 嵌入解析后的依赖版本表(build-info,`go version -m` 先例) |
-| `mj run <main>` / scripts | ✅ | runtime classpath 运行 |
-| `mj test` | ✅ | 内置零依赖 runner(注解 + 反射,node:test 先例) |
-| `mj publish` | ✅(手动)/V1.1(原生上传) | |
+| `mj build` | ✅ | javac 编译(严格可见性 classpath —— 只含 MAIN 声明);`src/main/resources` 拷入产物 |
+| `mj run <main>` / scripts | ✅ | runtime classpath 运行(排除 dev) |
+| `mj test` | ✅ | fork JVM runner:`@MjTest` + JUnit Platform;classpath 含 MAIN + dev |
+| `mj package` | ✅ | 纯 jar;`--uber` 合并闭包(排除 dev) |
+| `mj dist` | ✅ | 发行目录 + setup.sh + tar.gz |
+| `mj publish` | ✅ | 三件套(dist/)+ `gh:`/`gitee:` 原生上传;描述符只含 MAIN 依赖 |
+| `mj update` / `mj upgrade` | ✅ | 自升级(alias 同一实现) |
+| `mj release` | ✅ | 生命周期 = freeway-flow 图 |
+| `mj init` / `mj remove` / `mj clean` | **缺口** | 曾误标 ✅,实际未实现(见 §12 吸收清单) |
 | daemon 常驻 | **M6** | 已确认需要:常驻 JVM 热命令,mvnd 已验证可快 2–4 倍 |
 | workspaces/monorepo | V2 | 设计模板 = go.work 模式:`mj.work.toml` 本地覆盖文件,gitignore 不提交 |
 | `mj audit` | V2 | 依赖漏洞扫描,OSV.dev JSON API(commons 解析器现成);govulncheck 先例 |
@@ -407,3 +410,49 @@ IoC 接缝(未来扩展点,不引入插件机制):
 |---|------|------|
 | Q8 | Gitee 附件 URL 实测 | ✅ **已解决(2026-11-21,真机实测)**:URL 纯路径无动态成分 ✓、模式与 GitHub 同款 ✓、但**匿名下载 403**——Gitee 附件需要 Bearer 令牌(302 重定向→签名 CDN URL→200,sha256 校验通过)。结论:`gitee:` 物种的下载步骤携带 `MJ_GITEE_TOKEN` 认证请求即可,URL 约定不变,确定性由 lockfile 兜底;首次 fetch 后 store 缓存,后续构建离线可用 |
 | Q9 | 自举期 freeway 依赖来源 | ✅ 已解决(2026-11-21):**`local:` 仓库类型**(本地 Maven 布局目录,`~` 展开与相对路径均支持)+ **vendor 自举**——mj 的 `vendor/` 目录放 freeway-commons/freeway-ioc/slf4j-api 的 jar 与"独立声明 pom"(无 parent 链,版本重钉去 snapshot 后缀),字节与其他仓库同等 sha256 钉定。snapshot 全局仍然禁止,无需例外 |
+
+---
+
+## 13. 现代包管理器吸收清单(2026-11-21 对标探查)
+
+mj 的主框架已闭环(自举构建/测试/打包/发布/升级全通)。对标 cargo / uv / npm / pnpm /
+Gradle 9 / Maven 4 后,尚未覆盖的场景按下表排期。
+
+### P0 — 闭环缺口
+
+| # | 缺口 | 对标 | 状态 |
+|---|---|---|---|
+| 1 | **`[dev-deps]` 依赖分组** | Cargo dev-dependencies、uv PEP 735 dependency-groups | ✅ 已完成(2026-11-21):独立顶层节;解析进同一张锁图,`scope = "dev"`;不进编译可见性/run/package/dist/发布描述符,只进 `mj test`;MAIN 优先 |
+| 2 | `mj init` / `mj remove` / `mj clean` | mvn clean、npm init/uninstall | 未做 |
+| 3 | 发布三件套补 `-sources` jar | Maven classifiers(Central 强制 sources/javadoc) | 未做 |
+| 4 | JUnit XML 测试报告 | mvn surefire 默认产物 | 未做(fork JVM 里产出 `target/test-results/` 即可接 GitHub checks UI) |
+| 5 | `mj outdated` | mvn versions:display-dependency-updates、npm outdated | 未做(maven-metadata.xml 通道现成) |
+
+### P1 — 现代实践
+
+| # | 缺口 | 对标 |
+|---|---|---|
+| 6 | 发版前 API 兼容检查 | cargo-semver-checks、japicmp、Revapi(新 jar vs 上一版 jar,release flow 图加一个 verify 节点) |
+| 7 | workspace 依赖继承 | Cargo `[workspace.dependencies]`、Gradle version catalogs(freeway 7 模块版本重复声明的现场教训) |
+| 8 | `mj publish --dry-run` | cargo publish --dry-run、npm pack |
+| 9 | `--offline` | cargo --offline、pnpm --offline(store 内容寻址,成本近零) |
+| 10 | 可复现发行物 | Maven reproducible builds(SOURCE_DATE_EPOCH;dist tar.gz 时间戳归一化) |
+
+### P2 — 记录缓行
+
+- 增量编译/构建缓存(Gradle build cache、cargo incremental)——javac 无增量;M6 daemon 后再议
+- 测试并行(Gradle maxParallelForks)——fork JVM 目前串行
+- `git:` 任意仓库物种——gh:/gitee: 已覆盖主场景
+- 注解处理器——`[build].parameters` 传 `-processorpath` 即可,文档化即可
+- JPMS module-path——小众,记录不动
+
+### 明确不吸收(品味红线)
+
+- **Maven profiles** —— 配置面泛滥的根源;mj 用环境外置 + `[scripts]`
+- **插件生态** —— 零插件哲学是 mj 的身份;`[scripts]` 兜底
+- **npm 式语义版本范围**(`^1.2.3`)—— 精确钉定 + lockfile 双钉是供应链优势
+
+### 已在既有排期(本次探查确认方向一致)
+
+`mj audit`(OSV.dev,= cargo audit/npm audit)、`mj jdk`(= Gradle toolchains / Go GOTOOLCHAIN)、
+`mj.work.toml`(= workspaces)、M6 daemon、`[repos]` 回退链。

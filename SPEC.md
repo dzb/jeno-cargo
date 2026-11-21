@@ -76,6 +76,26 @@ key = 坐标,value 形态决定物种:
 - 同一坐标同时出现在 `[deps]` 与任何 `[deps.{repo}]` → 报错
 - `{repo}` 未在 `[repos]` 中声明 → 报错
 
+**[dev-deps] 与 [dev-deps.{repo}]** — 仅测试可见的依赖(Cargo `dev-dependencies`、uv `[dependency-groups]` 先例)
+
+独立顶层节,不是 `[deps.dev]`——后者已是"来自仓库 dev 的依赖"。声明规则与 `[deps]` **完全一致**
+(同样的物种形态、同样的 `{repo}` 分组、同样的精确版本约束),差别只在可见性:
+
+| 面 | `[deps]` | `[dev-deps]` |
+|---|---|---|
+| 编译可见性(strict visibility) | ✅ | ❌ 从不出现在 javac 参数 |
+| `mj run` 运行时 classpath | ✅ | ❌ |
+| `mj package` / `mj dist` 产物 | ✅ | ❌ |
+| 发布描述符(传播给消费者) | ✅ | ❌ **绝不外泄** |
+| `mj test` 编译与运行 classpath | ✅ | ✅ 这就是它存在的理由 |
+| mj.lock | ✅ 行无 scope | ✅ 行带 `scope = "dev"` |
+| 深度预算 / 跨 major 冲突检测 | ✅ | ✅ 同等对待 |
+
+- 同一个 id 同时出现在 `[deps]` 与 `[dev-deps]` → 报错(一个声明一个作用域)
+- 传递性作用域:仅从 `[dev-deps]` 可达的工件一律 `dev`;既能从 `[deps]` 也能从 `[dev-deps]` 可达的
+  工件为 `main`(**生产用途胜过测试用途**——同 Cargo 规则)
+- 读兼容:mj.lock 中缺省 `scope` 即 `main`,所有 `[dev-deps]` 之前的锁文件原样可读
+
 **[repos]**
 
 | 字段 | 规则 |
@@ -168,7 +188,7 @@ version = 21              # 可选;语义同 §2.1 [java]
 
 ### 3.2 禁止项(出现即报错)
 
-`[repos]`、`[deps.{repo}]`、`[limits]`、`[scripts]`、`[overrides]`、任何未知节。
+`[repos]`、`[deps.{repo}]`、`[dev-deps]`、`[limits]`、`[scripts]`、`[overrides]`、任何未知节。
 
 理由:仓库是消费方的配置;预算规则只有一份(消费方);scripts 只属于应用。**发布物里只有事实,规则只有一份。**
 

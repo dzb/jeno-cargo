@@ -77,7 +77,6 @@ public final class BuildCommand implements Command {
             }
             compileClasspath.add(jarById.get(requirement.id()).toString());
         }
-
         List<String> sources = sources();
         if (sources.isEmpty()) {
             System.err.println("mj: no sources under " + projectDir.resolve(SOURCES));

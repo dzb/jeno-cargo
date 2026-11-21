@@ -111,6 +111,8 @@ public final class TestCommand implements Command {
             entries.add(testOutput.toString());
         }
         entries.add(projectDir.resolve("target/classes").toString());
+        // the full closure, MAIN and DEV alike: [dev-deps] exists for this
+        // classpath and for nothing else
         for (LockedArtifact artifact : lock()) {
             Path jar = store.findByDigest(artifact.sha256(), ArtifactStore.Kind.JAR);
             if (jar != null) {

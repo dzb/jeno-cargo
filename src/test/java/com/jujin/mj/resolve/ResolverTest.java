@@ -7,6 +7,7 @@ import com.jujin.mj.project.ProjectReader;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -60,6 +61,134 @@ class ResolverTest {
               %s
             </project>
             """.formatted(groupId, artifactId, version, dependencies);
+    }
+
+    // ------------------------------------------------------------------
+    // [dev-deps] — scope semantics
+    // ------------------------------------------------------------------
+
+    @Test
+    void aDevOnlyArtifactIsMarkedDevAndNeverCompiled() {
+        ResolvedGraph graph = Resolver.resolve(project("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [dev-deps]
+            "com.example:test-kit" = "1.0.0"
+            """), pomSource(
+                "com.example:test-kit:1.0.0", pom("com.example", "test-kit", "1.0.0", "")),
+            descriptorSource());
+
+        assertEquals(1, graph.artifacts().size());
+        assertEquals(Scope.DEV, graph.artifacts().getFirst().scope());
+        assertTrue(graph.compileArtifacts().isEmpty(),
+                "a dev-only artifact is not on the compile classpath");
+        assertTrue(graph.mainArtifacts().isEmpty(),
+                "a dev-only artifact is not in the runtime closure");
+    }
+
+    @Test
+    void aSharedArtifactIsMainBecauseProductionReachWins() {
+        // lib-a is both a main dependency and (via test-kit) a dev one —
+        // production use wins, so it stays MAIN and its subtree stays MAIN.
+        ResolvedGraph graph = Resolver.resolve(project("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [deps]
+            "com.example:lib-a" = "1.0.0"
+
+            [dev-deps]
+            "com.example:test-kit" = "1.0.0"
+            """), pomSource(
+                "com.example:lib-a:1.0.0", pom("com.example", "lib-a", "1.0.0", ""),
+                "com.example:test-kit:1.0.0", pom("com.example", "test-kit", "1.0.0", """
+                    <dependencies>
+                      <dependency>
+                        <groupId>com.example</groupId>
+                        <artifactId>lib-a</artifactId>
+                        <version>1.0.0</version>
+                      </dependency>
+                    </dependencies>
+                    """)),
+            descriptorSource());
+
+        assertEquals(Scope.MAIN,
+                byId(graph.artifacts(), "com.example:lib-a").scope(),
+                "a main root keeps its artifact MAIN even when a dev root also reaches it");
+        assertEquals(Scope.DEV,
+                byId(graph.artifacts(), "com.example:test-kit").scope());
+        assertEquals(1, graph.mainArtifacts().size());
+    }
+
+    @Test
+    void aDevSubtreeIsDevAllTheWayDown() {
+        ResolvedGraph graph = Resolver.resolve(project("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [limits]
+            max-depth = 3
+
+            [dev-deps]
+            "com.example:test-kit" = "1.0.0"
+            """), pomSource(
+                "com.example:test-kit:1.0.0", pom("com.example", "test-kit", "1.0.0", """
+                    <dependencies>
+                      <dependency>
+                        <groupId>com.example</groupId>
+                        <artifactId>assert-lib</artifactId>
+                        <version>2.0.0</version>
+                      </dependency>
+                    </dependencies>
+                    """),
+                "com.example:assert-lib:2.0.0", pom("com.example", "assert-lib", "2.0.0", "")),
+            descriptorSource());
+
+        assertEquals(Scope.DEV,
+                byId(graph.artifacts(), "com.example:assert-lib").scope(),
+                "the dev root's transitives are dev too");
+        assertTrue(graph.compileArtifacts().isEmpty());
+        assertTrue(graph.mainArtifacts().isEmpty());
+    }
+
+    @Test
+    void devArtifactsStillCountAgainstTheDepthBudget() {
+        // the budget is a resolution fact; a too-deep dev tree is still too deep
+        ResolveException error = assertThrows(ResolveException.class, () ->
+                Resolver.resolve(project("""
+                    [project]
+                    name = "demo"
+                    version = "0.1.0"
+
+                    [limits]
+                    max-depth = 1
+
+                    [dev-deps]
+                    "com.example:test-kit" = "1.0.0"
+                    """), pomSource(
+                    "com.example:test-kit:1.0.0", pom("com.example", "test-kit", "1.0.0", """
+                        <dependencies>
+                          <dependency>
+                            <groupId>com.example</groupId>
+                            <artifactId>assert-lib</artifactId>
+                            <version>2.0.0</version>
+                          </dependency>
+                        </dependencies>
+                        """),
+                    "com.example:assert-lib:2.0.0",
+                    pom("com.example", "assert-lib", "2.0.0", "")),
+                    descriptorSource()));
+
+        assertTrue(error.getMessage().contains("depth"),
+                "depth budget applies to dev requirements as well");
+    }
+    private static ResolvedGraph.ResolvedArtifact byId(
+            List<ResolvedGraph.ResolvedArtifact> artifacts, String id) {
+        return artifacts.stream().filter(a -> a.id().equals(id)).findFirst().orElseThrow();
     }
 
     // ------------------------------------------------------------------

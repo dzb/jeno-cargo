@@ -107,6 +107,9 @@ public final class RunCommand implements Command {
         List<String> classpath = new ArrayList<>();
         classpath.add(output.toString());
         for (LockedArtifact artifact : locked) {
+            if (!artifact.isMain()) {
+                continue;  // [dev-deps] never reaches a production run
+            }
             Path jar = store.findByDigest(artifact.sha256(), ArtifactStore.Kind.JAR);
             if (jar == null) {
                 System.err.println("mj: " + artifact.id() + "@" + artifact.version()

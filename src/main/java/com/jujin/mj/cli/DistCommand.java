@@ -205,8 +205,11 @@ public final class DistCommand implements Command {
                 return 1;
             }
 
-            // the runtime closure
+            // the runtime closure — MAIN only; [dev-deps] is not a runtime fact
             for (LockedArtifact artifact : locked) {
+                if (!artifact.isMain()) {
+                    continue;
+                }
                 Path jar = jars.get(artifact.id());
                 String fileName = originalName(artifact);
                 Files.copy(jar, lib.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);

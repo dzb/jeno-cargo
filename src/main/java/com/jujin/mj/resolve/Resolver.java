@@ -114,10 +114,22 @@ public final class Resolver {
 
         void collect() {
             Deque<Constraint> queue = new ArrayDeque<>();
+            // MAIN first: a dev declaration that meets a main artifact one
+            // scope later must not flip it to DEV (MAIN wins, Cargo's rule).
             for (Requirement requirement : project.requirements()) {
                 if (project.overrides().containsKey(requirement.id())) {
                     throw new ResolveException("'" + requirement.id()
                             + "' is declared in [deps] and pinned in [overrides] — change the "
+                            + "declaration or drop the override, never both");
+                }
+                queue.add(constraint(requirement.id(), requirement.version(),
+                        List.of(display(requirement.id(), requirement.version())),
+                        true, Set.of(), requirement));
+            }
+            for (Requirement requirement : project.devRequirements()) {
+                if (project.overrides().containsKey(requirement.id())) {
+                    throw new ResolveException("'" + requirement.id()
+                            + "' is declared in [dev-deps] and pinned in [overrides] — change the "
                             + "declaration or drop the override, never both");
                 }
                 queue.add(constraint(requirement.id(), requirement.version(),
@@ -388,6 +400,30 @@ public final class Resolver {
             for (Requirement requirement : project.requirements()) {
                 declaredIds.add(requirement.id());
             }
+            for (Requirement requirement : project.devRequirements()) {
+                declaredIds.add(requirement.id());
+            }
+
+            // Scope: an artifact reachable from any MAIN root is MAIN; only
+            // artifacts exclusively reachable from [dev-deps] are DEV. The
+            // walk runs over the walked edges — the same graph the lockfile
+            // records.
+            Set<String> mainReachable = new HashSet<>();
+            Deque<String> frontier = new ArrayDeque<>();
+            for (Requirement requirement : project.requirements()) {
+                if (mainReachable.add(requirement.id())) {
+                    frontier.add(requirement.id());
+                }
+            }
+            while (!frontier.isEmpty()) {
+                String current = frontier.poll();
+                for (String child : children.getOrDefault(current, List.of())) {
+                    if (mainReachable.add(child)) {
+                        frontier.add(child);
+                    }
+                }
+            }
+
 
             Depths depths = new Depths(selected, children, declaredIds);
             depths.verifyAcyclic();
@@ -427,7 +463,8 @@ public final class Resolver {
                 };
                 artifacts.add(new ResolvedGraph.ResolvedArtifact(id, version, species, source,
                         jarUrl(template, version), metadataUrl(template, version),
-                        depths.depth(id), declaredIds.contains(id)));
+                        depths.depth(id), declaredIds.contains(id),
+                        mainReachable.contains(id) ? Scope.MAIN : Scope.DEV));
             }
             List<ResolvedGraph.ResolvedArtifact> direct = artifacts.stream()
                     .filter(ResolvedGraph.ResolvedArtifact::declared)

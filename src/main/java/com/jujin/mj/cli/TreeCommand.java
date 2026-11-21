@@ -72,6 +72,9 @@ public final class TreeCommand implements Command {
         for (Requirement requirement : project.requirements()) {
             render(byId.get(requirement.id()), graph, "", true, shown, project);
         }
+        for (Requirement requirement : project.devRequirements()) {
+            render(byId.get(requirement.id()), graph, "", true, shown, project);
+        }
         return 0;
     }
 
@@ -81,7 +84,9 @@ public final class TreeCommand implements Command {
         String marker = shown.contains(artifact.id()) ? "  (*) above" : "";
         System.out.println(prefix + connector + artifact.id() + "@" + artifact.version()
                 + "  [depth " + artifact.depth()
-                + (artifact.declared() ? ", declared" : "") + "]" + marker);
+                + (artifact.declared() ? ", declared" : "")
+                + (artifact.scope() == com.jujin.mj.resolve.Scope.DEV ? ", dev" : "")
+                + "]" + marker);
         boolean fresh = shown.add(artifact.id());
         if (!fresh) {
             return;  // the subtree is printed above; do not walk it twice

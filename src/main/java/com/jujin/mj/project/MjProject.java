@@ -9,10 +9,14 @@ import java.util.Map;
  * Everything downstream (resolver, lockfile, build) consumes this record and
  * never re-reads the file.
  *
- * @param javaVersion  the {@code [java].version} major, or null when unset
- * @param maxDepth     the dependency-chain budget, 1–255, default 2
- * @param repos        named repositories (name → https base URL), plus nothing
- *                     for Central — Central is always the implicit default
+ * @param javaVersion     the {@code [java].version} major, or null when unset
+ * @param maxDepth        the dependency-chain budget, 1–255, default 2
+ * @param repos           named repositories (name → https base URL), plus nothing
+ *                        for Central — Central is always the implicit default
+ * @param devRequirements {@code [dev-deps]} — test-only requirements; they
+ *                        resolve into mj.lock but never reach the compile
+ *                        visibility, the runtime classpath or a published
+ *                        descriptor (Cargo's dev-dependencies)
  */
 public record MjProject(
         String name,
@@ -24,13 +28,18 @@ public record MjProject(
         Map<String, String> overrides,
         Map<String, String> scripts,
         Map<String, String> repos,
-        List<String> buildParameters) {
+        List<String> buildParameters,
+        List<Requirement> devRequirements) {
 
     public MjProject {
         if (requirements == null) {
             requirements = List.of();
         }
         requirements = List.copyOf(requirements);
+        if (devRequirements == null) {
+            devRequirements = List.of();
+        }
+        devRequirements = List.copyOf(devRequirements);
         if (overrides == null) {
             overrides = Map.of();
         }

@@ -26,6 +26,9 @@ public final class LockFile {
                         .append(string(digests.sha256(artifact.metadataUrl()))).append('\n');
             }
             out.append("depth = ").append(artifact.depth()).append('\n');
+            if (artifact.scope() == Scope.DEV) {
+                out.append("scope = \"dev\"\n");
+            }
         }
         return out.toString();
     }

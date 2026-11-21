@@ -1,6 +1,7 @@
 package com.jujin.mj.store;
 
 import com.jujin.freeway.commons.toml.TomlUtils;
+import com.jujin.mj.resolve.Scope;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -45,8 +46,8 @@ public final class LockFileReader {
             @SuppressWarnings("unchecked")
             Map<String, Object> fields = (Map<String, Object>) row;
             for (String key : fields.keySet()) {
-                if (!Set.of("id", "version", "source", "url", "sha256", "meta-sha256", "depth")
-                        .contains(key)) {
+                if (!Set.of("id", "version", "source", "url", "sha256", "meta-sha256", "depth",
+                        "scope").contains(key)) {
                     throw new StoreException("mj.lock: unknown field '" + key
                             + "' in the row for '" + fields.get("id") + "'");
                 }
@@ -55,7 +56,7 @@ public final class LockFileReader {
                     string(fields, "id"), string(fields, "version"), string(fields, "source"),
                     string(fields, "url"), string(fields, "sha256"),
                     fields.containsKey("meta-sha256") ? string(fields, "meta-sha256") : null,
-                    depth(fields));
+                    depth(fields), scope(fields));
             if (!HEX64.matcher(artifact.sha256()).matches()) {
                 throw new StoreException("mj.lock: sha256 for '" + artifact.id()
                         + "' is not 64 hex characters");
@@ -88,5 +89,21 @@ public final class LockFileReader {
             throw new StoreException("mj.lock: 'depth' must be an integer >= 1");
         }
         return depth.intValue();
+    }
+
+    /**
+     * An absent {@code scope} is MAIN — every lockfile written before
+     * {@code [dev-deps]} existed pins no scope and must read unchanged.
+     */
+    private static Scope scope(Map<String, Object> fields) {
+        Object value = fields.get("scope");
+        if (value == null) {
+            return Scope.MAIN;
+        }
+        if (!(value instanceof String text) || !text.equals("dev")) {
+            throw new StoreException("mj.lock: 'scope' is either absent (main) or the string "
+                    + "\"dev\" — got " + value);
+        }
+        return Scope.DEV;
     }
 }

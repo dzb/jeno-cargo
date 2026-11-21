@@ -43,7 +43,8 @@ public final class ProjectReader {
                         + " must be a table — every mj.toml entry is a [section] (SPEC.md §2)");
             }
             switch (entry.getKey()) {
-                case "project", "java", "deps", "repos", "limits", "overrides", "scripts", "build" -> { }
+                case "project", "java", "deps", "dev-deps", "repos", "limits", "overrides",
+                     "scripts", "build" -> { }
                 default -> throw new ProjectException("unknown section [" + entry.getKey()
                         + "] — mj.toml is a closed schema (SPEC.md §2)");
             }
@@ -90,6 +91,30 @@ public final class ProjectReader {
         if (depsSection != null) {
             requirements = extractDependencies(depsSection, repos, "mj.toml");
             for (Requirement requirement : requirements) {
+                if (requirement.species() == Species.URL) {
+                    urlIds.add(requirement.id());
+                }
+            }
+        }
+
+        // [dev-deps] — test-only requirements (Cargo's dev-dependencies). It
+        // is a top-level section, not [deps.dev]: [deps.<name>] already means
+        // "dependencies from repository <name>". Same declaration rules, and
+        // an id may not appear on both sides — one declaration, one scope.
+        List<Requirement> devRequirements = List.of();
+        Map<String, Object> devDepsSection = optionalSection(root, "dev-deps");
+        if (devDepsSection != null) {
+            devRequirements = extractDependencies(devDepsSection, repos, "mj.toml");
+            Set<String> mainIds = new LinkedHashSet<>();
+            for (Requirement requirement : requirements) {
+                mainIds.add(requirement.id());
+            }
+            for (Requirement requirement : devRequirements) {
+                if (mainIds.contains(requirement.id())) {
+                    throw new ProjectException("dependency '" + requirement.id()
+                            + "' is declared in both [deps] and [dev-deps] — pick one scope; "
+                            + "a main dependency is already on the test classpath");
+                }
                 if (requirement.species() == Species.URL) {
                     urlIds.add(requirement.id());
                 }
@@ -145,7 +170,7 @@ public final class ProjectReader {
         }
 
         return new MjProject(name, version, main, javaVersion, maxDepth, requirements,
-                overrides, scripts, repos, buildParameters);
+                overrides, scripts, repos, buildParameters, devRequirements);
     }
 
     /**

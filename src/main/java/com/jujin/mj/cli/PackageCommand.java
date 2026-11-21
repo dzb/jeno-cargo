@@ -189,6 +189,9 @@ public final class PackageCommand implements Command {
                 attrs.put(new java.util.jar.Attributes.Name("Built-By"), "mj");
                 List<String> deps = new ArrayList<>();
                 for (LockedArtifact artifact : locked) {
+                    if (!artifact.isMain()) {
+                        continue;  // [dev-deps] never ships in a package
+                    }
                     deps.add(artifact.id() + "@" + artifact.version());
                 }
                 attrs.put(new java.util.jar.Attributes.Name("mj-Dependencies"),
@@ -207,6 +210,9 @@ public final class PackageCommand implements Command {
                 Set<String> written = new LinkedHashSet<>();
                 Map<String, Set<String>> services = new java.util.TreeMap<>();
                 for (LockedArtifact artifact : locked) {
+                    if (!artifact.isMain()) {
+                        continue;  // [dev-deps] never merges into an uber-jar
+                    }
                     try (var in = new java.util.jar.JarInputStream(
                             Files.newInputStream(jars.get(artifact.id())))) {
                         java.util.jar.JarEntry entry;
@@ -239,7 +245,8 @@ public final class PackageCommand implements Command {
         }
 
         System.out.println("packaged " + output + " — uber-jar ("
-                + locked.size() + " dependencies merged)"
+                + locked.stream().filter(LockedArtifact::isMain).count() + " dependencies merged, "
+                + locked.stream().filter(a -> !a.isMain()).count() + " dev excluded)"
                 + (mainClass != null ? " — java -jar " + output : ""));
         return 0;
     }

@@ -20,6 +20,9 @@ import java.util.Map;
  *                    repository's base URL — the lockfile's {@code source}
  * @param jarUrl      the artifact's download URL
  * @param metadataUrl the pom or descriptor URL (null for bare URL leaves)
+ * @param scope       {@link Scope#MAIN} (production reach) or
+ *                    {@link Scope#DEV} (test-only reach — never compiled
+ *                    against, never packaged, never published)
  */
 public record ResolvedGraph(
         List<ResolvedArtifact> artifacts,
@@ -41,6 +44,19 @@ public record ResolvedGraph(
         edges = Map.copyOf(edges);
     }
 
+    /** The artifacts a build/run/package sees — everything except dev-only ones. */
+    public List<ResolvedArtifact> mainArtifacts() {
+        return artifacts.stream().filter(a -> a.scope() == Scope.MAIN).toList();
+    }
+
+    /**
+     * The compile classpath: declared MAIN requirements only (strict
+     * visibility, SPEC.md §4.4) — dev declarations never appear here.
+     */
+    public List<ResolvedArtifact> compileArtifacts() {
+        return direct.stream().filter(a -> a.scope() == Scope.MAIN).toList();
+    }
+
     public record ResolvedArtifact(
             String id,
             String version,
@@ -49,7 +65,20 @@ public record ResolvedGraph(
             String jarUrl,
             String metadataUrl,
             int depth,
-            boolean declared) {
+            boolean declared,
+            Scope scope) {
+
+        /** Back-compat: artifacts built by older callers are MAIN. */
+        public ResolvedArtifact {
+            if (scope == null) {
+                scope = Scope.MAIN;
+            }
+        }
+
+        public ResolvedArtifact(String id, String version, Species species, String source,
+                                String jarUrl, String metadataUrl, int depth, boolean declared) {
+            this(id, version, species, source, jarUrl, metadataUrl, depth, declared, Scope.MAIN);
+        }
 
         /** The lockfile's {@code id} line value, {@code id@version}. */
         public String locked() {
