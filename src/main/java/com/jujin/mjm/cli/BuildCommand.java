@@ -54,7 +54,8 @@ public final class BuildCommand implements Command {
             return 1;
         }
         if (!Files.exists(projectDir.resolve("mjm.toml"))) {
-            System.err.println("mjm: cannot read mjm.toml in " + projectDir);
+            System.err.println("mjm: no mjm.toml in " + projectDir
+                    + " — run mjm init to create one");
             return 1;
         }
         List<LockedArtifact> locked = readLock();

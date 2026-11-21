@@ -77,7 +77,8 @@ public final class AddCommand implements Command {
         try {
             mjToml = Files.readString(projectDir.resolve("mjm.toml"));
         } catch (IOException e) {
-            System.err.println("mjm: cannot read mjm.toml in " + projectDir);
+            System.err.println("mjm: no mjm.toml in " + projectDir
+                    + " — run mjm init to create one");
             return 1;
         }
 
@@ -102,7 +103,8 @@ public final class AddCommand implements Command {
         try {
             Files.writeString(projectDir.resolve("mjm.toml"), updated);
         } catch (IOException e) {
-            System.err.println("mjm: cannot write mjm.toml");
+            System.err.println("mjm: cannot write " + projectDir.resolve("mjm.toml")
+                    + " — check the directory is writable");
             return 1;
         }
 

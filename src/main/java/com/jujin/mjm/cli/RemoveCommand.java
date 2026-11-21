@@ -63,7 +63,8 @@ public final class RemoveCommand implements Command {
         try {
             text = Files.readString(file);
         } catch (IOException e) {
-            System.err.println("mjm: cannot read mjm.toml in " + projectDir);
+            System.err.println("mjm: no mjm.toml in " + projectDir
+                    + " — run mjm init to create one");
             return 1;
         }
 
@@ -101,7 +102,8 @@ public final class RemoveCommand implements Command {
         try {
             Files.writeString(file, updated);
         } catch (IOException e) {
-            System.err.println("mjm: cannot write mjm.toml");
+            System.err.println("mjm: cannot write " + projectDir.resolve("mjm.toml")
+                    + " — check the directory is writable");
             return 1;
         }
 

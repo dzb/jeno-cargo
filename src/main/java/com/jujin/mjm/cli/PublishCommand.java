@@ -79,7 +79,8 @@ public final class PublishCommand implements Command {
         try {
             project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
         } catch (IOException e) {
-            System.err.println("mjm: cannot read mjm.toml in " + projectDir);
+            System.err.println("mjm: no mjm.toml in " + projectDir
+                    + " — run mjm init to create one");
             return 1;
         }
 

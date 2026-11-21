@@ -46,23 +46,35 @@ public final class Mjm {
         try (container) {
             exit = container.get(CommandRunner.class).run(args);
         } catch (RuntimeException e) {
-            // The deepest cause carries the next action; the wrappers only
-            // carry the phase ("unable to construct", "cannot store", ...).
-            Throwable cause = e;
-            while (cause.getCause() != null && cause.getCause() != cause) {
-                cause = cause.getCause();
-            }
-            // An exception with no message must still name itself — "mjm: null"
-            // tells the user nothing and looks like a mjm bug rather than the
-            // real failure.
-            String message = cause.getMessage();
-            System.err.println("mjm: " + (message == null || message.isBlank()
-                    ? cause.getClass().getSimpleName()
-                    : message));
+            System.err.println("mjm: " + describe(e));
             System.exit(1);
             return;
         }
         System.exit(exit);
+    }
+
+    /**
+     * The message to show for a failure.
+     *
+     * <p>mj's own exceptions carry messages written for the user
+     * ("cannot read mjm.toml in /x — run mjm init"), while the JDK exceptions
+     * they wrap do not ({@code NoSuchFileException.getMessage()} is the path
+     * and nothing else, and some have no message at all). Walking to the
+     * deepest cause therefore throws away the useful half — the outermost
+     * message is the one mj wrote.
+     *
+     * <p>So: use the outermost message when it says something, otherwise fall
+     * back to the innermost, otherwise the class name.
+     */
+    private static String describe(Throwable failure) {
+        for (Throwable current = failure; current != null; ) {
+            String message = current.getMessage();
+            if (message != null && !message.isBlank()) {
+                return message;
+            }
+            current = current.getCause() == current ? null : current.getCause();
+        }
+        return failure.getClass().getSimpleName();
     }
 
     /**

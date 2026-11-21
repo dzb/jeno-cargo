@@ -41,7 +41,8 @@ public final class LockService {
         try {
             project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
         } catch (IOException e) {
-            throw new IllegalStateException("cannot read mjm.toml in " + projectDir, e);
+            throw new IllegalStateException("no mjm.toml in " + projectDir
+                    + " — run mjm init to create one", e);
         }
 
         ResolvedGraph graph = Resolver.resolve(project, pomSource, descriptorSource);
@@ -57,7 +58,8 @@ public final class LockService {
             Files.writeString(projectDir.resolve("mjm.lock"),
                     LockFile.serialize(graph, store::digestOf));
         } catch (IOException e) {
-            throw new IllegalStateException("cannot write mjm.lock in " + projectDir, e);
+            throw new IllegalStateException("cannot write mjm.lock in " + projectDir
+                    + " — check the directory is writable", e);
         }
         return graph;
     }
