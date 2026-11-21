@@ -77,9 +77,16 @@ jobs:
             exit 1
           fi
 
-      - name: dist
+      # dist is run by the JUST-BUILT mj, not the installed one. The installed
+      # mj is the previous release — using it to package the current tree
+      # means a change to dist itself only lands one release later (the
+      # v0.1.4 artifact still had the old nine-jar layout for exactly this
+      # reason). Building the release with the code under test closes that lag.
+      - name: dist (with the freshly built mj)
         if: startsWith(github.ref, 'refs/tags/v')
-        run: mj dist
+        run: |
+          CP="target/classes:$(find vendor -name '*.jar' | tr '\n' ':')"
+          java -cp "$CP" com.jujin.mj.cli.Mj dist
 
       - name: stage the release asset (mj-bin-<version>.tar.gz)
         if: startsWith(github.ref, 'refs/tags/v')
