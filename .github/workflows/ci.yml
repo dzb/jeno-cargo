@@ -1,93 +1,105 @@
-# mj 的自举 CI/CD(DESIGN.md §7.5)——上一个 release 构建下一个 release,
-# 版本账本在 git tags 上:master 每落一批新提交,CI 自动把 patch 递增一并发布。
+# mj 的自举 CI/CD(DESIGN.md §7.5)——上一个 release 构建下一个 release。
 #
-# 版本模型:0.1.x —— major.minor 人工维护(mj.toml),patch 只由 CI 升。
-# GITHUB_TOKEN 的推送不触发新 run(GitHub 防环),所以 bump commit 不会造成循环。
+# 两种触发,两种职责:
+#   push master   只验证:装上一个 release,构建 + 测试(狗粮常磨),不发版
+#   push tag v*   验证 + 发行:一致性门 → mj dist → GitHub Release 附件
+#
+# 版本账本是 git tags 本身:人工决定版本号(改 mj.toml + Mj.VERSION 两处),
+# tag 即发布。文档类变更不触发构建。
 
 name: ci
 
 on:
   push:
     branches: [master]
+    tags: ["v*"]
+    # 纯文档改动不占用构建分钟;tag 推送不受此过滤(GitHub 对 tag 不评估路径)
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
 
 permissions:
   contents: write
 
 concurrency:
-  group: release
+  group: ci-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0          # 全量历史 + tags:版本账本在 git tags 上
+          fetch-depth: 0
 
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '25'
 
-      # 自举引导:装"上一个" release —— 每一版都由上一版构建(v(n) → v(n+1))。
-      - name: install mj (previous release)
+      # 自举引导:装"上一个" release —— tag 的 release 此刻尚未重建,
+      # latest 指向前一版,所以每一版都由上一版构建(v(n) → v(n+1))。
+      - name: install mj (latest release)
         run: |
           curl -fsSL https://raw.githubusercontent.com/dzb/mj-cargo/master/setup.sh | bash
           echo "$HOME/.mj/bin" >> "$GITHUB_PATH"
 
-      - name: compute the next patch version
+      - name: lock
+        run: mj lock
+
+      - name: build
+        run: mj build
+
+      - name: test
+        run: mj test
+
+      # ---- 以下仅 tag 触发:发行段 ----
+
+      - name: verify tag matches mj.toml version
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          BASE=$(grep -m1 '^version' mj.toml | sed 's/.*"\([0-9]*\.[0-9]*\)\..*/\1/')
-          LAST=$(git tag -l "v$BASE.*" | sed 's/.*\.//' | sort -n | tail -1)
-          NEXT="$BASE.$((${LAST:-0} + 1))"
-          if [ -n "$LAST" ] && git rev-parse -q --verify "v$BASE.$LAST" >/dev/null; then
-            COUNT=$(git rev-list --count "v$BASE.$LAST..HEAD")
-          else
-            COUNT=$(git rev-list --count HEAD)
+          TAG="${GITHUB_REF_NAME#v}"
+          TOML=$(grep -m1 '^version' mj.toml | sed 's/.*"\(.*\)".*/\1/')
+          if [ "$TAG" != "$TOML" ]; then
+            echo "::error::tag v$TAG does not match mj.toml [project].version $TOML"
+            exit 1
           fi
-          echo "NEXT=$NEXT" >> "$GITHUB_ENV"
-          echo "SHOULD_RELEASE=$([ "$COUNT" -gt 0 ] && echo true || echo false)" >> "$GITHUB_ENV"
-          echo "base $BASE · last tag v$BASE.$LAST · $COUNT new commit(s) → next $NEXT"
 
-      # 单一写点:mj.toml 与 Mj.VERSION 由同一条 sed 写出,写后断言兜底。
-      - name: bump the version
-        if: env.SHOULD_RELEASE == 'true'
+      - name: verify the built binary reports the same version
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          sed -i "s/^version = \".*\"/version = \"$NEXT\"/" mj.toml
-          sed -i "s/public static final String VERSION = \".*\";/public static final String VERSION = \"$NEXT\";/" \
-            src/main/java/com/jujin/mj/cli/Mj.java
-          grep -q "^version = \"$NEXT\"" mj.toml || { echo "::error::mj.toml bump failed"; exit 1; }
-          grep -q "VERSION = \"$NEXT\"" src/main/java/com/jujin/mj/cli/Mj.java \
-            || { echo "::error::Mj.VERSION bump failed"; exit 1; }
+          if ! java -cp target/classes com.jujin.mj.cli.Mj --version \
+              | grep -q "mj ${GITHUB_REF_NAME#v} "; then
+            echo "::error::Mj.VERSION does not match mj.toml — bump both or neither"
+            exit 1
+          fi
 
-      # 塌缩完成:v0.1.2 起上一个 release 自带 release 命令,
-      # 生命周期 lock → build → verify → test → dist 由 freeway-flow 图驱动。
-      - name: mj release (the lifecycle as one flow)
-        if: env.SHOULD_RELEASE == 'true'
-        run: mj release
+      - name: dist
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: mj dist
 
       - name: stage the release asset (mj-bin-<version>.tar.gz)
-        if: env.SHOULD_RELEASE == 'true'
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
+          VERSION="${GITHUB_REF_NAME#v}"
           mkdir dist-release
-          cp "target/mj-$NEXT.tar.gz" "dist-release/mj-bin-$NEXT.tar.gz"
+          cp "target/mj-$VERSION.tar.gz" "dist-release/mj-bin-$VERSION.tar.gz"
 
-      # 次序红线:先推 bump commit,release 与 tag 在同一次 create 调用里落地
-      # (tag 指向新 master HEAD,附件随 create 一次给出,无竞态窗口)。
-      - name: commit the bump, push, and cut the release
-        if: env.SHOULD_RELEASE == 'true'
+      # 重发安全:先删同 tag 的旧 release(保留 tag),规避附件 CDN 缓存。
+      - name: create the GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config user.name "mj-ci"
-          git config user.email "mj-ci@users.noreply.github.com"
-          git add mj.toml src/main/java/com/jujin/mj/cli/Mj.java
-          git commit -m "release: v$NEXT (CI)"
-          git push origin master
-          gh release create "v$NEXT" "dist-release/mj-bin-$NEXT.tar.gz" \
-            --target master \
-            --title "mj v$NEXT" \
+          TAG="$GITHUB_REF_NAME"
+          ASSET="dist-release/mj-bin-${TAG#v}.tar.gz"
+          gh release view "$TAG" >/dev/null 2>&1 && gh release delete "$TAG" --yes || true
+          gh release create "$TAG" "$ASSET" \
+            --target "$GITHUB_SHA" \
+            --title "mj $TAG" \
             --notes "modern java manager
 
           install:  curl -fsSL https://raw.githubusercontent.com/dzb/mj-cargo/master/setup.sh | bash
