@@ -134,6 +134,12 @@ public final class ReleaseCommand implements Command {
      * both are absent. Empty means: the verify gate stays closed.
      */
     private static String ciTag() {
+        // the test seam: CI runs these tests ON a tag push, where the ambient
+        // GITHUB_REF_* variables would open the verify gate for a fixture
+        // project that has nothing to do with mj's own version
+        if ("false".equals(System.getProperty("mj.release.ci"))) {
+            return "";
+        }
         if (!"tag".equals(System.getenv("GITHUB_REF_TYPE"))) {
             return "";
         }

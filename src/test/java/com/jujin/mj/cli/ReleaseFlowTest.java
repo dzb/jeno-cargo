@@ -86,6 +86,9 @@ class ReleaseFlowTest {
      * the lifecycle stages bind by id, the store points at a temp dir.
      */
     private ReleaseCommand release(Path storeDir) {
+        // hermetic against the CI runner's own tag: the verify gate must not
+        // open for a fixture project when the *build* is a tag push
+        System.setProperty("mj.release.ci", "false");
         Container container = Freeway.create(new FlowModule(), binder -> {
             ArtifactStore store = new ArtifactStore(storeDir);
             binder.bind(ArtifactStore.class).to(c -> store);
