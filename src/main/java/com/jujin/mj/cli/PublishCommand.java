@@ -60,8 +60,13 @@ public final class PublishCommand implements Command {
 
     @Override
     public String summary() {
-        return "generate the release triple into dist/ (+ native upload for gh:/gitee:)";
+        return "write the release triple and upload it: gh:, gitee:, or an http(s) host";
     }
+    @Override
+    public String usage() {
+        return "[target]";
+    }
+
 
     @Override
     public int execute(List<String> args) {

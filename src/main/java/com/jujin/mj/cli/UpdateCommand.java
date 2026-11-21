@@ -61,7 +61,7 @@ public final class UpdateCommand implements Command {
 
     @Override
     public String summary() {
-        return "check for a newer version and self-upgrade from GitHub Releases";
+        return "check for a newer release and self-upgrade";
     }
 
     @Override

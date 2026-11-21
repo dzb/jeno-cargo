@@ -54,9 +54,13 @@ public final class AddCommand implements Command {
     }
 
     @Override
+    public String usage() {
+        return "<key> [value]";
+    }
+
+    @Override
     public String summary() {
-        return "add a dependency and re-lock: mj add <key> [value] "
-                + "(no value lists versions, or searches Central for a bare name)";
+        return "add a dependency and re-lock (no value: list versions or search)";
     }
 
     @Override

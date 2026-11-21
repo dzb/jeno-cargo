@@ -27,7 +27,7 @@ public final class LockCommand implements Command {
 
     @Override
     public String summary() {
-        return "resolve dependencies, download into the store, write mj.lock";
+        return "resolve dependencies, download into the store, and pin mj.lock";
     }
 
     @Override

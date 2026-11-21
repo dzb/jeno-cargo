@@ -60,8 +60,13 @@ public final class PackageCommand implements Command {
 
     @Override
     public String summary() {
-        return "package the project into a jar (default: plain, --uber merges dependencies)";
+        return "build the project jar (--uber merges the closure)";
     }
+    @Override
+    public String usage() {
+        return "[--uber] [--main <class>]";
+    }
+
 
     @Override
     public int execute(List<String> args) {

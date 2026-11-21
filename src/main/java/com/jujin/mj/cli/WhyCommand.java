@@ -44,8 +44,13 @@ public final class WhyCommand implements Command {
 
     @Override
     public String summary() {
-        return "every path that introduces one artifact: mj why <id>";
+        return "every path that introduces one artifact";
     }
+    @Override
+    public String usage() {
+        return "<id>";
+    }
+
 
     @Override
     public int execute(List<String> args) {

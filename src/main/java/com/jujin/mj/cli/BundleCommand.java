@@ -141,7 +141,7 @@ public final class BundleCommand implements Command {
 
     @Override
     public String summary() {
-        return "assemble an installable distribution (bin + lib + setup.sh + tar.gz) — for apps that ship to users, not for libraries";
+        return "assemble an installable distribution for apps that ship to users";
     }
 
     @Override

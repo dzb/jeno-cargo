@@ -41,8 +41,13 @@ public final class RemoveCommand implements Command {
 
     @Override
     public String summary() {
-        return "remove a dependency and re-lock: mj remove <group:artifact | name>";
+        return "remove a dependency and re-lock";
     }
+    @Override
+    public String usage() {
+        return "<id>";
+    }
+
 
     @Override
     public int execute(List<String> args) {

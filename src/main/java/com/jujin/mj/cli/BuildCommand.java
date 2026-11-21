@@ -44,7 +44,7 @@ public final class BuildCommand implements Command {
 
     @Override
     public String summary() {
-        return "compile src/main/java against the declared dependencies (strict visibility)";
+        return "compile src/main/java against declared dependencies only";
     }
 
     @Override

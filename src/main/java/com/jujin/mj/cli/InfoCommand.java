@@ -55,9 +55,13 @@ public final class InfoCommand implements Command {
     }
 
     @Override
+    public String usage() {
+        return "<id> [--source]";
+    }
+
+    @Override
     public String summary() {
-        return "describe one dependency: identity, origin, needs, and where its source lives"
-                + " (--source fetches the tree)";
+        return "identity, origin, dependencies, and source of one artifact";
     }
 
     @Override

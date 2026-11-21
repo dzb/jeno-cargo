@@ -40,6 +40,11 @@ public final class InitCommand implements Command {
     public String summary() {
         return "create mj.toml — a skeleton, or --pom to migrate a Maven project";
     }
+    @Override
+    public String usage() {
+        return "";
+    }
+
 
     @Override
     public int execute(List<String> args) {

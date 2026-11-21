@@ -47,7 +47,7 @@ public final class TreeCommand implements Command {
 
     @Override
     public String summary() {
-        return "print the resolved graph with depths: the visible dependency budget";
+        return "print the resolved graph with depths";
     }
 
     @Override

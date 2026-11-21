@@ -58,7 +58,7 @@ public final class TestCommand implements Command {
 
     @Override
     public String summary() {
-        return "compile and run src/test/java — @MjTest built-in plus JUnit (Jupiter) tests";
+        return "compile and run src/test/java — @MjTest and JUnit Jupiter";
     }
 
     @Override
