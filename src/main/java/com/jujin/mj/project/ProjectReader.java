@@ -55,6 +55,8 @@ public final class ProjectReader {
             throw new ProjectException("[project].name '" + name + "' must match [a-z][a-z0-9-]*");
         }
         String version = requireString(projectSection, "project", "version");
+        String main = projectSection.containsKey("main")
+                ? requireString(projectSection, "project", "main") : null;
 
         Integer javaVersion = null;
         Map<String, Object> javaSection = optionalSection(root, "java");
@@ -125,7 +127,7 @@ public final class ProjectReader {
         if (buildSection != null) {
             for (Map.Entry<String, Object> entry : buildSection.entrySet()) {
                 if (!entry.getKey().equals("parameters")) {
-                    throw new ProjectException("[" + "build" + "]." + entry.getKey()
+                    throw new ProjectException("[build]." + entry.getKey()
                             + " — the only supported key is 'parameters' (a string array "
                             + "of additional javac flags)");
                 }
@@ -142,8 +144,8 @@ public final class ProjectReader {
             }
         }
 
-        return new MjProject(name, version, javaVersion, maxDepth, requirements, overrides,
-                scripts, repos, buildParameters);
+        return new MjProject(name, version, main, javaVersion, maxDepth, requirements,
+                overrides, scripts, repos, buildParameters);
     }
 
     /**

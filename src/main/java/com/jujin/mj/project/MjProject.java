@@ -17,6 +17,7 @@ import java.util.Map;
 public record MjProject(
         String name,
         String version,
+        String main,
         Integer javaVersion,
         int maxDepth,
         List<Requirement> requirements,

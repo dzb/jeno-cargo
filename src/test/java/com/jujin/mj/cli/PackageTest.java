@@ -57,7 +57,7 @@ class PackageTest {
                 dir.resolve("src/main/java/demo/Main.java").toString()));
 
         int exit = new PackageCommand(new ArtifactStore(storeDir), dir)
-                .execute(List.of("--main", "demo.Main"));
+                .execute(List.of("--uber", "--main", "demo.Main"));
 
         assertEquals(0, exit);
         Path uber = dir.resolve("target/demo-1.0.0.jar");
@@ -133,7 +133,7 @@ class PackageTest {
             """.formatted(libA.toUri().toString(), ArtifactStore.sha256(libA),
                 libB.toUri().toString(), ArtifactStore.sha256(libB)));
 
-        int exit = new PackageCommand(store, dir).execute(List.of());
+        int exit = new PackageCommand(store, dir).execute(List.of("--uber"));
 
         assertEquals(0, exit);
         try (ZipFile zip = new ZipFile(dir.resolve("target/demo-1.0.0.jar").toFile())) {
