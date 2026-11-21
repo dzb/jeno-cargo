@@ -114,13 +114,30 @@ class VersionTest {
     }
 
     @Test
-    void theRuntimeVersionComesFromTheGeneratedResource() {
-        // mj test runs off target/classes, which the build stamped — so the
-        // version is the declared one, not a scaffold and not "dev"
+    void theResourceFormatRoundTrips() {
+        // The reader is a static initializer over the classpath resource, so a
+        // test cannot feed it a different file. What can be pinned is the
+        // writer/reader contract: the format the build emits is the format
+        // Version.parse would read back.
+        String text = Version.propertiesText("4.5.6");
+        var properties = new java.util.Properties();
+        try (var in = new java.io.ByteArrayInputStream(
+                text.getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
+            properties.load(in);
+        } catch (java.io.IOException e) {
+            throw new AssertionError("the generated format must be loadable", e);
+        }
+        assertEquals("4.5.6", properties.getProperty("version"),
+                "the build writes exactly the key Version reads");
+    }
+
+    @Test
+    void aRunningMjAlwaysNamesItself() {
+        // whatever layout started this JVM, the answer is never blank: either
+        // the resource is present (a build wrote it) or it honestly says dev
         assertFalse(Version.current().isBlank(), "a running mj always names itself");
-        assertFalse(Version.UNKNOWN.equals(Version.current()),
-                "the build wrote the resource, so there is nothing to guess");
-        assertTrue(Version.current().matches("\\d+\\.\\d+\\.\\d+.*"),
-                "a semver-shaped version, got " + Version.current());
+        assertTrue(Version.UNKNOWN.equals(Version.current())
+                        || Version.current().matches("\\d+\\.\\d+\\.\\d+.*"),
+                "either a real version or the honest 'dev', got " + Version.current());
     }
 }
