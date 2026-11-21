@@ -291,25 +291,26 @@ mj 也是自己的狗粮:上一个 release 构建下一个 release。**升级地
 `-bin` 与库 jar 三件套命名区分)。版本号两处声明、CI 强制一致:`mj.toml [project].version`
 (产物命名)+ `Mj.VERSION`(`--version`/`mj update` 比对)。
 
-**流水线**(`.github/workflows/ci.yml`,单 job 两段):
+**流水线**(`.github/workflows/ci.yml`,提交即发版):
 
 ```
-push master / tag v*  →  GitHub Actions
-  1. 装 mj:curl setup.sh | bash        ← 装的是"上一个" release(tag 的 release 此刻还不存在)
-  2. mj lock → build → test            ← 上一个 release 构建新的(自举链 v(n) → v(n+1))
-  3. 仅 tag 触发:一致性门(tag == mj.toml version == 构建 --version)
-  4. 仅 tag 触发:mj dist → gh release create v{version} mj-bin-{version}.tar.gz
+push master  →  GitHub Actions
+  1. 装 mj:curl setup.sh | bash     ← 装的是"上一个" release
+  2. 版本账本:git tags v0.1.* 的最大 patch + 1;无新提交(>0 判定)则空跑
+  3. sed 单一写点:bump mj.toml + Mj.VERSION,写后断言
+  4. mj lock → build → test → dist  ← 上一个 release 构建新的(自举链 v(n) → v(n+1))
+  5. push bump commit → gh release create v0.1.(n+1) 附件一次给出,无竞态窗口
 ```
+
+**版本模型:0.1.x** —— major.minor 人工维护(mj.toml),patch 只由 CI 递增;账本是
+git tags。GITHUB_TOKEN 的推送不触发新 run(平台防环),bump commit 无循环。
 
 **本地同一链条一条命令**:`mj release` —— 生命周期即 freeway-flow 图(DESIGN.md §9 延伸):
 `lock → build → verify → test → dist → publish`,门控(verify/test/publish)是图上的节点级
 `when` 条件而非 if 链,任务节点经容器按 id 解析(`@release-lock` …),任一阶段失败即
 FlowException 快速终止。`--skip-test` 关测试门;`--publish gh:owner/repo` 开库发布门;
-`verify` 门只在 CI tag 推送时开(GITHUB_REF_TYPE),三处版本一致性由流程自身把关。
-CI 的 lock/build/test/dist 四步在 v0.3.0 起可塌缩为一步 `mj release`(上一个 release 必须已
-自带该命令)。
-
-- 每次推 master 都跑完整 dogfood 构建 + 测试(磨刀石常磨)
+`verify` 门做 tag/mj.toml/构建产物三方一致性把关。CI 的 lock/build/test/dist 四步在
+"上一个 release 自带该命令后"塌缩为一步 `mj release`(自举链约束)。
 - 自举链断裂的逃生舱(旧 mj 读不了新 mj.toml 等):本机 Maven 引导
   (`mvn -DskipTests package` → `java -cp target/classes:…` 跑 Mj)→ `mj dist` → `gh release upload` 手工补发
 - 引导链有根:v0.1.0 由 Maven 本地引导(已完成),此后链条不断
