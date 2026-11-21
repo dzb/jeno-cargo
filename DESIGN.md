@@ -422,9 +422,10 @@ Gradle 9 / Maven 4 后,尚未覆盖的场景按下表排期。
 
 | # | 缺口 | 对标 | 状态 |
 |---|---|---|---|
+| 0 | **`mj source <id>`**(替代 sources jar)+ `mj publish` 交接指令 | Go tag-archive、pkg.go.dev 可寻址源码;npm 的 `npm pack` 分享 | ✅ 已完成(2026-11-21) |
 | 1 | **`[dev-deps]` 依赖分组** | Cargo dev-dependencies、uv PEP 735 dependency-groups | ✅ 已完成(2026-11-21):独立顶层节;解析进同一张锁图,`scope = "dev"`;不进编译可见性/run/package/dist/发布描述符,只进 `mj test`;MAIN 优先 |
-| 2 | `mj init` / `mj remove` / `mj clean` | mvn clean、npm init/uninstall | 未做 |
-| 3 | 发布三件套补 `-sources` jar | Maven classifiers(Central 强制 sources/javadoc) | 未做 |
+| 2 | `mj init --pom` / `mj remove` | mvn clean、npm init/uninstall、Maven 迁移 | ✅ init 与 remove 已完成(2026-11-21,含 pom.xml → mj.toml 迁移);`mj clean` 仍未做 |
+| 3 | ~~发布三件套补 `-sources` jar~~ → **`mj source <id>`** | Go/Cargo 从不分离源码与产物;sources jar 是 Java 二进制分发的补丁,不是能力 | ✅ 已完成(2026-11-21):源码**随 tag 走**——gh:/gitee: 取 tag archive,Central 回退读发布者的 sources jar,URL 叶子明确拒绝。发布侧不产出 sources jar |
 | 4 | JUnit XML 测试报告 | mvn surefire 默认产物 | 未做(fork JVM 里产出 `target/test-results/` 即可接 GitHub checks UI) |
 | 5 | `mj outdated` | mvn versions:display-dependency-updates、npm outdated | 未做(maven-metadata.xml 通道现成) |
 

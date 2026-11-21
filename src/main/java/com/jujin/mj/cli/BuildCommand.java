@@ -103,6 +103,10 @@ public final class BuildCommand implements Command {
         command.add(output.toString());
         command.add("-cp");
         command.add(String.join(File.pathSeparator, compileClasspath));
+        // full debug info: line numbers, source file, and local variable names
+        // — what a debugger and a decompiler need to make `mj source` trees
+        // line up with the bytes
+        command.add("-g");
         command.addAll(project.buildParameters());
         command.addAll(sources);
         int exit = compiler.run(null, null, null, command.toArray(String[]::new));

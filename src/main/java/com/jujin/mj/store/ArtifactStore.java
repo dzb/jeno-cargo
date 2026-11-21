@@ -37,7 +37,7 @@ public final class ArtifactStore {
 
     /** What kind of bytes a URL holds — decides the store file's extension. */
     public enum Kind {
-        JAR("jar"), POM("pom"), DESCRIPTOR("mj.toml");
+        JAR("jar"), POM("pom"), DESCRIPTOR("mj.toml"), ARCHIVE("tar.gz");
 
         private final String extension;
 

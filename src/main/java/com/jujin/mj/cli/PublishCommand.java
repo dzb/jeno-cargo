@@ -125,8 +125,8 @@ public final class PublishCommand implements Command {
 
         if (args.isEmpty()) {
             System.out.println("upload the three files wherever a URL can reach — a GitHub/Gitee "
-                    + "release, an OSS bucket, any static server — and consumers add\n  "
-                    + "\"" + name + "\" = \"gh:<owner>/" + name + "@v" + version + "\"");
+                    + "release, an OSS bucket, any static server. then tell a teammate:");
+            System.out.println("  mj add \"" + name + "\" gh:<owner>/" + name + "@v" + version);
             return 0;
         }
 
@@ -190,9 +190,13 @@ public final class PublishCommand implements Command {
             }
         }
 
-        System.out.println("release " + tag + " uploaded to " + target);
-        System.out.println("consumers add: \"" + project.name() + "\" = \""
-                + target + "@" + tag + "\"");
+        System.out.println("uploaded; share it with:");
+        System.out.println("  mj add \"" + project.name() + "\" " + target + "@" + tag);
+
+        String page = target.startsWith("gh:")
+                ? ArtifactLocations.githubHost()
+                : ArtifactLocations.giteeHost();
+        System.out.println("  " + page + "/" + owner + "/" + repo + "/releases/tag/" + tag);
         return 0;
     }
 
