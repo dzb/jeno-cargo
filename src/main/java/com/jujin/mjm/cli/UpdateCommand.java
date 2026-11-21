@@ -104,7 +104,7 @@ public final class UpdateCommand implements Command {
 
         try {
             // download to temp
-            Path tempTar = Files.createTempFile("mj-upgrade-", ".tar.gz");
+            Path tempTar = Files.createTempFile("mjm-upgrade-", ".tar.gz");
             HttpResponse<byte[]> download = http.send(
                     HttpRequest.newBuilder(URI.create(tarGzUrl)).GET().build(),
                     HttpResponse.BodyHandlers.ofByteArray());
@@ -115,7 +115,7 @@ public final class UpdateCommand implements Command {
             Files.write(tempTar, download.body());
 
             // extract to temp
-            Path tempDir = Files.createTempDirectory("mj-upgrade-");
+            Path tempDir = Files.createTempDirectory("mjm-upgrade-");
             Process tar = new ProcessBuilder("tar", "-xzf", tempTar.toString(),
                     "-C", tempDir.toString()).inheritIO().start();
             if (tar.waitFor() != 0) {
@@ -124,7 +124,7 @@ public final class UpdateCommand implements Command {
             }
 
             // find and run the setup.sh inside the distribution
-            Path installScript = tempDir.resolve("mj-" + latestVersion + "/setup.sh");
+            Path installScript = tempDir.resolve("mjm-" + latestVersion + "/setup.sh");
             try (Stream<Path> stream = Files.walk(tempDir, 2)) {
                 installScript = stream
                         .filter(path -> path.getFileName().toString().equals("setup.sh"))
@@ -151,7 +151,7 @@ public final class UpdateCommand implements Command {
                 System.err.println("mjm: installation failed (exit " + exit + ")");
                 return 1;
             }
-            System.out.println("upgraded to mj " + latestVersion
+            System.out.println("upgraded to mjm " + latestVersion
                     + " — takes effect on the next mj invocation");
             return 0;
         } catch (IOException | InterruptedException e) {
