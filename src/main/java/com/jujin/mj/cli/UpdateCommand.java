@@ -17,9 +17,9 @@ import java.util.stream.Stream;
 
 /**
  * {@code mj update}: checks GitHub Releases for a newer version and
- * self-upgrades — download the tar.gz, extract, run install.sh. The same
- * install.sh mechanism as the one-liner, so the upgrade is atomic
- * (new version dir, launcher regenerated, old version left for rollback).
+ * self-upgrades — download the tar.gz, extract, run the setup.sh inside.
+ * The same install mechanism as the one-liner, so the upgrade is atomic
+ * (fresh install to $HOME/.mj/, launcher regenerated, old version replaced).
  *
  * <p>The running process cannot replace its own jar — the upgrade takes
  * effect on the next {@code mj} invocation. This is standard behavior
@@ -108,16 +108,13 @@ public final class UpdateCommand implements Command {
                 return 1;
             }
 
-            // find and run install.sh
-            Path installScript = tempDir.resolve("mj-" + latestVersion + "/install.sh");
-            if (!Files.exists(installScript)) {
-                // the tar.gz might use a different directory name
-                try (Stream<Path> stream = Files.walk(tempDir, 2)) {
-                    installScript = stream
-                            .filter(path -> path.getFileName().toString().equals("install.sh"))
-                            .findFirst()
-                            .orElse(installScript);
-                }
+            // find and run the setup.sh inside the distribution
+            Path installScript = tempDir.resolve("mj-" + latestVersion + "/setup.sh");
+            try (Stream<Path> stream = Files.walk(tempDir, 2)) {
+                installScript = stream
+                        .filter(path -> path.getFileName().toString().equals("setup.sh"))
+                        .findFirst()
+                        .orElse(installScript);
             }
             Process install = new ProcessBuilder("bash", installScript.toString())
                     .inheritIO().start();
@@ -125,11 +122,15 @@ public final class UpdateCommand implements Command {
 
             // cleanup
             Files.deleteIfExists(tempTar);
-                        try (var walk = java.nio.file.Files.walk(tempDir)) {
+            try (Stream<Path> walk = Files.walk(tempDir)) {
                 walk.sorted(java.util.Comparator.reverseOrder())
-                        .forEach(path -> { try { java.nio.file.Files.deleteIfExists(path); } catch (IOException e) { /* best-effort */ } });
-            } catch (IOException e) {
-                // best-effort cleanup
+                        .forEach(path -> {
+                            try {
+                                Files.deleteIfExists(path);
+                            } catch (IOException e) {
+                                // best-effort cleanup
+                            }
+                        });
             }
 
             if (exit != 0) {
