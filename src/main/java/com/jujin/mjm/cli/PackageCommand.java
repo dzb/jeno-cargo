@@ -140,6 +140,7 @@ public final class PackageCommand implements Command {
         }
 
         try {
+            DistOutput.clear(output);
             Files.createDirectories(output.getParent());
             try (var out = new java.util.zip.ZipOutputStream(
                     Files.newOutputStream(output))) {
@@ -186,6 +187,7 @@ public final class PackageCommand implements Command {
             return 1;
         }
         try {
+            DistOutput.clear(output);
             UberJar.write(output,
                     new UberJar.Input(classes, new ArrayList<>(
                             UberJar.mainJars(locked, jars).values()),

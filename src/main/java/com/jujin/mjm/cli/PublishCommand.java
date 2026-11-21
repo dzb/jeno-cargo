@@ -59,6 +59,11 @@ public final class PublishCommand implements Command {
     }
 
     @Override
+    public boolean supportsOffline() {
+        return false;
+    }
+
+    @Override
     public String summary() {
         return "write the release triple and upload it: gh:, gitee:, or an http(s) host";
     }
@@ -100,11 +105,17 @@ public final class PublishCommand implements Command {
             }
         }
 
-        Path dist = projectDir.resolve("dist");
+        Path dist;
         try {
-            Files.createDirectories(dist);
+            dist = DistOutput.dist(projectDir);
+            // clear only what publish writes. The jar belongs to `mjm package`
+            // — publishing does not regenerate it, and deleting it here would
+            // make the two commands fight over the same path.
+            for (String file : List.of(descriptorName, shaName)) {
+                DistOutput.clear(dist.resolve(file));
+            }
         } catch (IOException e) {
-            System.err.println("mjm: cannot create dist/");
+            System.err.println("mjm: cannot prepare dist/: " + e.getMessage());
             return 1;
         }
 

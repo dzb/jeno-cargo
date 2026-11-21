@@ -171,21 +171,14 @@ public final class BundleCommand implements Command {
         Path lib = dist.resolve("lib");
         Path bin = dist.resolve("bin");
 
-        // rerun-safe: assembled launchers are read-only — remove the previous dist
-        if (Files.isDirectory(dist)) {
-            try (Stream<Path> walk = Files.walk(dist)) {
-                walk.sorted(java.util.Comparator.reverseOrder())
-                        .forEach(path -> {
-                            try {
-                                Files.deleteIfExists(path);
-                            } catch (IOException e) {
-                                throw new IllegalStateException("cannot clean " + path, e);
-                            }
-                        });
-            } catch (IOException e) {
-                System.err.println("mjm: cannot clean the previous dist: " + e.getMessage());
-                return 1;
-            }
+        // rerun-safe: the launcher is read-only and the archive is stale-able —
+        // both are this version's outputs, so both are cleared first
+        try {
+            DistOutput.clear(dist);
+            DistOutput.clear(projectDir.resolve("dist/" + name + "-" + version + ".tar.gz"));
+        } catch (IOException e) {
+            System.err.println("mjm: cannot clean the previous output: " + e.getMessage());
+            return 1;
         }
 
         try {
