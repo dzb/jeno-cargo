@@ -1,21 +1,20 @@
 package com.jujin.mj.cli;
 
-import com.jujin.mj.store.ArtifactStore;
-import com.jujin.mj.resolve.ResolvedGraph;
 import com.jujin.mj.resolve.LockFile;
+import com.jujin.mj.resolve.ResolvedGraph;
+import com.jujin.mj.store.ArtifactStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.net.InetSocketAddress;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The built-in runner (node:test's shape): compile src/test/java against the
@@ -50,7 +49,10 @@ class TestRunnerTest {
             """);
         lock();
 
-        int exit = new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of());
+        int exit;
+        try (var central = serveVendoredToolchain()) {
+            exit = new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of());
+        }
 
         assertEquals(1, exit, "a failing @MjTest fails the command");
     }
@@ -77,7 +79,10 @@ class TestRunnerTest {
             """);
         lock();
 
-        int exit = new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of());
+        int exit;
+        try (var central = serveVendoredToolchain()) {
+            exit = new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of());
+        }
 
         assertEquals(0, exit, "three passing tests exit zero");
     }
@@ -102,46 +107,12 @@ class TestRunnerTest {
             """);
         lock();
 
-        // a loopback Central that serves the real junit toolchain jars
-        com.sun.net.httpserver.HttpServer central =
-                com.sun.net.httpserver.HttpServer.create(
-                        new InetSocketAddress("localhost", 0), 0);
-        Map<String, byte[]> jars = new LinkedHashMap<>();
-        for (String[] coordinate : new String[][]{
-                {"org/junit/jupiter", "junit-jupiter-api", "6.1.3"},
-                {"org/junit/jupiter", "junit-jupiter-engine", "6.1.3"},
-                {"org/junit/platform", "junit-platform-launcher", "6.1.3"},
-                {"org/junit/platform", "junit-platform-engine", "6.1.3"},
-                {"org/junit/platform", "junit-platform-commons", "6.1.3"},
-                {"org/opentest4j", "opentest4j", "1.3.0"}}) {
-            String path = "/" + coordinate[0] + "/" + coordinate[1] + "/" + coordinate[2] + "/"
-                    + coordinate[1] + "-" + coordinate[2] + ".jar";
-            jars.put(path, java.nio.file.Files.readAllBytes(
-                    java.nio.file.Path.of("vendor",
-                            coordinate[0], coordinate[1], coordinate[2],
-                            coordinate[1] + "-" + coordinate[2] + ".jar")));
+        int exit;
+        try (var central = serveVendoredToolchain()) {
+            exit = new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of());
         }
-        central.createContext("/", exchange -> {
-            byte[] body = jars.get(exchange.getRequestURI().getPath());
-            if (body == null) {
-                exchange.sendResponseHeaders(404, -1);
-                return;
-            }
-            exchange.sendResponseHeaders(200, body.length);
-            try (var out = exchange.getResponseBody()) {
-                out.write(body);
-            }
-        });
-        central.start();
-        System.setProperty("mj.central.base",
-                "http://localhost:" + central.getAddress().getPort() + "/");
-        try {
-            int exit = new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of());
-            assertEquals(1, exit, "a failing Jupiter test fails the command");
-        } finally {
-            central.stop(0);
-            System.clearProperty("mj.central.base");
-        }
+
+        assertEquals(1, exit, "a failing Jupiter test fails the command");
     }
 
     @Test
@@ -161,6 +132,28 @@ class TestRunnerTest {
             """);
         lock();
 
+        int exit;
+        try (var central = serveVendoredToolchain()) {
+            exit = new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of());
+        }
+
+        assertEquals(0, exit, "a passing Jupiter suite exits zero");
+    }
+
+    @Test
+    void noTestSourcesIsQuietlyZero(@TempDir Path storeDir) throws Exception {
+        project();
+        lock();
+        assertEquals(0, new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of()),
+                "a project without src/test/java has nothing to run");
+    }
+
+    /**
+     * Serves the vendored junit toolchain as a loopback Central for the
+     * exploded-mode toolchain download. Tests never touch the real Central —
+     * CI runners share IP space and get rate-limited (429).
+     */
+    private AutoCloseable serveVendoredToolchain() throws IOException {
         com.sun.net.httpserver.HttpServer central =
                 com.sun.net.httpserver.HttpServer.create(
                         new InetSocketAddress("localhost", 0), 0);
@@ -193,21 +186,10 @@ class TestRunnerTest {
         central.start();
         System.setProperty("mj.central.base",
                 "http://localhost:" + central.getAddress().getPort() + "/");
-        try {
-            assertEquals(0, new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of()),
-                    "a passing Jupiter suite exits zero");
-        } finally {
+        return () -> {
             central.stop(0);
             System.clearProperty("mj.central.base");
-        }
-    }
-
-    @Test
-    void noTestSourcesIsQuietlyZero(@TempDir Path storeDir) throws Exception {
-        project();
-        lock();
-        assertEquals(0, new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of()),
-                "a project without src/test/java has nothing to run");
+        };
     }
 
     private void project() throws IOException {
