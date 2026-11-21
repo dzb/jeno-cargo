@@ -57,7 +57,7 @@ public final class PackageCommand implements Command {
 
     @Override
     public String summary() {
-        return "package the project: distribution directory (default) or uber-jar (--uber)";
+        return "package the project into a jar (default: plain, --uber merges dependencies)";
     }
 
     @Override
@@ -106,7 +106,8 @@ public final class PackageCommand implements Command {
             mainClass = project.main();
         }
 
-        return uberJar(project, locked, jars, mainClass);
+        return uber ? uberJar(project, locked, jars, mainClass)
+                    : plainJar(project, mainClass);
     }
 
     // ------------------------------------------------------------------
@@ -118,6 +119,51 @@ public final class PackageCommand implements Command {
     // uber mode
     // ------------------------------------------------------------------
 
+    /** Default: the project's own classes, no dependency merging. */
+    private int plainJar(MjProject project, String mainClass) {
+        String name = project.name();
+        String version = project.version();
+        Path output = projectDir.resolve("target/" + name + "-" + version + ".jar");
+        Path classes = projectDir.resolve(CLASSES);
+
+        if (!Files.isDirectory(classes)) {
+            System.err.println("mj: " + CLASSES + " is missing — run mj build first");
+            return 1;
+        }
+
+        try {
+            Files.createDirectories(output.getParent());
+            try (var out = new java.util.zip.ZipOutputStream(
+                    Files.newOutputStream(output))) {
+                var manifest = new java.util.jar.Manifest();
+                var attrs = manifest.getMainAttributes();
+                attrs.put(java.util.jar.Attributes.Name.MANIFEST_VERSION, "1.0");
+                if (mainClass != null) {
+                    attrs.put(java.util.jar.Attributes.Name.MAIN_CLASS, mainClass);
+                }
+                attrs.put(new java.util.jar.Attributes.Name("Built-By"), "mj");
+                out.putNextEntry(new java.util.zip.ZipEntry("META-INF/MANIFEST.MF"));
+                manifest.write(out);
+                out.closeEntry();
+
+                try (Stream<Path> stream = Files.walk(classes)) {
+                    for (Path file : stream.filter(Files::isRegularFile).toList()) {
+                        String entry = classes.relativize(file).toString().replace('\\', '/');
+                        writeEntry(out, entry, Files.readAllBytes(file));
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("mj: packaging failed: " + e.getMessage());
+            return 1;
+        }
+
+        System.out.println("packaged " + output + " — plain jar (project classes only, "
+                + "use --uber to merge dependencies)");
+        return 0;
+    }
+
+    /** --uber: project classes + all closure jars merged into one. */
     private int uberJar(MjProject project, List<LockedArtifact> locked,
                         Map<String, Path> jars, String mainClass) {
         String name = project.name();
