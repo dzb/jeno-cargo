@@ -103,10 +103,15 @@ public final class PublishCommand implements Command {
             return 1;
         }
 
+        // publish uploads what package built — it never builds its own jar.
+        // Building one here would silently overwrite mj package's output with a
+        // different (manifest-less) jar, and a release would then carry bytes
+        // nobody reviewed.
         Path jarFile = dist.resolve(jarName);
-        int exit = jar(classes, jarFile);
-        if (exit != 0) {
-            return exit;
+        if (!Files.exists(jarFile)) {
+            System.err.println("mj: " + jarFile + " is missing — run mj package first "
+                    + "(publish uploads what package builds; it does not build its own jar)");
+            return 1;
         }
 
         try {
@@ -400,19 +405,4 @@ public final class PublishCommand implements Command {
     }
 
 
-    /** Zips {@code classes} into {@code jarFile} with the JDK's jar tool. */
-    private static int jar(Path classes, Path jarFile) {
-        List<String> command = List.of("jar", "--create", "--file", jarFile.toString(),
-                "--no-manifest", "-C", classes.toString(), ".");
-        try {
-            Process process = new ProcessBuilder(command).inheritIO().start();
-            return process.waitFor();
-        } catch (IOException e) {
-            System.err.println("mj: cannot run jar — is a JDK on the PATH?");
-            return 1;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return 1;
-        }
-    }
 }

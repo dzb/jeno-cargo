@@ -138,7 +138,10 @@ manifest 结构),都要检查 CI 里那步用的是不是新代码。`--version`
 - `release` 在 mj 的自举语境里已特指"发版这条链",`--publish` 旗标本身暗示了包含关系
 - 改名要同时动命令、`mj release` 的旗标、CI、README、RELEASE.md,收益是"少困惑一秒"
 
-**更值得做的替代**:不动命令名,而是**让 `release` 的输出说清它产出了什么**。
+**已落地(2026-11-21)**:`mj release` 已删除,`mj dist` 改名为 `mj bundle`。理由见 §7。
+下面保留原分析,作为"为什么最后选了删除而不是改名"的记录。
+
+**当时考虑过的替代**:不动命令名,而是**让 `release` 的输出说清它产出了什么**。
 现在 dist 阶段打印 `dist /path`,publish 阶段打印三件套路径,但没有任何一行说
 "这两个是不同的东西,给不同的人用"。在 release 结束时加一段总结:
 
@@ -155,3 +158,43 @@ release v0.1.5 complete:
 
 **成本**:改名是低风险但低收益的机械改动;加输出总结是极小改动且直接消解困惑。
 **后者优先**。
+
+---
+
+## 7. 命令面按"产物"收敛(2026-11-21 决策记录)
+
+**背景**:`publish` / `dist` / `release` 三者职责重叠,人和 agent 都难以抉择。
+
+**调研结论**(本机实测 `go` / `npm` / `uv` 的真实命令面):
+
+| | go | cargo | npm | uv |
+|---|---|---|---|---|
+| 有 publish 吗 | ❌ **没有** | ✅ | ✅ | ✅ |
+| "发布"实际是什么 | `git tag` + 推仓库 | 上传 crate | 上传 tarball | 上传 wheel/sdist |
+| 有 release/dist 命令吗 | ❌ | ❌ | ❌ | ❌ |
+| 构建与发布分离 | N/A | ✅ | ⚠️ | ✅(publish 默认读 `dist/*`) |
+
+**四家里没有一家有 `release` 或 `dist` 命令。** `release` 是 mj 自造的概念。
+`uv` 的 `publish` 默认值就是 `dist/*`——和 mj 的 `dist/` 布局一致。
+
+**决定**:
+1. **删除 `mj release`** —— 生命周期编排是项目 CI 的职责,不是构建工具的。
+   mj 提供单步机制(lock/build/test/bundle),CI 决定何时调用、如何发布。
+2. **`mj dist` → `mj bundle`** —— 名字说清产物:"组装一个可安装的发行版",
+   面向"有用户要 `curl | bash` 的应用",库永远不需要它。
+3. **移除 freeway-flow 依赖** —— 唯一的用户是 `release` 的图。CLI 回到朴素形态,
+   少一个依赖。flow 编排仍留在 freeway 框架里供别人用。
+4. **`publish` 不再自己打 jar** —— 它上传 `package` 的产物。之前两者写同一路径
+   `dist/<name>-<version>.jar`,后者静默覆盖前者:先 `package --uber` 再 `publish`
+   会上传一个不含依赖的 jar。**这是静默数据损坏,不是命名问题。**
+
+**产物矩阵(现在只有一种产物语义:jar)**:
+
+```
+mj package           → dist/<name>-<version>.jar   (库;可选 --uber)
+mj publish           → 读 dist/*.jar + 写描述符/sha256 → 上传
+mj bundle            → dist/<name>-<version>/ + .tar.gz   (应用发行版)
+```
+
+**留给后来者**:如果再次出现"要不要加一条流水线命令"的念头,先问一句
+"这件事 CI 能不能自己串起来?"。能,就不要进 CLI。

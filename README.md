@@ -67,7 +67,7 @@ depths; `mj why <id>` shows every path that introduces an artifact.
 
 `[dev-deps]` is the test-only group (Cargo's `dev-dependencies`, uv's
 dependency groups). It resolves into the same `mj.lock`, but never reaches the
-compile classpath, `mj run`, `mj package`, `mj dist`, or a **published
+compile classpath, `mj run`, `mj package`, `mj bundle`, or a **published
 descriptor**. Production use wins: an artifact reachable from both scopes is
 main.
 
@@ -167,17 +167,15 @@ mj builds mj, and freeway (the framework mj is built on) is built by mj too.
         └──────────────────────────────────────────────┘
 ```
 
-The whole lifecycle is one command, driven by a [freeway-flow](https://github.com/dzb/freeway) graph:
+The lifecycle is explicit steps, and that is deliberate: **mj has no `release`
+command.** Deciding when to build, what to name it, and where to upload it is a
+project's CI job; mj provides the mechanics one step at a time.
 
 ```bash
-mj release          # lock → build → verify → test → dist → publish
+mj lock && mj build && mj test     # verify the code under test
+mj bundle                          # assemble the installable distribution
+gh release create vX.Y.Z ...       # the CI decides to publish
 ```
-
-The stages are graph nodes resolved through the IoC container, and the gates
-are node-level conditions rather than an if-chain: `verify` opens only under a
-CI tag, `test` closes with `--skip-test`, `publish` opens with
-`--publish gh:owner/repo`. A failed stage throws and the evaluation stops —
-dist is never assembled from untested code.
 
 **Bootstrap discipline** (the part that actually matters): CI installs the
 *previous* release, then uses it to build the tree under test. That is the
@@ -207,7 +205,7 @@ One jar. freeway is mj's skeleton, not a dependency a user could swap — so it
 is merged in, not shipped beside. The test toolchain is separate because a
 production run never loads a single byte of it.
 
-`mj dist` also emits a `tar.gz` for `curl | bash`, and `setup.sh` installs
+`mj bundle` assembles that directory and a `tar.gz` for `curl | bash`; `setup.sh` installs
 surgically: it replaces `lib/` and `bin/`, and leaves `~/.mj/store` (your entire
 dependency cache) untouched. `mj update` upgrades in place and takes effect on
 the next invocation.
@@ -224,9 +222,9 @@ the next invocation.
 | `run` | run on the resolved closure |
 | `tree` / `why` | see the graph and every introduction path |
 | `info [--source]` | everything about one dependency, including its source |
-| `package [--uber]` / `dist` | a jar, or a distribution |
+| `package [--uber]` | the jar — plain, or one merged with its closure |
+| `bundle` | an installable distribution (bin + lib + setup.sh + tar.gz) |
 | `publish [gh:… \| gitee:…]` | the release triple, with native upload |
-| `release` | the whole lifecycle as one flow |
 | `update` / `upgrade` | self-upgrade from GitHub Releases |
 
 ## Design notes

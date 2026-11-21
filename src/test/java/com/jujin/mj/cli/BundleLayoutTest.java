@@ -74,7 +74,7 @@ class DistLayoutTest {
 
         ArtifactStore store = new ArtifactStore(storeDir);
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
-        assertEquals(0, new DistCommand(store, dir).execute(List.of()));
+        assertEquals(0, new BundleCommand(store, dir).execute(List.of()));
 
         Path lib = dir.resolve("dist/demo-1.0.0/lib");
         List<Path> topLevel;
@@ -112,7 +112,7 @@ class DistLayoutTest {
 
         ArtifactStore store = new ArtifactStore(storeDir);
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
-        assertEquals(0, new DistCommand(store, dir).execute(List.of()));
+        assertEquals(0, new BundleCommand(store, dir).execute(List.of()));
 
         String launcher = Files.readString(dir.resolve("dist/demo-1.0.0/bin/demo"));
         assertTrue(launcher.contains("-cp \"$MJ_HOME/lib/*\""),
@@ -138,7 +138,7 @@ class DistLayoutTest {
 
         ArtifactStore store = new ArtifactStore(storeDir);
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
-        assertEquals(0, new DistCommand(store, dir).execute(List.of()));
+        assertEquals(0, new BundleCommand(store, dir).execute(List.of()));
         assertEquals(0, new PackageCommand(store, dir).execute(List.of("--uber")));
 
         // the agreement: target/ is disposable intermediates only, so

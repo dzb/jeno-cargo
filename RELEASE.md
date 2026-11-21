@@ -70,5 +70,4 @@ gh release create v{ver} dist/mj-bin-{ver}.tar.gz --title "mj v{ver}" --notes "�
 - Gitee 仓只镜像代码与 tag,不承载 release(公开发布用 GitHub,已决策)
 - `mj publish` 与本管线无关:它是"把库发布给消费方"的三件套命令;
   mj 自身的工具发行走 CI 的 dist + Release,两个语义不混用
-- `mj release` 命令(flow 图驱动)在 CI 中的塌缩等 v0.1.2 落地后进行:
-  CI 装的"上一个 release"必须已自带该命令
+- mj 不提供 `release` 命令:CI 显式调用 `mj lock` / `build` / `test` / `bundle`,再自行 `gh release create`

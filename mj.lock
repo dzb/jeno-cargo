@@ -8,14 +8,6 @@ sha256 = "918f99ea14982eaacbb8a65bc5c736a029ddab5813eaecde4f08bfcb651672a2"
 meta-sha256 = "114549a8caac4d1155137ae3f4e76b075768767bbc66b6639920d574260fc9df"
 depth = 1
 [[artifacts]]
-id = "com.jujin8.freeway:freeway-flow"
-version = "2.0.2"
-source = "local:vendor"
-url = "file:///home/dzb/Projects/mj/vendor/com/jujin8/freeway/freeway-flow/2.0.2/freeway-flow-2.0.2.jar"
-sha256 = "e4c54865b71dce8e48b6b55fa3874fbe93ec7c6a7f4f0389006fc2e3482c744a"
-meta-sha256 = "3942460d90647c9b4b5cff0fb11eb88bb421c356513b76f359d257fce5f86831"
-depth = 1
-[[artifacts]]
 id = "com.jujin8.freeway:freeway-ioc"
 version = "2.0.2"
 source = "local:vendor"

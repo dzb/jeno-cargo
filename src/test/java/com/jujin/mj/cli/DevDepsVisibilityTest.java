@@ -110,6 +110,9 @@ class DevDepsVisibilityTest {
                 .execute(List.of()), "build compiles against the main jar");
 
         // publish writes the descriptor before it needs the store for upload
+        // publish uploads what package built
+        assertEquals(0, new PackageCommand(new ArtifactStore(storeDir), dir)
+                .execute(List.of()));
         new PublishCommand(dir).execute(List.of());
 
         Path descriptor = dir.resolve("dist/demo-0.1.0.mj.toml");

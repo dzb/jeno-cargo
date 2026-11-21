@@ -77,16 +77,20 @@ jobs:
             exit 1
           fi
 
-      # dist is run by the JUST-BUILT mj, not the installed one. The installed
-      # mj is the previous release — using it to package the current tree
-      # means a change to dist itself only lands one release later (the
-      # v0.1.4 artifact still had the old nine-jar layout for exactly this
-      # reason). Building the release with the code under test closes that lag.
-      - name: dist (with the freshly built mj)
+      # bundle is run by the JUST-BUILT mj, not the installed one. The
+      # installed mj is the previous release — using it to package the current
+      # tree means a change to the packaging itself only lands one release
+      # later (the v0.1.4 artifact still had the old nine-jar layout for
+      # exactly this reason). Packaging with the code under test closes that.
+      #
+      # The lifecycle stops here: mj has no `release` command. Deciding to
+      # build, name and upload an artifact belongs to the project's CI; mj
+      # provides the mechanics (one step each) and nothing more.
+      - name: bundle (with the freshly built mj)
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           CP="target/classes:$(find vendor -name '*.jar' | tr '\n' ':')"
-          java -cp "$CP" com.jujin.mj.cli.Mj dist
+          java -cp "$CP" com.jujin.mj.cli.Mj bundle
 
       - name: stage the release asset (mj-bin-<version>.tar.gz)
         if: startsWith(github.ref, 'refs/tags/v')

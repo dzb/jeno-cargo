@@ -96,7 +96,7 @@ class VersionTest {
 
         ArtifactStore store = new ArtifactStore(storeDir);
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
-        assertEquals(0, new DistCommand(store, dir).execute(List.of()));
+        assertEquals(0, new BundleCommand(store, dir).execute(List.of()));
 
         Path jar = dir.resolve("dist/demo-4.5.6/lib/demo-4.5.6.jar");
         assertTrue(Files.exists(jar), "the dist jar was written");

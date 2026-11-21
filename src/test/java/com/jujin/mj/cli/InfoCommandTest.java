@@ -196,6 +196,9 @@ class InfoCommandTest {
         Files.writeString(dir.resolve("mj.lock"), "");
         assertEquals(0, new BuildCommand(new ArtifactStore(storeDir), dir).execute(List.of()));
 
+        // publish uploads what package built
+        assertEquals(0, new PackageCommand(new ArtifactStore(storeDir), dir)
+                .execute(List.of()));
         new PublishCommand(dir).execute(List.of());
 
         String descriptor = Files.readString(dir.resolve("dist/widget-1.2.0.mj.toml"));

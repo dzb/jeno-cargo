@@ -21,26 +21,33 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 /**
- * {@code mj dist}: assembles the full distribution directory — the release
- * artifact that users download and install. Distinct from {@code mj package}
- * (which produces a single uber-jar): the dist directory carries a launcher,
- * separate jars, setup.sh, and a tar.gz — readable, inspectable, updatable
- * jar-by-jar.
+ * {@code mj bundle} — assembles an installable distribution directory. This is
+ * <b>not</b> a general "package my library" step; that is {@code mj package},
+ * and its single product is a jar.
+ *
+ * <p>bundle exists for one job: producing the artifact an application ships to
+ * its own users — the thing behind a {@code curl | bash}. mj itself is the first
+ * consumer; any CLI project can use it. A library never needs it.
  *
  * <pre>
  *   dist/{name}-{version}/
- *   ├── bin/{name}             POSIX launcher (main class from mj.toml)
+ *   ├── bin/{name}                POSIX launcher (main class from mj.toml)
  *   ├── lib/
  *   │   ├── {name}-{version}.jar  one jar: project + skeleton merged
  *   │   └── toolchain/            lifecycle toolchain (test-only jars)
- *   ├── setup.sh               self-installing script
- *   └── SHA256SUMS             integrity manifest
+ *   ├── setup.sh                  self-installing script
+ *   └── SHA256SUMS                integrity manifest
  * </pre>
  *
- * <p>Plus a tar.gz of the whole directory — the release artifact uploaded to
- * GitHub/Gitee Releases for {@code curl | bash} one-liner installation.
+ * <p>Plus a tar.gz of the whole directory — the asset a release upload carries
+ * for one-liner installation.
+ *
+ * <p><b>What this command does not decide.</b> Whether a project wants a
+ * bundle, what to name it, where to upload it — all of that is the project's
+ * CI. mj provides the packaging mechanics (merge the skeleton, place the
+ * launcher, write setup.sh, checksum it) and nothing else.
  */
-public final class DistCommand implements Command {
+public final class BundleCommand implements Command {
 
     private static final String CLASSES = "target/classes";
 
@@ -122,19 +129,19 @@ public final class DistCommand implements Command {
     private final Path projectDir;
 
     @Inject
-    public DistCommand(ArtifactStore store, Path projectDir) {
+    public BundleCommand(ArtifactStore store, Path projectDir) {
         this.store = store;
         this.projectDir = projectDir;
     }
 
     @Override
     public String name() {
-        return "dist";
+        return "bundle";
     }
 
     @Override
     public String summary() {
-        return "assemble the distribution directory (bin + lib + setup.sh + tar.gz)";
+        return "assemble an installable distribution (bin + lib + setup.sh + tar.gz) — for apps that ship to users, not for libraries";
     }
 
     @Override

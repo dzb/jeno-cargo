@@ -287,8 +287,8 @@ mj 也是自己的狗粮:上一个 release 构建下一个 release。**升级地
 `https://api.github.com/repos/dzb/mj-cargo/releases/latest` —— `mj update` 查询它,
 `setup.sh`(动态解析 latest,永不用改)与 CI 共用同一约定。
 
-**发行物**:GitHub Release `v{version}`,附件 `mj-bin-{version}.tar.gz`(`mj dist` 产物,
-`-bin` 与库 jar 三件套命名区分)。版本号两处声明、CI 强制一致:`mj.toml [project].version`
+**发行物**:GitHub Release `v{version}`,附件 `mj-bin-{version}.tar.gz`(`mj bundle` 产物,
+`-bin` 与库 jar 三件套命名区分;由 `mj bundle` 产出)。版本号两处声明、CI 强制一致:`mj.toml [project].version`
 (产物命名)+ `Mj.VERSION`(`--version`/`mj update` 比对)。
 
 **流水线**(`.github/workflows/ci.yml`,提交即发版):
@@ -305,14 +305,9 @@ push master  →  GitHub Actions
 **版本模型:0.1.x** —— major.minor 人工维护(mj.toml),patch 只由 CI 递增;账本是
 git tags。GITHUB_TOKEN 的推送不触发新 run(平台防环),bump commit 无循环。
 
-**本地同一链条一条命令**:`mj release` —— 生命周期即 freeway-flow 图(DESIGN.md §9 延伸):
-`lock → build → verify → test → dist → publish`,门控(verify/test/publish)是图上的节点级
-`when` 条件而非 if 链,任务节点经容器按 id 解析(`@release-lock` …),任一阶段失败即
-FlowException 快速终止。`--skip-test` 关测试门;`--publish gh:owner/repo` 开库发布门;
-`verify` 门做 tag/mj.toml/构建产物三方一致性把关。CI 的 lock/build/test/dist 四步在
-"上一个 release 自带该命令后"塌缩为一步 `mj release`(自举链约束)。
+**本地链条**:逐步执行 `mj lock` → `mj build` → `mj test` → `mj bundle`,再由 CI/人执行 `gh release create`。mj 不提供 `release` 命令——那一步的编排属于项目自己的 CI,不属于构建工具的职责面。
 - 自举链断裂的逃生舱(旧 mj 读不了新 mj.toml 等):本机 Maven 引导
-  (`mvn -DskipTests package` → `java -cp target/classes:…` 跑 Mj)→ `mj dist` → `gh release upload` 手工补发
+  (`mvn -DskipTests package` → `java -cp target/classes:…` 跑 Mj)→ `mj bundle` → `gh release upload` 手工补发
 - 引导链有根:v0.1.0 由 Maven 本地引导(已完成),此后链条不断
 - Gitee 仓只镜像代码,release 仅 GitHub(决策:公开发布用 GitHub)
 
@@ -332,10 +327,10 @@ FlowException 快速终止。`--skip-test` 关测试门;`--publish gh:owner/repo
 | `mj run <main>` / scripts | ✅ | runtime classpath 运行(排除 dev) |
 | `mj test` | ✅ | fork JVM runner:`@MjTest` + JUnit Platform;classpath 含 MAIN + dev |
 | `mj package` | ✅ | 纯 jar;`--uber` 合并闭包(排除 dev);输出 `dist/` |
-| `mj dist` | ✅ | 发行目录 + setup.sh + tar.gz,输出 `dist/` |
+| `mj bundle` | ✅ | 发行目录 + setup.sh + tar.gz,输出 `dist/`(应用自用;库不需要) |
 | `mj publish` | ✅ | 三件套(dist/)+ `gh:`/`gitee:` 原生上传;描述符只含 MAIN 依赖 |
 | `mj update` / `mj upgrade` | ✅ | 自升级(alias 同一实现) |
-| `mj release` | ✅ | 生命周期 = freeway-flow 图 |
+| ~~`mj release`~~ | **已删除** | 生命周期属于项目自己的 CI;mj 只提供单步机制 |
 | `mj init` / `mj remove` / `mj clean` | **缺口** | 曾误标 ✅,实际未实现(见 §12 吸收清单) |
 | daemon 常驻 | **M6** | 已确认需要:常驻 JVM 热命令,mvnd 已验证可快 2–4 倍 |
 | workspaces/monorepo | V2 | 设计模板 = go.work 模式:`mj.work.toml` 本地覆盖文件,gitignore 不提交 |

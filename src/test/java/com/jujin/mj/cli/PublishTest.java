@@ -1,5 +1,6 @@
 package com.jujin.mj.cli;
 
+import com.jujin.mj.store.ArtifactStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -28,6 +29,16 @@ class PublishTest {
         writeProject(dir);
         Files.createDirectories(dir.resolve("target/classes/demo"));
         Files.writeString(dir.resolve("target/classes/demo/A.class"), "class bytes");
+
+        // publish uploads what package built — it never builds its own jar,
+        // so the fixture provides a real jar where package would have put one
+        Path dist = Files.createDirectories(dir.resolve("dist"));
+        try (var out = new java.util.zip.ZipOutputStream(
+                Files.newOutputStream(dist.resolve("demo-1.0.0.jar")))) {
+            out.putNextEntry(new java.util.zip.ZipEntry("demo/A.class"));
+            out.write("class bytes".getBytes());
+            out.closeEntry();
+        }
 
         int exit = new PublishCommand(dir).execute(List.of());
 
