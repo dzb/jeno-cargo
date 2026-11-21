@@ -51,15 +51,15 @@ info "download complete"
 info "extracting ..."
 tar -xzf "$TEMP_DIR/mj-bin.tar.gz" -C "$TEMP_DIR"
 
-INSTALL_SCRIPT=$(find "$TEMP_DIR" -name "install.sh" -type f | head -1)
-if [ -z "$INSTALL_SCRIPT" ]; then
-    error "install.sh not found in the package"
+SETUP_SCRIPT=$(find "$TEMP_DIR" -name "setup.sh" -type f | head -1)
+if [ -z "$SETUP_SCRIPT" ]; then
+    error "setup.sh not found in the package"
     exit 1
 fi
 
 # ---- install ----
 info "installing ..."
-bash "$INSTALL_SCRIPT"
+bash "$SETUP_SCRIPT"
 
 echo ""
 echo "mj ${VERSION} — modern java manager"

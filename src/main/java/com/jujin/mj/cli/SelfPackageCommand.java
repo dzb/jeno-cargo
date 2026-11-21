@@ -181,9 +181,9 @@ public final class SelfPackageCommand implements Command {
                     PosixFilePermissions.fromString("r-xr-xr-x"));
 
             // the installer — travels in the tar.gz, self-installs to $HOME/.mj/
-            Files.writeString(dist.resolve("install.sh"), installScript(version),
+            Files.writeString(dist.resolve("setup.sh"), installScript(version),
                     StandardCharsets.UTF_8);
-            Files.setPosixFilePermissions(dist.resolve("install.sh"),
+            Files.setPosixFilePermissions(dist.resolve("setup.sh"),
                     PosixFilePermissions.fromString("r-xr-xr-x"));
 
             // the integrity manifest
