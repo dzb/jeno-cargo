@@ -281,6 +281,32 @@ mylib-1.2.0.sha256
 - sha256 由 lockfile 钉死(§6.2),release asset 可变也不影响字节确定性
 - URL 依赖仅允许 https
 
+### 7.5 mj 自身的发行管线(自举闭环)
+
+mj 也是自己的狗粮:上一个 release 构建下一个 release。**升级地址(唯一事实来源)**:
+`https://api.github.com/repos/dzb/mj-cargo/releases/latest` —— `mj update` 查询它,
+`setup.sh`(动态解析 latest,永不用改)与 CI 共用同一约定。
+
+**发行物**:GitHub Release `v{version}`,附件 `mj-bin-{version}.tar.gz`(`mj dist` 产物,
+`-bin` 与库 jar 三件套命名区分)。版本号两处声明、CI 强制一致:`mj.toml [project].version`
+(产物命名)+ `Mj.VERSION`(`--version`/`mj update` 比对)。
+
+**流水线**(`.github/workflows/ci.yml`,单 job 两段):
+
+```
+push master / tag v*  →  GitHub Actions
+  1. 装 mj:curl setup.sh | bash        ← 装的是"上一个" release(tag 的 release 此刻还不存在)
+  2. mj lock → build → test            ← 上一个 release 构建新的(自举链 v(n) → v(n+1))
+  3. 仅 tag 触发:一致性门(tag == mj.toml version == 构建 --version)
+  4. 仅 tag 触发:mj dist → gh release create v{version} mj-bin-{version}.tar.gz
+```
+
+- 每次推 master 都跑完整 dogfood 构建 + 测试(磨刀石常磨)
+- 自举链断裂的逃生舱(旧 mj 读不了新 mj.toml 等):本机 Maven 引导
+  (`mvn -DskipTests package` → `java -cp target/classes:…` 跑 Mj)→ `mj dist` → `gh release upload` 手工补发
+- 引导链有根:v0.1.0 由 Maven 本地引导(已完成),此后链条不断
+- Gitee 仓只镜像代码,release 仅 GitHub(决策:公开发布用 GitHub)
+
 ---
 
 ## 8. 构建与命令面(草案)

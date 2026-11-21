@@ -1,15 +1,16 @@
 #!/bin/bash
 #
 # mj — modern java manager installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/dzb/mj-cargo/main/setup.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/dzb/mj-cargo/master/setup.sh | bash
 #
-# Downloads the mj distribution from GitHub Releases, extracts it, and
-# installs to $HOME/.mj/ with PATH configuration and a /usr/local/bin symlink.
+# Resolves the latest release dynamically from GitHub — no version hardcoding,
+# so this script never needs editing when a new version ships. Downloads the
+# release tar.gz, extracts it, and delegates to the setup.sh inside to install
+# to $HOME/.mj/.
 
 set -e
 
-VERSION="v0.1.0"
-PACKAGE_URL="https://github.com/dzb/mj-cargo/releases/download/${VERSION}/mj-bin-${VERSION#v}.tar.gz"
+REPO="dzb/mj-cargo"
 TEMP_DIR=""
 
 RED='\033[0;31m'
@@ -18,7 +19,6 @@ YELLOW='\033[0;33m'
 NC='\033[0m'
 
 info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 cleanup() {
@@ -27,6 +27,19 @@ cleanup() {
     fi
 }
 trap cleanup EXIT
+
+# ---- resolve the latest release tag ----
+# Follow the redirect from releases/latest to releases/tag/vX.Y.Z — one HEAD
+# request, no API rate limits, no JSON parsing.
+LATEST=$(curl -fsIL "https://github.com/$REPO/releases/latest" -o /dev/null -w '%{url_effective}' 2>/dev/null | sed 's|.*/tag/||')
+if [ -z "$LATEST" ] || [ "$LATEST" = "latest" ]; then
+    error "cannot resolve the latest release — check your network connection"
+    exit 1
+fi
+VERSION="${LATEST#v}"
+info "latest release: $LATEST"
+
+PACKAGE_URL="https://github.com/$REPO/releases/download/$LATEST/mj-bin-$VERSION.tar.gz"
 
 # ---- check Java 25+ ----
 JAVA_MAJOR=$(java -version 2>&1 | head -1 | sed 's/.*"\([0-9]*\)\..*/\1/' 2>/dev/null)
@@ -39,7 +52,7 @@ info "Java $JAVA_MAJOR found"
 
 # ---- download ----
 TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/mj-install.XXXXXX")
-info "downloading mj ${VERSION} ..."
+info "downloading mj $LATEST ..."
 
 if ! curl -fsSL -o "$TEMP_DIR/mj-bin.tar.gz" "$PACKAGE_URL"; then
     error "download failed: $PACKAGE_URL"
@@ -57,10 +70,11 @@ if [ -z "$SETUP_SCRIPT" ]; then
     exit 1
 fi
 
-# ---- install ----
+# ---- install (delegates to the setup.sh inside the distribution) ----
 info "installing ..."
 bash "$SETUP_SCRIPT"
 
 echo ""
-echo "mj ${VERSION} — modern java manager"
+echo "mj $LATEST — modern java manager"
 echo "  run 'mj' to see available commands"
+echo "  run 'mj update' to upgrade to a newer version"
