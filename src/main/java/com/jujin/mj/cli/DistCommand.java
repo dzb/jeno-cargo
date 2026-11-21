@@ -85,61 +85,47 @@ public final class DistCommand implements Command {
 
     private static final String SETUP_TEMPLATE = """
         #!/bin/bash
-        # setup.sh — installs this distribution to $HOME/.%s/
+        # setup.sh — installs this distribution to $HOME/.%1$s/
+        # Surgical update: replaces the runtime (lib/bin), leaves the
+        # content-addressed store ($HOME/.%1$s/store) untouched.
 
         set -e
 
         JAVA_MAJOR=$(java -version 2>&1 | head -1 | sed 's/.*"\\([0-9]*\\)\\..*/\\1/')
         if [ -z "$JAVA_MAJOR" ] || [ "$JAVA_MAJOR" -lt 25 ]; then
-            echo "mj requires JDK 25+ (found: ${JAVA_MAJOR:-none})"
+            echo "%1$s requires JDK 25+ (found: ${JAVA_MAJOR:-none})"
             echo "  download: https://adoptium.net/temurin/releases/?version=25"
             exit 1
         fi
 
         SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-        INSTALL_DIR="$HOME/.%s"
-        BIN_DIR="$HOME/.%s/bin"
+        INSTALL_DIR="$HOME/.%1$s"
+        BIN_DIR="$HOME/.%1$s/bin"
 
-        echo "installing %s %s to $INSTALL_DIR ..."
-        rm -rf "$INSTALL_DIR"
+        echo "installing %1$s %2$s to $INSTALL_DIR ..."
+        rm -rf "$INSTALL_DIR/lib" "$INSTALL_DIR/bin" "$INSTALL_DIR/SHA256SUMS"
         mkdir -p "$BIN_DIR" "$INSTALL_DIR"
         cp -R "$SCRIPT_DIR"/lib "$INSTALL_DIR/"
         cp "$SCRIPT_DIR"/SHA256SUMS "$INSTALL_DIR/" 2>/dev/null || true
 
-        cat > "$BIN_DIR/%s" << 'LAUNCHER_EOF'
-        #!/bin/sh
-        PRG="$0"
-        while [ -h "$PRG" ]; do
-            link=$(ls -ld "$PRG" | sed -e 's/^.* -> //')
-            if [ -n "$link" ]; then
-                case "$link" in /*) PRG="$link" ;; *) PRG="$(dirname "$PRG")/$link" ;; esac
-            fi
-            PRG=$(dirname "$PRG")
-        done
-        MJ_HOME=$(cd "$(dirname "$PRG")/.." && pwd)
-
-        if [ -n "$JAVA_HOME" ]; then
-            JAVA="$JAVA_HOME/bin/java"
-        else
-            JAVA=$(command -v java 2>/dev/null)
-        fi
-        exec "$JAVA" -cp "$MJ_HOME/lib/*" %s "$@"
+        cat > "$BIN_DIR/%1$s" << 'LAUNCHER_EOF'
+        %3$s
         LAUNCHER_EOF
-        chmod +x "$BIN_DIR/%s"
+        chmod +x "$BIN_DIR/%1$s"
 
         USER_SHELL=$(basename "${SHELL:-/bin/bash}")
         case "$USER_SHELL" in
             zsh)  CONFIG_FILE="$HOME/.zshrc" ;;
             *)    CONFIG_FILE="$HOME/.bashrc" ;;
         esac
-        if [ -f "$CONFIG_FILE" ] && grep -qF '.%s/bin' "$CONFIG_FILE" 2>/dev/null; then
+        if [ -f "$CONFIG_FILE" ] && grep -qF '.%1$s/bin' "$CONFIG_FILE" 2>/dev/null; then
             true
         else
-            echo 'export PATH="$PATH:$HOME/.%s/bin"' >> "$CONFIG_FILE"
+            echo 'export PATH="$PATH:$HOME/.%1$s/bin"' >> "$CONFIG_FILE"
             echo "  PATH updated in $CONFIG_FILE"
         fi
 
-        echo "%s %s installed — run '%s' to verify"
+        echo "%1$s %2$s installed — run '%1$s' to verify"
         """;
 
     private final ArtifactStore store;
@@ -188,6 +174,23 @@ public final class DistCommand implements Command {
         Path lib = dist.resolve("lib");
         Path bin = dist.resolve("bin");
 
+        // rerun-safe: assembled launchers are read-only — remove the previous dist
+        if (Files.isDirectory(dist)) {
+            try (Stream<Path> walk = Files.walk(dist)) {
+                walk.sorted(java.util.Comparator.reverseOrder())
+                        .forEach(path -> {
+                            try {
+                                Files.deleteIfExists(path);
+                            } catch (IOException e) {
+                                throw new IllegalStateException("cannot clean " + path, e);
+                            }
+                        });
+            } catch (IOException e) {
+                System.err.println("mj: cannot clean the previous dist: " + e.getMessage());
+                return 1;
+            }
+        }
+
         try {
             Files.createDirectories(bin);
             Files.createDirectories(lib);
@@ -219,10 +222,10 @@ public final class DistCommand implements Command {
             Files.setPosixFilePermissions(bin.resolve(name),
                     PosixFilePermissions.fromString("r-xr-xr-x"));
 
-            // setup.sh — self-installing
-            String setupScript = SETUP_TEMPLATE.formatted(
-                    name, name, name, name, name, version,
-                    name, name, name, name, name, name, name, name);
+            // setup.sh — self-installing; the embedded launcher is the same
+            // launcher the dist ships, spliced verbatim into the heredoc
+            String launcherBody = LAUNCHER_TEMPLATE.formatted(launcherMain);
+            String setupScript = SETUP_TEMPLATE.formatted(name, version, launcherBody);
             Files.writeString(dist.resolve("setup.sh"), setupScript, StandardCharsets.UTF_8);
             Files.setPosixFilePermissions(dist.resolve("setup.sh"),
                     PosixFilePermissions.fromString("r-xr-xr-x"));
