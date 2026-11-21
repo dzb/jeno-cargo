@@ -47,14 +47,34 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/dzb/mj-cargo/master/setup.sh | bash
           echo "$HOME/.mj/bin" >> "$GITHUB_PATH"
 
-      - name: lock
+      # lock runs on the previous release: the question it answers is "can the
+      # shipped tool consume this mj.toml", which is exactly the compatibility
+      # check self-hosting is about.
+      - name: lock (previous release)
         run: mj lock
 
-      - name: build
-        run: mj build
+      # build and test run on the CODE UNDER TEST, not the previous release.
+      # A change to the build itself (generating the version resource, a new
+      # javac flag) cannot be executed by a tool that predates it — v0.1.2's
+      # tag run failed exactly this way: v0.1.1 built the tree and never wrote
+      # version.properties, so the version gate read "dev".
+      #
+      # The compile below is the bootstrap hop: javac straight to target/classes
+      # from vendor/, after which the new code drives its own build and tests.
+      - name: bootstrap-compile the code under test
+        run: |
+          CP="$(find vendor -name '*.jar' | tr '\n' ':')"
+          javac -d target/classes -cp "$CP" $(find src/main/java -name '*.java')
 
-      - name: test
-        run: mj test
+      - name: build (with the freshly compiled mj)
+        run: |
+          CP="target/classes:$(find vendor -name '*.jar' | tr '\n' ':')"
+          java -cp "$CP" com.jujin.mj.cli.Mj build
+
+      - name: test (with the freshly compiled mj)
+        run: |
+          CP="target/classes:$(find vendor -name '*.jar' | tr '\n' ':')"
+          java -cp "$CP" com.jujin.mj.cli.Mj test
 
       # ---- 以下仅 tag 触发:发行段 ----
 
