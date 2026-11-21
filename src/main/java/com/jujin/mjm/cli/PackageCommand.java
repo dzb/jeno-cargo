@@ -1,0 +1,247 @@
+package com.jujin.mjm.cli;
+
+import com.jujin.freeway.ioc.annotation.Inject;
+import com.jujin.mjm.project.MjProject;
+import com.jujin.mjm.project.ProjectReader;
+import com.jujin.mjm.store.ArtifactStore;
+import com.jujin.mjm.store.LockFileReader;
+import com.jujin.mjm.store.LockedArtifact;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Stream;
+
+/**
+ * {@code mjm package} — the packaging verb. Two output formats:
+ *
+ * <ul>
+ *   <li><b>default (dist)</b> — a distribution directory with a launcher,
+ *       separate jars, setup.sh, and a tar.gz. Readable, inspectable,
+ *       updatable jar-by-jar.</li>
+ *   <li><b>--uber</b> — a single fat jar with all closure classes merged,
+ *       services combined, signatures dropped. One file, easy to share.</li>
+ * </ul>
+ *
+ * <p>Both write to {@code dist/} — the one directory that holds
+ * deliverables. {@code target/} keeps only disposable build intermediates
+ * ({@code classes}, {@code test-classes}), so {@code rm -rf target} stays the
+ * safe, familiar gesture. The dist directory additionally produces
+ * a tar.gz (the release artifact) and a setup.sh (self-installing).
+ */
+public final class PackageCommand implements Command {
+
+    private static final String CLASSES = "target/classes";
+
+
+
+    private final ArtifactStore store;
+    private final Path projectDir;
+
+    @Inject
+    public PackageCommand(ArtifactStore store, Path projectDir) {
+        this.store = store;
+        this.projectDir = projectDir;
+    }
+
+    @Override
+    public String name() {
+        return "package";
+    }
+
+    @Override
+    public String summary() {
+        return "build the project jar (--uber merges the closure)";
+    }
+    @Override
+    public String usage() {
+        return "[--uber] [--main <class>]";
+    }
+
+
+    @Override
+    public int execute(List<String> args) {
+        boolean uber = false;
+        String mainClass = null;
+        for (int i = 0; i < args.size(); i++) {
+            String arg = args.get(i);
+            if (arg.equals("--uber")) {
+                uber = true;
+            } else if (arg.equals("--main")) {
+                if (i + 1 >= args.size()) {
+                    System.err.println("mjm: --main needs the main class name");
+                    return 2;
+                }
+                mainClass = args.get(++i);
+            } else {
+                System.err.println("mjm: unknown package option '" + arg + "'");
+                return 2;
+            }
+        }
+
+        MjProject project;
+        List<LockedArtifact> locked;
+        Map<String, Path> jars;
+        try {
+            var mjToml = projectDir.resolve("mjm.toml");
+            var mjLock = projectDir.resolve("mjm.lock");
+            if (!Files.exists(mjToml)) {
+                System.err.println("mjm: cannot read mjm.toml in " + projectDir);
+                return 1;
+            }
+            project = ProjectReader.parse(Files.readString(mjToml));
+            if (!Files.exists(mjLock)) {
+                System.err.println("mjm: no mjm.lock — run mjm lock first");
+                return 1;
+            }
+            locked = LockFileReader.read(Files.readString(mjLock));
+            jars = store.verifiedJars(locked);
+        } catch (IOException | RuntimeException e) {
+            System.err.println("mjm: " + e.getMessage());
+            return 1;
+        }
+
+        if (mainClass == null) {
+            mainClass = project.main();
+        }
+
+        return uber ? uberJar(project, locked, jars, mainClass)
+                    : plainJar(project, mainClass);
+    }
+
+    // ------------------------------------------------------------------
+    // dist mode (default)
+    // ------------------------------------------------------------------
+
+
+    // ------------------------------------------------------------------
+    // uber mode
+    // ------------------------------------------------------------------
+
+    /** Default: the project's own classes, no dependency merging. */
+    private int plainJar(MjProject project, String mainClass) {
+        String name = project.name();
+        String version = project.version();
+        Path output = projectDir.resolve("dist/" + name + "-" + version + ".jar");
+        Path classes = projectDir.resolve(CLASSES);
+
+        if (!Files.isDirectory(classes)) {
+            System.err.println("mjm: " + CLASSES + " is missing — run mjm build first");
+            return 1;
+        }
+
+        try {
+            Files.createDirectories(output.getParent());
+            try (var out = new java.util.zip.ZipOutputStream(
+                    Files.newOutputStream(output))) {
+                var manifest = new java.util.jar.Manifest();
+                var attrs = manifest.getMainAttributes();
+                attrs.put(java.util.jar.Attributes.Name.MANIFEST_VERSION, "1.0");
+                if (mainClass != null) {
+                    attrs.put(java.util.jar.Attributes.Name.MAIN_CLASS, mainClass);
+                }
+                attrs.put(new java.util.jar.Attributes.Name("Built-By"), "mjm");
+                attrs.put(new java.util.jar.Attributes.Name("Implementation-Title"), name);
+                attrs.put(new java.util.jar.Attributes.Name("Implementation-Version"), version);
+                out.putNextEntry(new java.util.zip.ZipEntry("META-INF/MANIFEST.MF"));
+                manifest.write(out);
+                out.closeEntry();
+
+                try (Stream<Path> stream = Files.walk(classes)) {
+                    for (Path file : stream.filter(Files::isRegularFile).toList()) {
+                        String entry = classes.relativize(file).toString().replace('\\', '/');
+                        writeEntry(out, entry, Files.readAllBytes(file));
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("mjm: packaging failed: " + e.getMessage());
+            return 1;
+        }
+
+        System.out.println("packaged " + output + " — plain jar (project classes only, "
+                + "use --uber to merge dependencies)");
+        return 0;
+    }
+
+    /** --uber: project classes + all closure jars merged into one. */
+    private int uberJar(MjProject project, List<LockedArtifact> locked,
+                        Map<String, Path> jars, String mainClass) {
+        String name = project.name();
+        String version = project.version();
+        Path output = projectDir.resolve("dist/" + name + "-" + version + ".jar");
+        Path classes = projectDir.resolve(CLASSES);
+
+        if (!Files.isDirectory(classes)) {
+            System.err.println("mjm: " + CLASSES + " is missing — run mjm build first");
+            return 1;
+        }
+        try {
+            UberJar.write(output,
+                    new UberJar.Input(classes, new ArrayList<>(
+                            UberJar.mainJars(locked, jars).values()),
+                            UberJar.labels(locked)),
+                    new UberJar.Header(name, version, mainClass));
+        } catch (IOException e) {
+            System.err.println("mjm: packaging failed: " + e.getMessage());
+            return 1;
+        }
+
+        System.out.println("packaged " + output + " — uber-jar ("
+                + locked.stream().filter(LockedArtifact::isMain).count() + " dependencies merged, "
+                + locked.stream().filter(a -> !a.isMain()).count() + " dev excluded)"
+                + (mainClass != null ? " — java -jar " + output : ""));
+        return 0;
+    }
+
+    // ------------------------------------------------------------------
+    // shared helpers
+    // ------------------------------------------------------------------
+
+    private static void writeEntry(java.util.zip.ZipOutputStream out, String name,
+                                   byte[] bytes) throws IOException {
+        out.putNextEntry(new java.util.zip.ZipEntry(name));
+        out.write(bytes);
+        out.closeEntry();
+    }
+
+    private static boolean isSignature(String name) {
+        return name.startsWith("META-INF/")
+                && (name.endsWith(".SF") || name.endsWith(".RSA")
+                        || name.endsWith(".DSA") || name.endsWith(".EC"));
+    }
+
+    private static boolean isModuleInfo(String name) {
+        return name.equals("module-info.class")
+                || (name.startsWith("META-INF/versions/")
+                        && name.endsWith("/module-info.class"));
+    }
+
+    private static Set<String> serviceLines(byte[] bytes) {
+        Set<String> lines = new LinkedHashSet<>();
+        for (String line : new String(bytes).split("\r?\n")) {
+            String stripped = line.strip();
+            if (!stripped.isEmpty() && !stripped.startsWith("#")) {
+                lines.add(stripped);
+            }
+        }
+        return lines;
+    }
+
+    private static String originalName(LockedArtifact artifact) {
+        String url = artifact.url();
+        String name = url.substring(url.lastIndexOf('/') + 1);
+        return name.isBlank() || !name.contains(".")
+                ? artifact.sha256().substring(0, 12) + ".jar"
+                : name;
+    }
+}

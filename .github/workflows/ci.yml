@@ -1,10 +1,10 @@
-# mj 的自举 CI/CD(DESIGN.md §7.5)——上一个 release 构建下一个 release。
+# mjm 的自举 CI/CD(DESIGN.md §7.5)——上一个 release 构建下一个 release。
 #
 # 两种触发,两种职责:
 #   push master   只验证:装上一个 release,构建 + 测试(狗粮常磨),不发版
-#   push tag v*   验证 + 发行:一致性门 → mj dist → GitHub Release 附件
+#   push tag v*   验证 + 发行:一致性门 → mjm bundle → GitHub Release 附件
 #
-# 版本账本是 git tags 本身:人工决定版本号(改 mj.toml + Mj.VERSION 两处),
+# 版本账本是 git tags 本身:人工决定版本号(改 mjm.toml 一处,构建派生),
 # tag 即发布。文档类变更不触发构建。
 
 name: ci
@@ -40,84 +40,77 @@ jobs:
           distribution: temurin
           java-version: '25'
 
-      # 自举引导:装"上一个" release —— tag 的 release 此刻尚未重建,
-      # latest 指向前一版,所以每一版都由上一版构建(v(n) → v(n+1))。
-      - name: install mj (latest release)
-        run: |
-          curl -fsSL https://raw.githubusercontent.com/dzb/mj-cargo/master/setup.sh | bash
-          echo "$HOME/.mj/bin" >> "$GITHUB_PATH"
-
-      # lock runs on the previous release: the question it answers is "can the
-      # shipped tool consume this mj.toml", which is exactly the compatibility
-      # check self-hosting is about.
-      - name: lock (previous release)
-        run: mj lock
-
-      # build and test run on the CODE UNDER TEST, not the previous release.
-      # A change to the build itself (generating the version resource, a new
-      # javac flag) cannot be executed by a tool that predates it — v0.1.2's
-      # tag run failed exactly this way: v0.1.1 built the tree and never wrote
-      # version.properties, so the version gate read "dev".
-      #
-      # The compile below is the bootstrap hop: javac straight to target/classes
-      # from vendor/, after which the new code drives its own build and tests.
+      # No install step: the previous release is still `mjm` and cannot read
+      # this tree's mjm.toml, so it has nothing to contribute. The bootstrap
+      # below compiles the code under test with javac and every later step
+      # runs that. Once an `mjm` release exists this reverts to
+      # "install previous release, use it to lock" — the compatibility check
+      # self-hosting is really about.
+      # Every step runs the code under test: javac straight to target/classes
+      # from vendor/, then that classpath drives lock, build and test. A change
+      # to the build itself therefore lands immediately, not one release late.
       - name: bootstrap-compile the code under test
         run: |
           CP="$(find vendor -name '*.jar' | tr '\n' ':')"
           javac -d target/classes -cp "$CP" $(find src/main/java -name '*.java')
 
-      - name: build (with the freshly compiled mj)
+      - name: lock (with the freshly compiled mjm)
         run: |
           CP="target/classes:$(find vendor -name '*.jar' | tr '\n' ':')"
-          java -cp "$CP" com.jujin.mj.cli.Mj build
+          java -cp "$CP" com.jujin.mjm.cli.Mjm lock
 
-      - name: test (with the freshly compiled mj)
+      - name: build (with the freshly compiled mjm)
         run: |
           CP="target/classes:$(find vendor -name '*.jar' | tr '\n' ':')"
-          java -cp "$CP" com.jujin.mj.cli.Mj test
+          java -cp "$CP" com.jujin.mjm.cli.Mjm build
+
+      - name: test (with the freshly compiled mjm)
+        run: |
+          CP="target/classes:$(find vendor -name '*.jar' | tr '\n' ':')"
+          java -cp "$CP" com.jujin.mjm.cli.Mjm test
 
       # ---- 以下仅 tag 触发:发行段 ----
 
-      - name: verify tag matches mj.toml version
+      - name: verify tag matches mjm.toml version
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          TOML=$(grep -m1 '^version' mj.toml | sed 's/.*"\(.*\)".*/\1/')
+          TOML=$(grep -m1 '^version' mjm.toml | sed 's/.*"\(.*\)".*/\1/')
           if [ "$TAG" != "$TOML" ]; then
-            echo "::error::tag v$TAG does not match mj.toml [project].version $TOML"
+            echo "::error::tag v$TAG does not match mjm.toml [project].version $TOML"
             exit 1
           fi
 
       - name: verify the built binary reports the same version
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          if ! java -cp target/classes com.jujin.mj.cli.Mj --version \
-              | grep -q "mj ${GITHUB_REF_NAME#v} "; then
-            echo "::error::Mj.VERSION does not match mj.toml — bump both or neither"
+          if ! java -cp target/classes com.jujin.mjm.cli.Mjm --version \
+              | grep -q "mjm ${GITHUB_REF_NAME#v} "; then
+            echo "::error::Mjm.VERSION does not match mjm.toml — bump both or neither"
             exit 1
           fi
 
-      # bundle is run by the JUST-BUILT mj, not the installed one. The
-      # installed mj is the previous release — using it to package the current
+      # bundle is run by the JUST-BUILT mjm, not the installed one. The
+      # installed mjm is the previous release — using it to package the current
       # tree means a change to the packaging itself only lands one release
       # later (the v0.1.4 artifact still had the old nine-jar layout for
       # exactly this reason). Packaging with the code under test closes that.
       #
-      # The lifecycle stops here: mj has no `release` command. Deciding to
-      # build, name and upload an artifact belongs to the project's CI; mj
+      # The lifecycle stops here: mjm has no `release` command. Deciding to
+      # build, name and upload an artifact belongs to the project's CI; mjm
       # provides the mechanics (one step each) and nothing more.
-      - name: bundle (with the freshly built mj)
+      - name: bundle (with the freshly built mjm)
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           CP="target/classes:$(find vendor -name '*.jar' | tr '\n' ':')"
-          java -cp "$CP" com.jujin.mj.cli.Mj bundle
+          java -cp "$CP" com.jujin.mjm.cli.Mjm bundle
 
-      - name: stage the release asset (mj-bin-<version>.tar.gz)
+      - name: stage the release asset (mjm-bin-<version>.tar.gz)
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           mkdir dist-release
-          cp "dist/mj-$VERSION.tar.gz" "dist-release/mj-bin-$VERSION.tar.gz"
+          cp "dist/mjm-$VERSION.tar.gz" "dist-release/mjm-bin-$VERSION.tar.gz"
 
       # 重发安全:先删同 tag 的旧 release(保留 tag),规避附件 CDN 缓存。
       - name: create the GitHub release
@@ -126,12 +119,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="$GITHUB_REF_NAME"
-          ASSET="dist-release/mj-bin-${TAG#v}.tar.gz"
+          ASSET="dist-release/mjm-bin-${TAG#v}.tar.gz"
           gh release view "$TAG" >/dev/null 2>&1 && gh release delete "$TAG" --yes || true
           gh release create "$TAG" "$ASSET" \
             --target "$GITHUB_SHA" \
-            --title "mj $TAG" \
+            --title "mjm $TAG" \
             --notes "modern java manager
 
-          install:  curl -fsSL https://raw.githubusercontent.com/dzb/mj-cargo/master/setup.sh | bash
-          upgrade:  mj update"
+          install:  curl -fsSL https://raw.githubusercontent.com/dzb/mjm-cargo/master/setup.sh | bash
+          upgrade:  mjm update"
