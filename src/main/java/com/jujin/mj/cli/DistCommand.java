@@ -195,12 +195,10 @@ public final class DistCommand implements Command {
             Files.createDirectories(bin);
             Files.createDirectories(lib);
 
-            // the project jar
-            Process jarTool = new ProcessBuilder("jar", "--create", "--file",
-                    lib.resolve(name + "-" + version + ".jar").toString(),
-                    "--no-manifest", "-C", projectDir.resolve(CLASSES).toString(), ".")
-                    .inheritIO().start();
-            if (jarTool.waitFor() != 0) {
+            // the project jar — with the Java-conventional manifest entries
+            if (jar(projectDir.resolve(CLASSES),
+                    lib.resolve(name + "-" + version + ".jar"),
+                    name, version, project.main()) != 0) {
                 System.err.println("mj: cannot jar the build output");
                 return 1;
             }
@@ -260,6 +258,67 @@ public final class DistCommand implements Command {
             return 0;
         } catch (IOException | InterruptedException e) {
             System.err.println("mj: dist assembly failed: " + e.getMessage());
+            return 1;
+        }
+    }
+
+    /**
+     * Zips {@code classes} into {@code jarFile} with the JDK's jar tool,
+     * adding the Java-conventional manifest entries ({@code
+     * Implementation-Title}/{@code Implementation-Version}) so outside tools
+     * and IDEs can read the version without mj's resource.
+     */
+    static int jar(Path classes, Path jarFile, String title, String version, String mainClass) {
+        try {
+            java.util.jar.Manifest manifest = new java.util.jar.Manifest();
+            var attributes = manifest.getMainAttributes();
+            attributes.put(java.util.jar.Attributes.Name.MANIFEST_VERSION, "1.0");
+            if (title != null && !title.isBlank()) {
+                attributes.put(new java.util.jar.Attributes.Name("Implementation-Title"), title);
+            }
+            if (version != null && !version.isBlank()) {
+                attributes.put(new java.util.jar.Attributes.Name("Implementation-Version"),
+                        version);
+                attributes.put(new java.util.jar.Attributes.Name("mj-Version"), version);
+            }
+            if (mainClass != null && !mainClass.isBlank()) {
+                attributes.put(java.util.jar.Attributes.Name.MAIN_CLASS, mainClass);
+            }
+            attributes.put(new java.util.jar.Attributes.Name("Built-By"), "mj");
+
+            Path manifestFile = Files.createTempFile("mj-manifest-", ".mf");
+            try (var out = Files.newOutputStream(manifestFile)) {
+                manifest.write(out);
+            }
+            List<String> command = List.of("jar", "--create", "--file", jarFile.toString(),
+                    "--manifest", manifestFile.toString(), "-C", classes.toString(), ".");
+            try {
+                Process process = new ProcessBuilder(command).inheritIO().start();
+                return process.waitFor();
+            } finally {
+                Files.deleteIfExists(manifestFile);
+            }
+        } catch (IOException e) {
+            System.err.println("mj: cannot run jar — is a JDK on the PATH?");
+            return 1;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return 1;
+        }
+    }
+
+    /** Zips {@code classes} into {@code jarFile} with no manifest (store-side helpers). */
+    static int plainJar(Path classes, Path jarFile) {
+        List<String> command = List.of("jar", "--create", "--file", jarFile.toString(),
+                "--no-manifest", "-C", classes.toString(), ".");
+        try {
+            Process process = new ProcessBuilder(command).inheritIO().start();
+            return process.waitFor();
+        } catch (IOException e) {
+            System.err.println("mj: cannot run jar — is a JDK on the PATH?");
+            return 1;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             return 1;
         }
     }

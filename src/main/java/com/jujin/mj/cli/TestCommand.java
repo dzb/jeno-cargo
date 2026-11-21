@@ -192,6 +192,23 @@ public final class TestCommand implements Command {
 
     private boolean compile(List<String> sources, List<String> classpath) {
         Path output = projectDir.resolve(TEST_OUTPUT);
+        // a stale test-classes tree makes deleted tests run forever: the fork
+        // scans whatever is on disk, so `NoClassDefFoundError` from a removed
+        // class lingers until someone deletes target/ by hand
+        if (Files.isDirectory(output)) {
+            try (Stream<Path> walk = Files.walk(output)) {
+                walk.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
+                    try {
+                        Files.deleteIfExists(path);
+                    } catch (IOException e) {
+                        throw new IllegalStateException("cannot clean " + path, e);
+                    }
+                });
+            } catch (IOException e) {
+                System.err.println("mj: cannot clean " + output + ": " + e.getMessage());
+                return false;
+            }
+        }
         try {
             Files.createDirectories(output);
         } catch (IOException e) {

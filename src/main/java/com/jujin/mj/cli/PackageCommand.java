@@ -142,6 +142,8 @@ public final class PackageCommand implements Command {
                     attrs.put(java.util.jar.Attributes.Name.MAIN_CLASS, mainClass);
                 }
                 attrs.put(new java.util.jar.Attributes.Name("Built-By"), "mj");
+                attrs.put(new java.util.jar.Attributes.Name("Implementation-Title"), name);
+                attrs.put(new java.util.jar.Attributes.Name("Implementation-Version"), version);
                 out.putNextEntry(new java.util.zip.ZipEntry("META-INF/MANIFEST.MF"));
                 manifest.write(out);
                 out.closeEntry();
@@ -187,6 +189,8 @@ public final class PackageCommand implements Command {
                     attrs.put(java.util.jar.Attributes.Name.MAIN_CLASS, mainClass);
                 }
                 attrs.put(new java.util.jar.Attributes.Name("Built-By"), "mj");
+                attrs.put(new java.util.jar.Attributes.Name("Implementation-Title"), name);
+                attrs.put(new java.util.jar.Attributes.Name("Implementation-Version"), version);
                 List<String> deps = new ArrayList<>();
                 for (LockedArtifact artifact : locked) {
                     if (!artifact.isMain()) {

@@ -112,9 +112,27 @@ public final class BuildCommand implements Command {
         int exit = compiler.run(null, null, null, command.toArray(String[]::new));
         if (exit == 0) {
             SourceResources.copy(projectDir.resolve("src/main/resources"), output);
+            writeVersionResource(project, output);
             System.out.println("compiled " + sources.size() + " source file(s) into " + output);
         }
         return exit;
+    }
+
+    /**
+     * Writes {@code META-INF/mj/version.properties} from mj.toml — the one
+     * declaration becomes a resource the running binary can read from a
+     * classes directory, a jar, or an installed dist alike. This is why mj's
+     * version is not a source constant: a resource survives every layout,
+     * while {@code Package.getImplementationVersion()} is null off a jar.
+     */
+    private void writeVersionResource(MjProject project, Path output) {
+        Path target = output.resolve("META-INF/mj/version.properties");
+        try {
+            Files.createDirectories(target.getParent());
+            Files.writeString(target, Version.propertiesText(project.version()));
+        } catch (IOException e) {
+            throw new IllegalStateException("cannot write " + target, e);
+        }
     }
 
     private List<LockedArtifact> readLock() {
