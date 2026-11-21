@@ -61,22 +61,11 @@ jobs:
           grep -q "VERSION = \"$NEXT\"" src/main/java/com/jujin/mj/cli/Mj.java \
             || { echo "::error::Mj.VERSION bump failed"; exit 1; }
 
-      # v0.1.2 起可塌缩为一步 `mj release`(前提:上一个 release 已自带该命令)。
-      - name: lock
+      # 塌缩完成:v0.1.2 起上一个 release 自带 release 命令,
+      # 生命周期 lock → build → verify → test → dist 由 freeway-flow 图驱动。
+      - name: mj release (the lifecycle as one flow)
         if: env.SHOULD_RELEASE == 'true'
-        run: mj lock
-
-      - name: build
-        if: env.SHOULD_RELEASE == 'true'
-        run: mj build
-
-      - name: test
-        if: env.SHOULD_RELEASE == 'true'
-        run: mj test
-
-      - name: dist
-        if: env.SHOULD_RELEASE == 'true'
-        run: mj dist
+        run: mj release
 
       - name: stage the release asset (mj-bin-<version>.tar.gz)
         if: env.SHOULD_RELEASE == 'true'

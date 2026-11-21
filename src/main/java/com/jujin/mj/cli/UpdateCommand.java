@@ -29,8 +29,8 @@ import java.util.stream.Stream;
  */
 public final class UpdateCommand implements Command {
 
-    /** The GitHub repo that hosts mj's releases. */
-    private static final String RELEASES_API =
+    /** The default GitHub repo that hosts mj's releases. */
+    private static final String RELEASES_API_DEFAULT =
             "https://api.github.com/repos/dzb/mj-cargo/releases/latest";
 
     private final HttpClient http = HttpClient.newBuilder()
@@ -39,6 +39,14 @@ public final class UpdateCommand implements Command {
 
     @Inject
     public UpdateCommand() {
+    }
+
+    /**
+     * The releases URL — overridable for in-house mirrors and the hermetic
+     * update test ({@code -Dmj.update.api=<full releases/latest URL>}).
+     */
+    private static String releasesApi() {
+        return System.getProperty("mj.update.api", RELEASES_API_DEFAULT);
     }
 
     @Override
@@ -62,7 +70,7 @@ public final class UpdateCommand implements Command {
         String tarGzUrl = null;
         try {
             HttpResponse<String> response = http.send(
-                    HttpRequest.newBuilder(URI.create(RELEASES_API)).GET().build(),
+                    HttpRequest.newBuilder(URI.create(releasesApi())).GET().build(),
                     HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() != 200) {
                 System.err.println("mj: cannot check for updates (GitHub answered "
@@ -123,8 +131,7 @@ public final class UpdateCommand implements Command {
                         .findFirst()
                         .orElse(installScript);
             }
-            Process install = new ProcessBuilder("bash", installScript.toString())
-                    .inheritIO().start();
+            Process install = installProcess(installScript);
             int exit = install.waitFor();
 
             // cleanup
@@ -151,6 +158,20 @@ public final class UpdateCommand implements Command {
             System.err.println("mj: upgrade failed: " + e.getMessage());
             return 1;
         }
+    }
+
+    /**
+     * The installer subprocess. {@code -Dmj.update.home=<dir>} redirects the
+     * packaged setup.sh's {@code $HOME} — the hermetic-update-test seam
+     * (and an off-home install root, should one ever be wanted).
+     */
+    private static Process installProcess(Path installScript) throws IOException {
+        ProcessBuilder builder = new ProcessBuilder("bash", installScript.toString());
+        String home = System.getProperty("mj.update.home");
+        if (home != null && !home.isBlank()) {
+            builder.environment().put("HOME", home);
+        }
+        return builder.inheritIO().start();
     }
 
     private String findTarGzUrl(Map<String, Object> release) {
