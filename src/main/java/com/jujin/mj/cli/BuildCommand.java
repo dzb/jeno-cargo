@@ -108,6 +108,7 @@ public final class BuildCommand implements Command {
         command.addAll(sources);
         int exit = compiler.run(null, null, null, command.toArray(String[]::new));
         if (exit == 0) {
+            SourceResources.copy(projectDir.resolve("src/main/resources"), output);
             System.out.println("compiled " + sources.size() + " source file(s) into " + output);
         }
         return exit;

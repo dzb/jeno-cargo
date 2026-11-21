@@ -206,8 +206,10 @@ public final class TestCommand implements Command {
         int exit = compiler.run(null, null, null, command.toArray(String[]::new));
         if (exit != 0) {
             System.err.println("mj: test compilation failed");
+            return false;
         }
-        return exit == 0;
+        SourceResources.copy(projectDir.resolve("src/test/resources"), output);
+        return true;
     }
 
     private List<String> sources(Path root) {
