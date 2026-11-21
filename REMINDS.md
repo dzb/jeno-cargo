@@ -5,9 +5,9 @@
 
 ---
 
-## 1. `mjm dist` 靠包名猜 toolchain
+## 1. `mjm bundle` 靠包名猜 toolchain
 
-**位置**:`DistCommand.isTestOnly(String id)`
+**位置**:`BundleCommand.isTestOnly(String id)`
 
 ```java
 private static boolean isTestOnly(String id) {
@@ -19,19 +19,19 @@ private static boolean isTestOnly(String id) {
 装进 `lib/toolchain/`）和骨架（其余,合并进 uber-jar）。判据是**硬编码的包名前缀**。
 
 **为什么现在可接受**:mjm 自己的 `mjm.toml` 里 junit 就是全部测试依赖,规则精确命中,
-零误判。`mjm` 是当前唯一用 `mjm dist` 的项目。
+零误判。`mjm` 是当前唯一用 `mjm bundle` 的项目。
 
 **代价/风险**:
-- 任何别的项目依赖 junit,跑 `mjm dist` 也会被塞进 `lib/toolchain/` 而不是 uber-jar
+- 任何别的项目依赖 junit,跑 `mjm bundle` 也会被塞进 `lib/toolchain/` 而不是 uber-jar
 - 如果将来 mjm 引入非 junit 的测试库（assertj、mockito、testcontainers…），它们会被
   误判成骨架合并进运行 jar——**测试库进生产产物**,而且没人会立刻发现（因为它仍然能跑）
 
 **触发重新决定的条件**（任一即可）:
-- 第二个项目开始用 `mjm dist`
+- 第二个项目开始用 `mjm bundle`
 - mjm 引入 junit 以外的测试依赖
 - 有人问"为什么我的 assertj 在 lib/toolchain 里/在 uber-jar 里"
 
-**正确的解法**:不要在 `DistCommand` 里猜。让 `mjm.toml` 显式声明哪些是 toolchain,例如:
+**正确的解法**:不要在 `BundleCommand` 里猜。让 `mjm.toml` 显式声明哪些是 toolchain,例如:
 
 ```toml
 [toolchain]
@@ -42,7 +42,7 @@ private static boolean isTestOnly(String id) {
 然后 dist 按这份显式清单分流,`[deps]` 里的其余一切按骨架处理。这与 mjm 的
 "closed schema, 不猜"气质一致——反过来,靠包名前缀猜正是 mjm 在别处明确拒绝的做法。
 
-**成本**:中等。要动 SPEC（新增 `[toolchain]` 节）、ProjectReader、DistCommand,
+**成本**:中等。要动 SPEC（新增 `[toolchain]` 节）、ProjectReader、BundleCommand,
 以及 mjm 自己的 mjm.toml 迁移。等触发条件出现再做,现在做是过早抽象。
 
 ---
@@ -51,7 +51,7 @@ private static boolean isTestOnly(String id) {
 
 **曾经的症状**:改了 `dist` 的布局,v0.1.4 发布出来的附件**仍是旧布局**。
 
-**原因**:CI 装的是**上一个 release** 的 mjm,然后用它跑 `mjm dist`。所以任何对 dist
+**原因**:CI 装的是**上一个 release** 的 mjm,然后用它跑 `mjm bundle`。所以任何对 dist
 本身的修改,要等两个版本才生效——v0.1.4 的附件由 v0.1.3 打包,v0.1.3 不懂新布局。
 
 **现在的做法**(`.github/workflows/ci.yml`):
@@ -117,7 +117,7 @@ manifest 结构),都要检查 CI 里那步用的是不是新代码。`--version`
 
 ## 6. `publish` 与 `release` 的命名歧义
 
-**位置**:`PublishCommand` / `ReleaseCommand`
+**位置**:`PublishCommand`(原 `ReleaseCommand` 已删除)
 
 **现状**:两个词在英文里几乎同义,但在 mjm 里指两件不同的事:
 
@@ -138,7 +138,7 @@ manifest 结构),都要检查 CI 里那步用的是不是新代码。`--version`
 - `release` 在 mjm 的自举语境里已特指"发版这条链",`--publish` 旗标本身暗示了包含关系
 - 改名要同时动命令、`mjm release` 的旗标、CI、README、RELEASE.md,收益是"少困惑一秒"
 
-**已落地(2026-11-21)**:`mjm release` 已删除,`mjm dist` 改名为 `mjm bundle`。理由见 §7。
+**已落地(2026-11-21)**:`mjm release` 已删除,`mjm bundle` 改名为 `mjm bundle`。理由见 §7。
 下面保留原分析,作为"为什么最后选了删除而不是改名"的记录。
 
 **当时考虑过的替代**:不动命令名,而是**让 `release` 的输出说清它产出了什么**。
@@ -180,7 +180,7 @@ release v0.1.5 complete:
 **决定**:
 1. **删除 `mjm release`** —— 生命周期编排是项目 CI 的职责,不是构建工具的。
    mjm 提供单步机制(lock/build/test/bundle),CI 决定何时调用、如何发布。
-2. **`mjm dist` → `mjm bundle`** —— 名字说清产物:"组装一个可安装的发行版",
+2. **`mjm bundle` → `mjm bundle`** —— 名字说清产物:"组装一个可安装的发行版",
    面向"有用户要 `curl | bash` 的应用",库永远不需要它。
 3. **移除 freeway-flow 依赖** —— 唯一的用户是 `release` 的图。CLI 回到朴素形态,
    少一个依赖。flow 编排仍留在 freeway 框架里供别人用。

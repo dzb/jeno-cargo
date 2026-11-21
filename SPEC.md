@@ -71,6 +71,10 @@ string-array  = "[" ws basic-string *( "," ws basic-string ) [","] ws "]"
 | `name` | 字符串 | 是 | `^[a-z][a-z0-9-]*$`(用作 mjm 原生发布的 artifact 名) |
 | `group` | 字符串 | 否 | 反向域名 id(`com.jujin8.mjm`)。发布到 http(s) 主机的 **Maven 布局必需**(路径按 group 展开),并写入描述符供消费方以 `group:artifact` 引用 |
 | `version` | 字符串 | 是 | mjm 原生发布时必须 semver(§2.4) |
+| `main` | 字符串 | 否 | 主类全名。`mjm run` 缺参时的入口;`mjm package` 写进 MANIFEST 的 `Main-Class`;`mjm bundle` 写进 launcher |
+| `summary` | 字符串 | 否 | 一句话说明。写入发布描述符,由 `mjm info` 展示 |
+| `homepage` | 字符串 | 否 | 项目主页,**必须 `https://`**。写入描述符 |
+| `license` | 字符串 | 否 | SPDX 标识符(`Apache-2.0`、`MIT`)。写入描述符 |
 
 **[java]**
 
@@ -102,7 +106,7 @@ key = 坐标,value 形态决定物种:
 |---|---|---|
 | 编译可见性(strict visibility) | ✅ | ❌ 从不出现在 javac 参数 |
 | `mjm run` 运行时 classpath | ✅ | ❌ |
-| `mjm package` / `mjm dist` 产物 | ✅ | ❌ |
+| `mjm package` / `mjm bundle` 产物 | ✅ | ❌ |
 | 发布描述符(传播给消费者) | ✅ | ❌ **绝不外泄** |
 | `mjm test` 编译与运行 classpath | ✅ | ✅ 这就是它存在的理由 |
 | mjm.lock | ✅ 行无 scope | ✅ 行带 `scope = "dev"` |
@@ -216,6 +220,7 @@ gitee:{owner}/{repo}@{tag}
 ```toml
 [project]
 name = "mylib"            # 必填;必须与文件名 artifact 段一致,否则报错
+group = "com.example"     # 可选;发布者声明的 group,消费方据此以 group:artifact 引用
 version = "1.2.0"         # 必填;必须与文件名 version 段一致,否则报错
 summary = "..."           # 可选;一句话说明这个库是做什么的(供 mjm info 展示)
 homepage = "https://..."  # 可选;必须 https;项目主页
@@ -269,6 +274,8 @@ url = "https://…"         # 实际下载 URL(local: 仓库为 file:// URI),必
 sha256 = "…"              # artifact 字节(jar),64 位十六进制,必填
 meta-sha256 = "…"         # 元数据字节(pom.xml 或描述符);URL 叶子无元数据,省略该字段
 depth = 1                 # 实际深度,>= 1
+scope = "dev"             # 可选:[dev-deps] 可达的工件。缺省 = main
+                          #       另一取值 "processor"(§2.1 [build].processors)
 ```
 
 ### 4.2 不变式

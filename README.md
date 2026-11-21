@@ -247,11 +247,12 @@ the next invocation.
 | `run` | run on the resolved closure |
 | `tree` / `why` | see the graph and every introduction path |
 | `info [--source]` | everything about one dependency, including its source |
-| `package [--uber]` | the jar — plain, or one merged with its closure |
+| `package [--uber]` | the jar. `--uber` merges the closure and writes `...-uber.jar`, so the two never overwrite each other |
 | `bundle` | an installable distribution (bin + lib + setup.sh + tar.gz) |
-| `publish [gh:… \| gitee:…]` | the release triple, with native upload |
+| `publish [target]` | the release triple; `gh:`, `gitee:`, or any `http(s)://` host (Maven layout over PUT) |
 | `update` / `upgrade` | self-upgrade from GitHub Releases |
-| `--offline` (flag) | refuse all network access — store hits only (`lock`, `build`, `test`, …) |
+| `--offline` (flag) | refuse all network access — store hits only. Not for `update`/`publish`, which are network by nature |
+| `mjm <command> --help` | that command's syntax and one-line description |
 
 ## Design notes
 

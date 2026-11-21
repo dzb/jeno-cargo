@@ -328,12 +328,16 @@ git tags。GITHUB_TOKEN 的推送不触发新 run(平台防环),bump commit 无�
 | `mjm build` | ✅ | javac 编译(严格可见性 classpath —— 只含 MAIN 声明);`--release N` 目标化字节码;`-processorpath` 注入处理器;`src/main/resources` 拷入产物 |
 | `mjm run <main>` / scripts | ✅ | runtime classpath 运行(排除 dev) |
 | `mjm test` | ✅ | fork JVM runner:`@MjmTest` + JUnit Platform;classpath 含 MAIN + dev;`[test]` include/exclude 过滤源 |
-| `mjm package` | ✅ | 纯 jar;`--uber` 合并闭包(排除 dev);输出 `dist/` |
+| `mjm package` | ✅ | 纯 jar;`--uber` 合并闭包(排除 dev)并输出 `dist/<name>-<ver>-uber.jar`——与普通 jar 不同名,互不覆盖 |
 | `mjm bundle` | ✅ | 发行目录 + setup.sh + tar.gz,输出 `dist/`(应用自用;库不需要) |
 | `mjm publish` | ✅ | 三件套(dist/);`gh:`/`gitee:` 原生上传;**任意 http(s) 主机 → Maven 布局 + HTTP PUT**;描述符只含 MAIN 依赖 |
 | `mjm update` / `mjm upgrade` | ✅ | 自升级(alias 同一实现) |
 | ~~`mjm release`~~ | **已删除** | 生命周期属于项目自己的 CI;mjm 只提供单步机制 |
-| `mjm init` / `mjm remove` / `mjm clean` | **缺口** | 曾误标 ✅,实际未实现(见 §12 吸收清单) |
+| `mjm init [--pom] [--force]` | ✅ | 骨架,或从 pom.xml 迁移(逐条报告不可表达的事实) |
+| `mjm remove <id>` | ✅ | 删除一行声明并重锁 |
+| `mjm info <id> [--source]` | ✅ | 身份/来源/依赖/源码地址;`--source` 取源码树 |
+| `mjm clean` | **缺口** | 目前只能 `rm -rf target/` |
+| `--offline` | ✅ | 禁止一切网络访问;store 有则用,缺则报错。`update`/`publish` 不适用 |
 | daemon 常驻 | **M6** | 已确认需要:常驻 JVM 热命令,mvnd 已验证可快 2–4 倍 |
 | workspaces/monorepo | V2 | 设计模板 = go.work 模式:`mjm.work.toml` 本地覆盖文件,gitignore 不提交 |
 | `mjm audit` | V2 | 依赖漏洞扫描,OSV.dev JSON API(commons 解析器现成);govulncheck 先例 |
