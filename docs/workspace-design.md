@@ -57,9 +57,10 @@
 | `build`(编译) | ✅ | 这就是工作区的意义 |
 | `test`(测试编译 + fork runtime) | ✅ | 否则测不到本地改动 |
 | `run`(runtime) | ✅ | 同上 |
+| `run` / `[scripts]` 注入的 `MJM_CLASSPATH` | ✅ **但只是开发用** | 脚本属于本地开发路径。替换命中时每次运行打一行警告:这份 classpath 含本地检出,**不能当作发布输入**(见 §6.7) |
 | `classpath`(两种) | ✅ | IDE 因此能看到兄弟模块的 classes |
-| `package`(普通 jar) | 无关 | 只含本项目 classes,不含依赖字节 |
-| `package --uber` | ❌ **拒绝** | uber 会把依赖字节嵌进去;嵌入未发布的本地 classes 就等于产出一个**不可分发**的 jar |
+| `package`(普通 jar) | ❌ **默认拒绝**,`--local` 才产出 | 它的 classes 是用本地兄弟编译出来的;这份 jar 正是 `publish` 上传的东西。普通 jar 现在**不写** `mjm-Dependencies`(只有 uber 写,且标签取自锁),所以 jar 本身无法自证和锁一致。`--local` 产出的 jar 明确不是发布候选 |
+| `package --uber` | ❌ **拒绝**(无 `--local`) | uber 会把依赖字节嵌进去;嵌入未发布的本地 classes 就是一个**不可分发**的 jar |
 | `bundle` | ❌ **拒绝** | 同理:发行目录里的 `lib/` 会带本地 classes,给别人就跑不起来或跑错 |
 | `publish` | ❌ **拒绝** | 描述符只能写已发布版本;发布本地字节等于撒谎 |
 | `info` / `tree` / `why` | 展示锁图 + 标记 | 它们答的是「锁里的图」,不是「本地字节」;命中替换的行加 `(local: <path>)` 标记 |
@@ -70,22 +71,26 @@ published artifact; `--uber`/`bundle`/`publish` embed or describe published byte
 so they refuse while a workspace override is active. Build and run the module
 instead, or drop `libs/core` from mjm.work.toml." 不给静默降级。
 
+`package` 的拒绝提示多一句:`--local` 可以产出一份供你自己检查的 jar,但它不是
+发布候选(`publish` 在替换命中时仍然拒绝,与 jar 是怎么来的无关)。若将来给普通 jar
+补 `mjm-Dependencies`,那一行**必须写锁里的版本**,绝不写本地版本。
+
 ## 5. 文件
 
 ```toml
 # mjm.work.toml —— 工作区根目录,建议 gitignore(跨仓调试)或提交(monorepo)
 [work]
 modules = ["libs/core", "libs/util", "apps/web", "tools/cli"]
-
-# 可选:允许本地版本与锁里的版本不一致(见 §6.2)。默认 false。
-allow-version-skew = false
 ```
+
+**文件里只有 `modules`。** 没有任何策略开关——原因见 §6.2:任何能放宽一致性的开关
+一旦被提交,CI 也会读到它。
 
 - 路径相对工作区根;必须是目录且含 `mjm.toml`。
 - 查法:从当前目录向上找,取最近的一层;没有就是单模块(今天的行为)。
 - 工作区根目录**不能**同时是模块(既有 `mjm.toml` 又有 `mjm.work.toml` → 报错)。
-- 文件里除 `modules` 与 `allow-version-skew` 外**不携带任何规则**:版本、仓库、覆盖
-  仍在各模块 `mjm.toml`——「规则只有一份」。
+- 文件里**只有 `modules`**,不携带任何规则或策略:版本、仓库、覆盖仍在各模块
+  `mjm.toml`——「规则只有一份」;放宽一致性的开关一律走命令行(§6.2),不进文件。
 
 ## 6. 语义
 
@@ -104,26 +109,26 @@ allow-version-skew = false
 `META-INF/mjm/version.properties`,读它即可。这比比 mtime 可靠得多(git checkout
 会把 mtime 全部刷新)。
 
-### 6.2 版本不一致:默认拒绝,显式放宽
+### 6.2 版本不一致:默认拒绝,放宽必须逐次声明
 
-默认(以及 `allow-version-skew = false`)要求**精确相等**,否则报错——本地与 CI
-分叉是 mjm 要消灭的东西。
+**默认要求精确相等**。本地与 CI 分叉是 mjm 要消灭的东西。
 
-但真实开发里"改进本地版本看效果"需要先改模块版本、再改所有消费者声明,那会让工作区
-从"方便"变成"负担"。所以给一个**显式、非默认**的逃生口:
+真实开发里"改进本地版本看效果"需要先改模块版本、再改所有消费者声明。这个需求是真的,
+所以给一个逃生口——但它**不能放在 `mjm.work.toml` 里**:那个文件允许提交,一旦
+`allow-version-skew = true` 被提交,CI 也会读到它,§2 的目标 5 就直接破了。
 
-```toml
-[work]
-allow-version-skew = true
-```
-
-打开后允许本地版本 ≥ 锁里的版本,但**每次运行都打印一行警告**:
+因此放宽只能通过**命令行开关**逐次声明:
 
 ```
-warning: core is 1.2.1 locally, 1.2.0 in the lock — CI will build against 1.2.0
+mjm build --allow-version-skew
+mjm test  --allow-version-skew
 ```
 
-**不允许静默**。若本地版本更低 → 仍然报错(那说明锁比本地新,替换没有意义)。
+- 只影响本次运行,不可持久化,不可能被提交。
+- 命中时每次打一行警告:
+  `warning: core is 1.2.1 locally, 1.2.0 in the lock — CI will build against 1.2.0`
+- 本地版本**更低**时即使带这个开关也报错(说明锁比本地新,替换没有意义)。
+- `package` / `bundle` / `publish` **不接受**这个开关:发布路径永远 strict。
 
 ### 6.3 工作区根目录的编排
 
@@ -159,6 +164,17 @@ mjm clean    逐模块;遇错继续,汇总              ← 一个模块的挂�
   consumer classpath 再加到兄弟工程上——同一批 classes 会从两个来源出现。
 - 这不需要工具介入,但需要一句话说明,否则用户会自己撞上。
 
+### 6.7 `[scripts]` 与 `MJM_CLASSPATH` 的定位
+
+脚本是**本地开发路径**,不是发布路径。替换命中时:
+
+- `mjm run <script>` 照常注入替换后的 classpath(否则脚本看不到本地改动);
+- 每次运行打一行警告:`warning: MJM_CLASSPATH includes local checkouts (libs/core) — not a release input`;
+- 文档里把这句话写进 `[scripts]` 的说明:脚本可以依赖本地检出,**发行物不可以**。
+
+不这样写的话会出现一条很难发现的分叉:脚本跑通了、以为自己验证了发布路径,而
+`bundle` 在同样状态下会拒绝(§4)——两者的"能跑"含义不同。
+
 ## 7. 错误与边界
 
 | 情形 | 行为 |
@@ -187,7 +203,7 @@ mjm clean    逐模块;遇错继续,汇总              ← 一个模块的挂�
 | `--offline` | 语义不变;兄弟模块少一次网络需求 |
 | `mjm cache` | 不变;工作区不产生新的全局目录 |
 | 深度预算 | 不变;预算看锁里的图,与字节来源无关 |
-| `[scripts]` 的 `MJM_CLASSPATH` | 跟随替换(与 `run` 一致) |
+| `[scripts]` 的 `MJM_CLASSPATH` | 跟随替换,但每次警告:脚本是本地开发路径(§6.7) |
 
 ## 9. 为什么不是另外两种做法
 
@@ -201,7 +217,7 @@ mjm clean    逐模块;遇错继续,汇总              ← 一个模块的挂�
 
 | # | 问题 | 建议 |
 |---|---|---|
-| Q1 | 版本相等要不要放宽 | 默认精确相等 + `allow-version-skew` 显式开关并每次警告(§6.2) |
+| Q1 | 版本相等要不要放宽 | 默认精确相等;放宽只允许逐次 `--allow-version-skew`,且每次警告(§6.2) |
 | Q2 | 根目录要不要编排 `package`/`bundle` | V1 不编排;两者在替换命中时**拒绝**。需要全量打包时再加显式命令 |
 | Q3 | `mjm.work.toml` 该不该提交 | 允许但不规定;monorepo 提交、跨仓调试 gitignore |
 | Q4 | 版本目录(`[workspace.dependencies]` 那套) | V1 不做;要做就单独一个文件,不塞进 `mjm.work.toml` |
@@ -218,3 +234,8 @@ mjm clean    逐模块;遇错继续,汇总              ← 一个模块的挂�
 8. 根目录 `add` / `run` / `publish` → 拒绝;`--module` 可用。
 9. 无 `mjm.work.toml` 时,所有命令的 lock 与 classpath 输出与今天**逐字节一致**。
 10. `test` 在根目录:一个模块失败,其余仍跑完,汇总里能看出哪个失败。
+11. `package`(普通与 `--uber`)在替换命中时**默认拒绝**;`package --local` 产出 jar 但
+    打警告说它不是发布候选;`publish` 在同样状态下仍然拒绝(与 jar 来源无关)。
+12. `run <script>` 在替换命中时注入替换后的 classpath 并打警告;警告文本包含模块路径。
+13. `--allow-version-skew` 只对 `build`/`test` 生效;`package`/`bundle`/`publish` 收到它
+    直接报用法错误。
