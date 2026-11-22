@@ -258,6 +258,7 @@ the next invocation.
 | `bundle` | an installable distribution (bin + lib + setup.sh + tar.gz), in `target/dist/` |
 | `clean [--target \| --dist]` | remove the whole `target/` by default (deliverables live in `target/dist/`); `--dist` removes only `target/dist/` and keeps classes; never the store |
 | `outdated [--json]` | pinned dependencies with newer versions available; `--json` gives `upToDate`/`updates`/`notChecked`/`failures` |
+| `audit [--json] [--dev]` | known vulnerabilities for the locked closure (OSV). Maven-coordinate artifacts are checked; `gh:`/`url`/`local:`/`mjm:`/named repositories are listed as `notChecked` with the reason — never as clean. Vulnerabilities or failed queries exit 1; `--json` gives `vulnerabilities`/`notChecked`/`failures` |
 | `publish [target]` | the release triple; `gh:owner/repo`, `mjm:https://host/` (two levels, no group), or any `http(s)://` host (Maven layout over PUT, needs group) |
 | `update` / `upgrade` | self-upgrade from GitHub Releases |
 | `-o`, `--offline` (flag) | refuse all network access — store hits only. Not for `update`/`publish`/`outdated`, which are network by nature |

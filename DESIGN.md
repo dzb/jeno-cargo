@@ -369,7 +369,7 @@ push tag v*  →  验证 + 发行
 | `-o`, `--offline` | ✅ | 禁止一切网络访问;store 有则用,缺则报错。`update`/`publish`/`outdated` 不适用 |
 | daemon 常驻 | **M6** | 已确认需要:常驻 JVM 热命令,mvnd 已验证可快 2–4 倍 |
 | workspaces/monorepo | V2 | 设计模板 = go.work 模式:`mjm.ws.toml`(表名 `[ws]`,旗标 `init --ws`)本地文件,gitignore 不提交 |
-| `mjm audit` | V2 | 依赖漏洞扫描,OSV.dev JSON API(commons 解析器现成);govulncheck 先例 |
+| `mjm audit [--json] [--dev]` | ✅ | 依赖漏洞扫描(OSV.dev);只查 Central 坐标(gh:/url/local:/mjm:/命名仓库列为未检查并给原因,不当作干净);发现漏洞或查询失败 exit 1,全干净 exit 0;`--json` 输出 `vulnerabilities`/`notChecked`/`failures`;`--offline` 不适用(exit 2) |
 | ~~`mjm jdk`~~ | **不做** | toolchain 管理:2026-11-22 决定不做。现状已足够:JDK major 不符时报错并说明怎么办;新增它会引入下载通道、平台矩阵、外部二进制的校验信任、以及 build 里的第二个 JVM(子进程 javac),换来的只是省一次手工装 JDK |
 
 编译策略 V1:全量编译,正确优先;增量编译列为后续优化。
@@ -466,6 +466,7 @@ Gradle 9 / Maven 4 后,尚未覆盖的场景按下表排期。
 | 3 | ~~发布三件套补 `-sources` jar~~ → **`mjm info <id> [--source]`** | Go/Cargo 从不分离源码与产物;sources jar 是 Java 二进制分发的补丁,不是能力 | ✅ 已完成(2026-11-21):源码**随 tag 走**——gh: 取 tag archive,Central 回退读发布者的 sources jar,URL 叶子明确拒绝。发布侧不产出 sources jar |
 | 4 | JUnit XML 测试报告 | mvn surefire 默认产物 | ✅ 已完成(2026-11-22):`target/test-results/TEST-<类名>.xml`,两个 runner 都覆盖(`@MjmTest` 反射路径 + Jupiter 的 `TestExecutionListener`);无 `timestamp`、固定 `time`,同一套测试两次跑字节相同 |
 | 5 | `mjm outdated` | mvn versions:display-dependency-updates、npm outdated | ✅ 已完成(2026-11-22):`maven-metadata.xml` 列版本;预发布按 qualifier token 判定(不靠 `-` 子串);local:/gh:/url 明确列为未检查 |
+| 5b | `mjm audit` | cargo audit / npm audit、govulncheck | ✅ 已完成(2026-11-22):OSV.dev `querybatch` + `vulns/{id}`;只查 Maven 坐标,其余列 `notChecked` 并给原因;severity 取 `database_specific.severity` 再退 CVSS type;`fixed` 取所有 fix 事件中大于当前的最近者;查询失败具名且 exit 1 |
 
 ### P1 — 现代实践
 
@@ -493,5 +494,5 @@ Gradle 9 / Maven 4 后,尚未覆盖的场景按下表排期。
 
 ### 已在既有排期(本次探查确认方向一致)
 
-`mjm audit`(OSV.dev,= cargo audit/npm audit)、
 `mjm.ws.toml`(= workspaces)、M6 daemon、`[repos]` 回退链。
+(`mjm audit` 与 workspace 本地覆盖已分别于 2026-11-22 落地,见 §8。)
