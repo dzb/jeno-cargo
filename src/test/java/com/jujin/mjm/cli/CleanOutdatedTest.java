@@ -31,7 +31,7 @@ class CleanOutdatedTest {
     // ------------------------------------------------------------------
 
     @Test
-    void cleanRemovesTargetAndDist() throws Exception {
+    void cleanOnlyRemovesTargetByDefault() throws Exception {
         Files.createDirectories(dir.resolve("target/classes/demo"));
         Files.createDirectories(dir.resolve("dist/demo-1.0.0/lib"));
         Files.writeString(dir.resolve("target/classes/demo/A.class"), "x");
@@ -40,7 +40,8 @@ class CleanOutdatedTest {
         assertEquals(0, new CleanCommand(dir).execute(List.of()));
 
         assertFalse(Files.exists(dir.resolve("target")), "target/ is gone");
-        assertFalse(Files.exists(dir.resolve("dist")), "dist/ is gone");
+        assertTrue(Files.exists(dir.resolve("dist/demo-1.0.0.tar.gz")),
+                "dist/ holds what is about to ship — cleaning a build must not delete it");
     }
 
     @Test
@@ -65,6 +66,17 @@ class CleanOutdatedTest {
 
         assertTrue(Files.isDirectory(dir.resolve("target/classes")));
         assertFalse(Files.exists(dir.resolve("dist")));
+    }
+
+    @Test
+    void bothFlagsRemoveBothDirectories() throws Exception {
+        Files.createDirectories(dir.resolve("target/classes"));
+        Files.createDirectories(dir.resolve("dist"));
+
+        assertEquals(0, new CleanCommand(dir).execute(List.of("--target", "--dist")));
+
+        assertFalse(Files.exists(dir.resolve("target")), "target/ is gone");
+        assertFalse(Files.exists(dir.resolve("dist")), "--dist said so explicitly");
     }
 
     @Test

@@ -249,7 +249,7 @@ the next invocation.
 | `info [--source]` | everything about one dependency, including its source |
 | `package [--uber]` | the jar. `--uber` merges the closure and writes `...-uber.jar`, so the two never overwrite each other |
 | `bundle` | an installable distribution (bin + lib + setup.sh + tar.gz) |
-| `clean [--target\|--dist]` | remove build output; never the store |
+| `clean [--target] [--dist]` | remove `target/` by default; `--dist` also removes `dist/`; never the store |
 | `outdated` | pinned dependencies with newer versions available |
 | `publish [target]` | the release triple; `gh:`, `gitee:`, or any `http(s)://` host (Maven layout over PUT) |
 | `update` / `upgrade` | self-upgrade from GitHub Releases |

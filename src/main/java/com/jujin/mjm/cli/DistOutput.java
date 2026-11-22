@@ -15,9 +15,12 @@ import java.util.stream.Stream;
  * unless the writer clears it. A stale jar looks like a current one: same
  * name, different bytes.
  *
- * <p>The rule is precise: clear what this command and this version own, never
- * the whole directory. Removing {@code dist/} outright would delete artifacts
- * for other versions that a release may still be staging.
+ * <p>Two callers, two intents. A writer ({@code package}/{@code bundle}/
+ * {@code publish}) calls it on the exact files it is about to rewrite — a
+ * stale jar looks like a current one: same name, different bytes. {@code mjm
+ * clean --dist} calls it on {@code dist/} itself, because the user asked for
+ * the whole directory to go. Writers must keep their own paths precise;
+ * removing the directory is a decision only a human makes.
  */
 final class DistOutput {
 

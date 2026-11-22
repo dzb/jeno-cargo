@@ -9,10 +9,16 @@ import java.util.List;
  * {@code mjm clean} — remove this project's build output.
  *
  * <pre>
- *   mjm clean            target/ and dist/ (the default)
- *   mjm clean --target   only target/ (keep the deliverables in dist/)
- *   mjm clean --dist     only dist/
+ *   mjm clean                only target/ (the default)
+ *   mjm clean --target       only target/ (the same, spelled out for scripts)
+ *   mjm clean --dist         only dist/
+ *   mjm clean --target --dist  both
  * </pre>
+ *
+ * <p>Cleaning a build means removing intermediates. {@code dist/} holds what
+ * is about to ship — the release triple, a bundle — possibly for several
+ * versions at once, so deleting it is a separate, explicit request
+ * ({@code --dist}) and never a side effect of "clean".
  *
  * <p>Never touches the store. {@code ~/.mjm/store} is content-addressed and
  * shared across projects: deleting it would cost every project a re-download,
@@ -21,8 +27,8 @@ import java.util.List;
  *
  * <p>The split between the two directories is the one established earlier:
  * {@code target/} holds intermediates that {@code rm -rf} is safe on, and
- * {@code dist/} holds deliverables — which is why {@code --target} exists as
- * a way to clean up a build without losing what you were about to ship.
+ * {@code dist/} holds deliverables — which is why the default stops at
+ * {@code target/} and {@code --dist} has to be asked for.
  */
 public final class CleanCommand implements Command {
 
@@ -39,34 +45,34 @@ public final class CleanCommand implements Command {
 
     @Override
     public String usage() {
-        return "[--target | --dist]";
+        return "[--target] [--dist]";
     }
 
     @Override
     public String summary() {
-        return "remove build output (target/ and dist/; the store is never touched)";
+        return "remove build output (target/ by default; --dist also removes the "
+                + "deliverables; the store is never touched)";
     }
 
     @Override
     public int execute(List<String> args) {
-        boolean target = true;
-        boolean dist = true;
+        // No flag means the safe default (target/). A flag states exactly what
+        // to remove, and repeating it accumulates: --target --dist is both.
+        boolean target = false;
+        boolean dist = false;
         for (String arg : args) {
             switch (arg) {
-                case "--target" -> {
-                    target = true;
-                    dist = false;
-                }
-                case "--dist" -> {
-                    target = false;
-                    dist = true;
-                }
+                case "--target" -> target = true;
+                case "--dist" -> dist = true;
                 default -> {
                     System.err.println("mjm: unknown clean option '" + arg + "'"
                             + " — use --target or --dist");
                     return 2;
                 }
             }
+        }
+        if (!target && !dist) {
+            target = true;
         }
 
         boolean removedSomething = false;
