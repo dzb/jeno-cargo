@@ -370,7 +370,7 @@ push tag v*  →  验证 + 发行
 | daemon 常驻 | **M6** | 已确认需要:常驻 JVM 热命令,mvnd 已验证可快 2–4 倍 |
 | workspaces/monorepo | V2 | 设计模板 = go.work 模式:`mjm.work.toml` 本地覆盖文件,gitignore 不提交 |
 | `mjm audit` | V2 | 依赖漏洞扫描,OSV.dev JSON API(commons 解析器现成);govulncheck 先例 |
-| `mjm jdk` | V2 | toolchain 管理(Q5 已定方向):下载 Temurin 到 `~/.mjm/jdks`,Go GOTOOLCHAIN 先例 |
+| ~~`mjm jdk`~~ | **不做** | toolchain 管理:2026-11-22 决定不做。现状已足够:JDK major 不符时报错并说明怎么办;新增它会引入下载通道、平台矩阵、外部二进制的校验信任、以及 build 里的第二个 JVM(子进程 javac),换来的只是省一次手工装 JDK |
 
 编译策略 V1:全量编译,正确优先;增量编译列为后续优化。
 
@@ -432,10 +432,10 @@ IoC 接缝(未来扩展点,不引入插件机制):
 | Q1 | JSON 解析器用 **freeway-commons 自带**(免自写);`mjm add` 模糊搜索解禁,排期 M5 |
 | Q3 | 深度预算**无豁免机制**;出口只有结构性方案:替换库 / exclude / 调大 max-depth |
 | Q4 | 文件格式 Spec 独立成文 → [SPEC.md](SPEC.md)(mjm.toml / 描述符 / mjm.lock 的文法、字段、校验、错误规范) |
-| Q5 | 分两步走:V1 仅校验(JDK major 不符即报错,编译走 `--release`);V2 `mjm jdk` toolchain 管理(Temurin → `~/.mjm/jdks`,Go GOTOOLCHAIN 先例确认方向) |
+| Q5 | ✅ 定为「只校验、不管理」的终态(2026-11-22 修订):JDK major 不符即报错并给出下一步,编译走 `--release`。原计划的 V2 `mjm jdk`(Temurin 下载)**放弃**,理由见 §8 命令表 |
 | Q6 | daemon 确认要做,列为 **M6** |
 | Q7 | token 环境变量定为 `MJM_GITHUB_TOKEN` / `MJM_GITEE_TOKEN` |
-| Go 吸收 | 1–3 定稿进 SPEC:跨 major 硬冲突(D4 升级)、mjm.lock 双钉、描述符 [retract];4–7 进排期:[repos] 回退链、mjm jdk、mjm.work.toml 模板、store 只读+文件锁、build-info 嵌入、mjm audit |
+| Go 吸收 | 1–3 定稿进 SPEC:跨 major 硬冲突(D4 升级)、mjm.lock 双钉、描述符 [retract];4–7 进排期:[repos] 回退链、mjm.work.toml 模板、store 只读+文件锁、build-info 嵌入、mjm audit(`mjm jdk` 已于 2026-11-22 取消,见 §8)|
 | Q2 | `[overrides]` 进 V1:同 id 全图钉定(MVS 之上);URL 物种不适用;跨 major 硬冲突的合法出口;闭包无此 id → 告警;`mjm tree/why` 强制标注。SPEC §2.1 已定稿 |
 
 ### 待定
@@ -493,5 +493,5 @@ Gradle 9 / Maven 4 后,尚未覆盖的场景按下表排期。
 
 ### 已在既有排期(本次探查确认方向一致)
 
-`mjm audit`(OSV.dev,= cargo audit/npm audit)、`mjm jdk`(= Gradle toolchains / Go GOTOOLCHAIN)、
+`mjm audit`(OSV.dev,= cargo audit/npm audit)、
 `mjm.work.toml`(= workspaces)、M6 daemon、`[repos]` 回退链。
