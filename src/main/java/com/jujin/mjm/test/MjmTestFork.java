@@ -1,8 +1,13 @@
 package com.jujin.mjm.test;
 
 import org.junit.platform.engine.DiscoverySelector;
+import org.junit.platform.engine.TestExecutionResult;
 import org.junit.platform.engine.discovery.DiscoverySelectors;
+import org.junit.platform.engine.support.descriptor.ClassSource;
+import org.junit.platform.engine.support.descriptor.MethodSource;
 import org.junit.platform.launcher.LauncherDiscoveryRequest;
+import org.junit.platform.launcher.TestExecutionListener;
+import org.junit.platform.launcher.TestIdentifier;
 import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder;
 import org.junit.platform.launcher.core.LauncherFactory;
 import org.junit.platform.launcher.listeners.SummaryGeneratingListener;
@@ -28,7 +33,9 @@ import java.util.stream.Stream;
  *   <li>JUnit Jupiter ({@code org.junit.jupiter.api.Test}) — via the Platform Launcher</li>
  * </ul>
  *
- * <p>Usage: {@code java -cp <test-cp> com.jujin.mjm.test.MjmTestFork <test-classes-dir>}
+ * <p>Usage: {@code java -cp <test-cp> com.jujin.mjm.test.MjmTestFork <test-classes-dir>
+ * [<results-dir>]}. With a results directory it also writes one surefire-shaped
+ * {@code TEST-<class>.xml} per class.
  * Exit code: 0 = all passed, 1 = any failure.
  */
 public final class MjmTestFork {
@@ -39,6 +46,7 @@ public final class MjmTestFork {
             System.exit(2);
         }
         Path testClasses = Path.of(args[0]);
+        Path resultsDir = args.length > 1 ? Path.of(args[1]) : null;
 
         List<Class<?>> mjTests = new ArrayList<>();
         List<Class<?>> jupiterTests = new ArrayList<>();
@@ -66,6 +74,7 @@ public final class MjmTestFork {
 
         int passed = 0;
         int failed = 0;
+        List<TestReports.Case> cases = new ArrayList<>();
 
         // ---- @MjmTest runner ----
         for (Class<?> testClass : mjTests) {
@@ -86,10 +95,15 @@ public final class MjmTestFork {
                         after.invoke(instance);
                     }
                     passed++;
+                    cases.add(new TestReports.Case(testClass.getName(), test.getName(),
+                            null, false));
                     System.out.println("  ok  " + name);
                 } catch (Throwable failure) {
                     failed++;
                     Throwable cause = failure.getCause() != null ? failure.getCause() : failure;
+                    // a failing @MjmBeforeEach belongs to this case, not the suite
+                    cases.add(new TestReports.Case(testClass.getName(), test.getName(),
+                            cause, false));
                     System.out.println("  FAIL " + name + ": " + cause);
                 }
             }
@@ -105,7 +119,8 @@ public final class MjmTestFork {
                     .selectors(selectors)
                     .build();
             SummaryGeneratingListener listener = new SummaryGeneratingListener();
-            LauncherFactory.create().execute(request, listener);
+            XmlListener reporter = new XmlListener(cases);
+            LauncherFactory.create().execute(request, listener, reporter);
 
             var summary = listener.getSummary();
             summary.getFailures().forEach(failure ->
@@ -115,9 +130,67 @@ public final class MjmTestFork {
             failed += (int) summary.getTotalFailureCount();
         }
 
+        if (resultsDir != null) {
+            try {
+                TestReports.write(resultsDir, cases);
+            } catch (IOException e) {
+                System.err.println("mjm: cannot write test reports to " + resultsDir
+                        + " — " + e.getMessage());
+            }
+        }
+
         System.out.println("tests: " + (passed + failed) + ", passed: " + passed
                 + ", failed: " + failed);
         System.exit(failed > 0 ? 1 : 0);
+    }
+
+    /**
+     * Per-test results for the XML report. The summary listener only counts;
+     * this one keeps one entry per test, with the throwable and skip state.
+     */
+    private static final class XmlListener implements TestExecutionListener {
+        private final List<TestReports.Case> cases;
+
+        XmlListener(List<TestReports.Case> cases) {
+            this.cases = cases;
+        }
+
+        @Override
+        public void executionFinished(TestIdentifier identifier, TestExecutionResult result) {
+            if (!identifier.isTest()) {
+                return;
+            }
+            String className = className(identifier);
+            switch (result.getStatus()) {
+                case SUCCESSFUL -> cases.add(new TestReports.Case(className,
+                        identifier.getDisplayName(), null, false));
+                case FAILED -> cases.add(new TestReports.Case(className,
+                        identifier.getDisplayName(), result.getThrowable().orElse(null), false));
+                case ABORTED -> cases.add(new TestReports.Case(className,
+                        identifier.getDisplayName(), null, true));
+            }
+        }
+
+        @Override
+        public void executionSkipped(TestIdentifier identifier, String reason) {
+            if (identifier.isTest()) {
+                cases.add(new TestReports.Case(className(identifier),
+                        identifier.getDisplayName(), null, true));
+            }
+        }
+
+        private static String className(TestIdentifier identifier) {
+            var source = identifier.getSource();
+            if (source.isPresent()) {
+                if (source.get() instanceof MethodSource method) {
+                    return method.getClassName();
+                }
+                if (source.get() instanceof ClassSource type) {
+                    return type.getClassName();
+                }
+            }
+            return identifier.getDisplayName();
+        }
     }
 
     private static boolean hasAnnotation(Class<?> type, Class<? extends java.lang.annotation.Annotation> annotation) {
@@ -136,6 +209,8 @@ public final class MjmTestFork {
                 found.add(method);
             }
         }
+        // declared order is not specified; the report is diffed between runs
+        found.sort(java.util.Comparator.comparing(Method::getName));
         return found;
     }
 }

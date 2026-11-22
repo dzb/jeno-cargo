@@ -36,6 +36,7 @@ public final class TestCommand implements Command {
     private static final String MAIN_OUTPUT = "target/classes";
     private static final String TEST_SOURCES = "src/test/java";
     private static final String TEST_OUTPUT = "target/test-classes";
+    private static final String RESULTS = "target/test-results";
 
     private static final List<String[]> JUNIT_TOOLCHAIN = List.of(
             new String[]{"org.junit.jupiter", "junit-jupiter-api", "6.1.3"},
@@ -118,16 +119,27 @@ public final class TestCommand implements Command {
         List<String> runClasspath = classpath(toolchain, true);
         Path testOutput = projectDir.resolve(TEST_OUTPUT);
 
+        Path results = projectDir.resolve(RESULTS);
+        try {
+            // last run's XML must not mix with this one
+            DistOutput.clear(results);
+        } catch (IOException e) {
+            System.err.println("mjm: cannot clear " + results + " — " + e.getMessage());
+            return 1;
+        }
+
         List<String> command = new ArrayList<>();
         command.add("java");
         command.add("-cp");
         command.add(String.join(File.pathSeparator, runClasspath));
         command.add("com.jujin.mjm.test.MjmTestFork");
         command.add(testOutput.toString());
+        command.add(results.toAbsolutePath().toString());
 
+        int exit;
         try {
             Process process = new ProcessBuilder(command).inheritIO().start();
-            return process.waitFor();
+            exit = process.waitFor();
         } catch (IOException e) {
             System.err.println("mjm: cannot fork test JVM: " + e.getMessage());
             return 1;
@@ -135,6 +147,16 @@ public final class TestCommand implements Command {
             Thread.currentThread().interrupt();
             return 1;
         }
+        if (Files.isDirectory(results)) {
+            long files;
+            try (Stream<Path> entries = Files.list(results)) {
+                files = entries.filter(path -> path.toString().endsWith(".xml")).count();
+            } catch (IOException e) {
+                files = 0;
+            }
+            System.out.println("results: " + RESULTS + " (" + files + " files)");
+        }
+        return exit;
     }
 
     // ------------------------------------------------------------------

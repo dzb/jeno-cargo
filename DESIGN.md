@@ -353,7 +353,7 @@ push tag v*  →  验证 + 发行
 | `mjm why <dep>` | ✅ | 谁引入的、占多少深度预算 |
 | `mjm build` | ✅ | javac 编译(严格可见性 classpath —— 只含 MAIN 声明);`--release N` 目标化字节码;`-processorpath` 注入处理器;`src/main/resources` 拷入产物 |
 | `mjm run <main>` / scripts | ✅ | runtime classpath 运行(排除 dev) |
-| `mjm test` | ✅ | fork JVM runner:`@MjmTest` + JUnit Platform;classpath 含 MAIN + dev;`[test]` include/exclude 过滤源 |
+| `mjm test` | ✅ | fork JVM runner:`@MjmTest` + JUnit Platform;classpath 含 MAIN + dev;`[test]` include/exclude 过滤源;每次开跑前清空 `target/test-results/`,跑完每个测试类一个 surefire 形状的 `TEST-<类名>.xml`(无 timestamp、可逐字节 diff) |
 | `mjm package` | ✅ | 纯 jar;`--uber` 合并闭包(排除 dev)并输出 `target/dist/<name>-<ver>-uber.jar`——与普通 jar 不同名,互不覆盖 |
 | `mjm bundle` | ✅ | 发行目录 + setup.sh + tar.gz,输出 `target/dist/`(应用自用;库不需要) |
 | `mjm publish` | ✅ | 三件套(`target/dist/`);`gh:` 原生上传;**任意 http(s) 主机 → Maven 布局 + HTTP PUT**;描述符只含 MAIN 依赖 |
@@ -464,7 +464,7 @@ Gradle 9 / Maven 4 后,尚未覆盖的场景按下表排期。
 | 1 | **`[dev-deps]` 依赖分组** | Cargo dev-dependencies、uv PEP 735 dependency-groups | ✅ 已完成(2026-11-21):独立顶层节;解析进同一张锁图,`scope = "dev"`;不进编译可见性/run/package/dist/发布描述符,只进 `mjm test`;MAIN 优先 |
 | 2 | `mjm init --pom` / `mjm remove` / `mjm clean` | mvn clean、npm init/uninstall、Maven 迁移 | ✅ 全部完成:init(含 `--pom` 迁移)、remove、clean(2026-11-22,`[--target] [--dist]`,永不碰 store) |
 | 3 | ~~发布三件套补 `-sources` jar~~ → **`mjm info <id> [--source]`** | Go/Cargo 从不分离源码与产物;sources jar 是 Java 二进制分发的补丁,不是能力 | ✅ 已完成(2026-11-21):源码**随 tag 走**——gh: 取 tag archive,Central 回退读发布者的 sources jar,URL 叶子明确拒绝。发布侧不产出 sources jar |
-| 4 | JUnit XML 测试报告 | mvn surefire 默认产物 | 未做(fork JVM 里产出 `target/test-results/` 即可接 GitHub checks UI) |
+| 4 | JUnit XML 测试报告 | mvn surefire 默认产物 | ✅ 已完成(2026-11-22):`target/test-results/TEST-<类名>.xml`,两个 runner 都覆盖(`@MjmTest` 反射路径 + Jupiter 的 `TestExecutionListener`);无 `timestamp`、固定 `time`,同一套测试两次跑字节相同 |
 | 5 | `mjm outdated` | mvn versions:display-dependency-updates、npm outdated | ✅ 已完成(2026-11-22):`maven-metadata.xml` 列版本;预发布按 qualifier token 判定(不靠 `-` 子串);local:/gh:/url 明确列为未检查 |
 
 ### P1 — 现代实践

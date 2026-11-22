@@ -249,7 +249,7 @@ the next invocation.
 | `add` / `remove` | edit a declaration and re-lock. `add` writes the value shape (`1.2.3`, `corp:1.2.3`, `gh:owner/repo@tag`, or the shorthand `owner/repo@tag`) |
 | `lock [--check] [--refresh]` | resolve, download, pin. `--check` regenerates in memory and compares byte-for-byte with the lock on disk (Cargo's `--locked`); it fetches metadata, so it needs the network unless every byte is already in the store |
 | `build` | compile against declared deps only |
-| `test` | forked JVM: `@MjmTest` + JUnit Jupiter |
+| `test` | forked JVM: `@MjmTest` + JUnit Jupiter. Writes surefire-shaped XML to `target/test-results/` (one `TEST-<class>.xml` per class) |
 | `run` | run on the resolved closure |
 | `tree [--json]` / `why` | see the graph and every introduction path; `tree --json` is one machine-readable document (id-sorted artifacts, sorted children) |
 | `info [--source]` | everything about one dependency, including its source |
