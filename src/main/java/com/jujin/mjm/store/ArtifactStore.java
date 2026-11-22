@@ -129,8 +129,9 @@ public final class ArtifactStore {
      */
     public Path ensure(String url, Kind kind) {
         boolean localFile = url.startsWith("file:");
+        String key = cacheKey(url);
         if (!localFile) {
-            String known = digestByUrl.get(url);
+            String known = digestByUrl.get(key);
             if (known != null) {
                 Path cached = root.resolve(known + "." + kind.extension());
                 if (Files.exists(cached)) {
@@ -143,8 +144,14 @@ public final class ArtifactStore {
         // network, no re-hash.
         if (offline || !localFile) {
             String indexed = index.lookup(url, kind.extension(), root);
+            if (indexed != null && localFile && offline && !indexMatchesLocal(url, indexed)) {
+                // the relative key is portable across checkouts only while the
+                // file behind it still hashes to the recorded digest; a sibling
+                // module's file with the same relative tail must not answer
+                indexed = null;
+            }
             if (indexed != null) {
-                digestByUrl.put(url, indexed);
+                digestByUrl.put(key, indexed);
                 return root.resolve(indexed + "." + kind.extension());
             }
         }
@@ -154,7 +161,7 @@ public final class ArtifactStore {
         }
         byte[] bytes = fetch(url);
         String sha = sha256(bytes);
-        digestByUrl.put(url, sha);
+        digestByUrl.put(key, sha);
         index.record(url, sha);
         Path target = root.resolve(sha + "." + kind.extension());
         if (Files.exists(target)) {
@@ -231,7 +238,35 @@ public final class ArtifactStore {
 
     /** The digest recorded for a URL this session downloaded. */
     public String digestOf(String url) {
-        return digestByUrl.get(url);
+        return digestByUrl.get(cacheKey(url));
+    }
+
+    /**
+     * The identity of a URL for the session cache and the durable index. A
+     * relative {@code file:vendor/…} row means "this path inside <em>the</em>
+     * project", so two workspace modules that write the same relative tail point
+     * at different bytes — the key carries the project root, or the second
+     * module would silently receive the first one's artifact. Absolute URLs are
+     * already unique and stay as written.
+     */
+    /** Whether the file a relative {@code file:} row names still has this digest. */
+    private static boolean indexMatchesLocal(String url, String sha) {
+        try {
+            Path source = com.jujin.mjm.resolve.ArtifactLocations.localPath(
+                    url, com.jujin.mjm.resolve.ArtifactLocations.projectRoot());
+            return Files.isRegularFile(source) && sha256(Files.readAllBytes(source)).equals(sha);
+        } catch (IOException | RuntimeException e) {
+            return false;
+        }
+    }
+
+    private static String cacheKey(String url) {
+        if (!url.startsWith("file:") || url.startsWith("file://")) {
+            return url;
+        }
+        Path absolute = com.jujin.mjm.resolve.ArtifactLocations.localPath(
+                url, com.jujin.mjm.resolve.ArtifactLocations.projectRoot());
+        return "file:" + absolute;
     }
 
     /** The text at {@code url}, through the store. */

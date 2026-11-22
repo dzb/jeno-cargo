@@ -121,7 +121,8 @@ final class WorkspaceRun {
             System.out.println(name);
             int code;
             try {
-                code = withIndentedOutput(() -> child.run(module, run.args()));
+                code = withIndentedOutput(() -> inModule(module,
+                        () -> child.run(module, run.args())));
             } catch (ShutdownAfterBuildOutput e) {
                 throw e;  // the process is about to exit on purpose
             } catch (RuntimeException e) {
@@ -174,7 +175,23 @@ final class WorkspaceRun {
             System.err.println("mjm: --module is only used at a workspace root");
             return 2;
         }
-        return child.run(run.module(), run.args());
+        return inModule(run.module(), () -> child.run(run.module(), run.args()));
+    }
+
+    /**
+     * Runs one module with the process pointed at it: a relative {@code local:}
+     * repository or a relative {@code file:} lock row means "relative to this
+     * module", exactly as it does when the module is the working directory.
+     * The previous root is restored even when the command throws.
+     */
+    private static int inModule(Path module, java.util.function.IntSupplier body) {
+        Path previous = com.jujin.mjm.resolve.ArtifactLocations.projectRoot();
+        com.jujin.mjm.resolve.ArtifactLocations.useProjectRoot(module);
+        try {
+            return body.getAsInt();
+        } finally {
+            com.jujin.mjm.resolve.ArtifactLocations.useProjectRoot(previous);
+        }
     }
 
     private static int usage(String message) {

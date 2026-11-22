@@ -27,10 +27,20 @@ public final class ArtifactLocations {
      * The project this process works in. A {@code local:} base declared as a
      * relative path, and a relative {@code file:} lock URL, both resolve here —
      * never against whatever directory the shell happened to start in.
+     *
+     * <p>Process-wide and order-dependent: the CLI sets it once at assembly, and
+     * workspace orchestration switches it to each module for the duration of
+     * that module's command, restoring it afterwards. Sequential use is the only
+     * supported use — concurrent commands in one process would race here, and
+     * making the root an explicit parameter through the resolver/store is its
+     * own change.
      */
     private static Path projectRoot = Path.of("").toAbsolutePath().normalize();
 
-    /** One process works in one project; the CLI sets this once at assembly. */
+    /**
+     * Points this process at a project. The CLI calls it once for the working
+     * directory; workspace orchestration calls it per module (see above).
+     */
     public static void useProjectRoot(Path projectDir) {
         projectRoot = projectDir.toAbsolutePath().normalize();
     }
