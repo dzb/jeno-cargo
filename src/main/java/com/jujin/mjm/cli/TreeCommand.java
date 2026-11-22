@@ -25,11 +25,10 @@ import java.util.Set;
  * §4.2). Diagnosing re-resolves (idempotent; the lockfile stays the build's
  * input).
  *
- * <p>Two blocks: the declarations first, one line per root and no markers, so
- * every root is listed exactly once and never looks like a repeated node; then
- * one subtree per root, drawn with {@code ├─}/{@code └─} and indentation. A
- * node met again inside a subtree prints {@code (*) above} instead of a second
- * copy, and its subtree is not walked twice.
+ * <p>One root per line, each followed by its own subtree — the classic shape,
+ * so a second-level node can never read as the next root. Direct children carry
+ * {@code ├─}/{@code └─}, deeper nodes grow the continuation columns, and a node
+ * already printed above prints {@code (*) above} instead of its subtree again.
  */
 public final class TreeCommand implements Command {
 
@@ -80,33 +79,23 @@ public final class TreeCommand implements Command {
         List<Requirement> requirements = new ArrayList<>(project.requirements());
         requirements.addAll(project.devRequirements());
 
-        // The declaration block: every root once, in declaration order, with
-        // no repeated-node marker — a root is not "above" anything.
+        // Classic tree: each root's line, then its own subtree immediately, so
+        // a child can never be mistaken for the next root. `printed` holds every
+        // node already shown; meeting one again prints the marker and stops.
         Set<String> printed = new HashSet<>();
-        List<ResolvedGraph.ResolvedArtifact> roots = new ArrayList<>();
         for (Requirement requirement : requirements) {
             ResolvedGraph.ResolvedArtifact root = byId.get(requirement.id());
-            if (printed.add(root.id())) {
-                System.out.println(line(root, ""));
-                roots.add(root);
+            if (!printed.add(root.id())) {
+                continue;  // the same root reached twice is still one line
             }
-        }
-
-        // The subtrees: one per root, prefix grown by "├─ "/"└─ " and the
-        // continuation columns. `printed` already holds the roots, so a child
-        // that is also a root prints the marker and is not expanded here.
-        Set<String> expanded = new HashSet<>();
-        for (ResolvedGraph.ResolvedArtifact root : roots) {
-            if (!expanded.contains(root.id())) {
-                expand(root, "", graph, printed, expanded);
-            }
+            System.out.println(line(root, ""));
+            expand(root, "", graph, printed);
         }
         return 0;
     }
 
     private void expand(ResolvedGraph.ResolvedArtifact artifact, String prefix,
-                        ResolvedGraph graph, Set<String> printed, Set<String> expanded) {
-        expanded.add(artifact.id());
+                        ResolvedGraph graph, Set<String> printed) {
         List<String> children = graph.edges().getOrDefault(artifact.id(), List.of());
         for (int i = 0; i < children.size(); i++) {
             boolean last = i == children.size() - 1;
@@ -114,10 +103,9 @@ public final class TreeCommand implements Command {
             boolean repeat = !printed.add(child.id());
             System.out.println(prefix + (last ? "└─ " : "├─ ")
                     + line(child, repeat ? "  (*) above" : ""));
-            if (repeat) {
-                continue;  // the subtree is printed above; do not walk it twice
+            if (!repeat) {
+                expand(child, prefix + (last ? "   " : "│  "), graph, printed);
             }
-            expand(child, prefix + (last ? "   " : "│  "), graph, printed, expanded);
         }
     }
 

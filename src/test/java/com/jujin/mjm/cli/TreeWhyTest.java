@@ -87,26 +87,24 @@ class TreeWhyTest {
 
         assertEquals(0, treeExit);
         String banner = readConsole();
-        assertTrue(banner.contains("lib-a@1.0.0  [depth 1, declared]"), "got: " + banner);
-        assertTrue(banner.contains("lib-c@2.0.0  [depth 3]"), "got: " + banner);
 
-        // a root is declared once, and only once — no second copy as a child
+        // The whole block, in order: a root line, its own subtree, then the next
+        // root. A child never follows the wrong parent and never reads as a root.
+        String expected = """
+            demo@0.1.0 (budget 5)
+            com.example:lib-a@1.0.0  [depth 1, declared]
+            └─ com.example:lib-b@1.1.0  [depth 2]
+               └─ com.example:lib-c@2.0.0  [depth 3]
+            com.example:lib-d@1.0.0  [depth 1, declared]
+            └─ com.example:lib-c@2.0.0  [depth 3]  (*) above
+            """;
+        assertEquals(expected, banner, "the tree block is exactly this shape");
+
         assertEquals(1, count(banner, "com.example:lib-a@1.0.0"),
                 "a root appears exactly once, got: " + banner);
         assertEquals(1, count(banner, "com.example:lib-d@1.0.0"),
                 "a root appears exactly once, got: " + banner);
-
-        // the subtrees are drawn with connectors and indentation
-        assertTrue(banner.contains("└─ com.example:lib-b@1.1.0  [depth 2]"),
-                "a child hangs off its root, got: " + banner);
-        assertTrue(banner.contains("   └─ com.example:lib-c@2.0.0  [depth 3]"),
-                "a grandchild is indented one more level, got: " + banner);
-
-        // the second introduction of lib-c is a marker, not a second subtree
-        assertTrue(banner.contains("└─ com.example:lib-c@2.0.0  [depth 3]  (*) above"),
-                "a repeated node is marked, got: " + banner);
-        assertEquals(1, count(banner, "(*) above"),
-                "exactly one repeat marker, got: " + banner);
+        assertEquals(3, count(banner, "└─ "), "every child line has a connector");
         assertFalse(banner.contains("      └─ "),
                 "the repeated subtree was not walked twice, got: " + banner);
 
