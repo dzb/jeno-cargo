@@ -128,6 +128,15 @@ public final class ProjectReader {
                     throw new ProjectException("[repos]." + entry.getKey()
                             + " must match [a-z][a-z0-9-]*");
                 }
+                // gh:/gitee: are species prefixes, matched before any repository
+                // lookup. Letting [repos] take those names would make
+                // "gh:owner/repo@v1" silently mean a repository named gh — a
+                // dependency that can never resolve as itself.
+                if (entry.getKey().equals("gh") || entry.getKey().equals("gitee")) {
+                    throw new ProjectException(at(file, source.key("repos", entry.getKey()))
+                            + "[repos]." + entry.getKey() + " is reserved for the "
+                            + entry.getKey() + ": species — pick another name");
+                }
                 String baseUrl = requireString(reposSection, "repos", entry.getKey());
                 boolean remote = baseUrl.startsWith("https://");
                 boolean local = baseUrl.startsWith("local:");

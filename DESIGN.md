@@ -125,6 +125,8 @@ dev = "mjm run app.Main"
   (Gitee 同模式: `https://gitee.com/{owner}/{repo}/releases/download/...`)
 - `"corp:1.2.3"` 与 `[deps.corp]` 是同一种语义:只在 `corp` 查找、互不回退;值里的仓库名必须已在
   `[repos]` 声明(否则报错并列出可用仓库名),冒号前不像仓库名的值仍是 central 版本
+- 前缀优先:`gh:` / `gitee:` / `https://` 永远先匹配(保留前缀);`gh` 与 `gitee` 也就不能被
+  `[repos]` 占用(声明即报错)。`local` / `http` / `https` / `file` 不是保留名
 - `[deps.{repo}]` 分区写法保留可读,但已是 legacy(`mjm add` 只产生值形态)
 - 版本一律精确钉定,**不支持 version ranges**
 - V2 增强(GOPROXY 先例):`[repos]` 支持回退链与私库排除(排期见 §12"Go 吸收"行,语法届时补进 SPEC)

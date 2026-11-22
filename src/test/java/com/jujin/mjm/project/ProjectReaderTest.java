@@ -113,6 +113,59 @@ class ProjectReaderTest {
     }
 
     @Test
+    void theSpeciesPrefixesAreReservedRepositoryNames() {
+        ProjectException gh = assertThrows(ProjectException.class,
+            () -> ProjectReader.parse("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+
+                [repos]
+                gh = "https://mirror.example.com/gh/"
+
+                [deps]
+                "com.example:lib" = "1.0.0"
+                """));
+        assertTrue(gh.getMessage().contains("[repos].gh is reserved for the gh: species"),
+                gh.getMessage());
+        assertTrue(gh.getMessage().contains("mjm.toml:6:1"),
+                "the position is named like every other schema error: " + gh.getMessage());
+
+        ProjectException gitee = assertThrows(ProjectException.class,
+            () -> ProjectReader.parse("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+
+                [repos]
+                gitee = "https://mirror.example.com/gitee/"
+                """));
+        assertTrue(gitee.getMessage().contains("reserved for the gitee: species"),
+                gitee.getMessage());
+    }
+
+    @Test
+    void aDeclaredRepositoryWinsOnlyWhenNoSpeciesPrefixMatches() {
+        // corp: has no species meaning, so the declared repository is what it is
+        MjProject project = ProjectReader.parse("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [repos]
+            corp = "https://nexus.corp.internal/repository/maven/"
+
+            [deps]
+            "com.corp:lib" = "corp:2.0.0"
+            "mylib" = "gh:acme/mylib@v1.0.0"
+            """);
+
+        assertEquals("corp", project.requirements().get(0).repository());
+        assertEquals(Species.GH, project.requirements().get(1).species(),
+                "a gh: value stays the gh: species even with a corp repo declared");
+    }
+
+    @Test
     void aValueNamingAnUndeclaredRepositoryIsAnErrorListingTheDeclaredOnes() {
         ProjectException error = assertThrows(ProjectException.class,
             () -> ProjectReader.parse("""
