@@ -59,6 +59,10 @@ public final class MjModule implements ModuleEx {
                 c -> new RemoveCommand(c.get(LockService.class), projectDir));
         binder.contribute(Command.class).addDeferred("init",
                 c -> new InitCommand(projectDir));
+        binder.contribute(Command.class).addDeferred("clean",
+                c -> new CleanCommand(projectDir));
+        binder.contribute(Command.class).addDeferred("outdated",
+                c -> new OutdatedCommand(projectDir));
         binder.contribute(Command.class).addDeferred("update",
                 c -> new UpdateCommand());
     }
