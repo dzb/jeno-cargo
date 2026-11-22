@@ -9,6 +9,7 @@ import java.io.PrintStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -77,6 +78,56 @@ class CleanOutdatedTest {
 
         assertFalse(Files.exists(dir.resolve("target")), "target/ is gone");
         assertFalse(Files.exists(dir.resolve("dist")), "--dist said so explicitly");
+    }
+
+    @Test
+    void cleanRemovesASymlinkInsteadOfLeavingItDangling() throws Exception {
+        Files.createDirectories(dir.resolve("target/classes"));
+        Files.createSymbolicLink(dir.resolve("dist"), dir.resolve("target"));
+
+        // both flags: target/ goes first, which turns dist into a dangling link
+        assertEquals(0, new CleanCommand(dir).execute(List.of("--target", "--dist")));
+
+        assertFalse(Files.exists(dir.resolve("target")), "target/ is gone");
+        assertFalse(Files.exists(dir.resolve("dist"), LinkOption.NOFOLLOW_LINKS),
+                "dist became a dangling link when target/ went; it must be removed too");
+    }
+
+    @Test
+    void cleanRemovesASymlinkWithoutFollowingIt() throws Exception {
+        Path victim = Files.createDirectories(dir.resolve("victim"));
+        Files.writeString(victim.resolve("keep.txt"), "keep");
+        Files.createSymbolicLink(dir.resolve("target"), victim);
+
+        assertEquals(0, new CleanCommand(dir).execute(List.of()));
+
+        assertFalse(Files.exists(dir.resolve("target"), LinkOption.NOFOLLOW_LINKS),
+                "the link itself is removed");
+        assertTrue(Files.exists(victim.resolve("keep.txt")),
+                "what the link pointed at is not ours to delete");
+    }
+
+    @Test
+    void aMountPointWouldBeRefused() {
+        assertFalse(CleanCommand.isMountPoint(dir), "a temp dir is an ordinary directory");
+        // /proc is a mounted filesystem on Linux; the check must see the
+        // different file store rather than walking in and deleting it.
+        Path proc = Path.of("/proc");
+        assertTrue(Files.isDirectory(proc));
+        assertTrue(CleanCommand.isMountPoint(proc), "/proc is a mount point");
+    }
+
+    @Test
+    void onlyRemovingTheRunningClassesAsksForTheEarlyExit() {
+        Path target = dir.resolve("target");
+        assertTrue(CleanCommand.removedOwnClasses(true, target, target.resolve("classes")),
+                "target/ removed and the JVM ran from it");
+        assertFalse(CleanCommand.removedOwnClasses(false, target, target.resolve("classes")),
+                "--dist did not remove target/, so nothing to escape");
+        assertFalse(CleanCommand.removedOwnClasses(true, target, dir.resolve("elsewhere")),
+                "the JVM did not run from target/");
+        assertFalse(CleanCommand.removedOwnClasses(true, target, null),
+                "unknown self location: let the container close normally");
     }
 
     @Test

@@ -11,6 +11,11 @@ package com.jujin.mjm.cli;
  * {@code @PreDestroy} methods, and the class loader may try to re-read a class
  * file that is now gone: "Unable to invoke @PreDestroy".
  *
+ * <p>Thrown only when {@code target/} was actually removed and this JVM's own
+ * classes lived under it; {@code --dist} alone never triggers it. {@code Mjm}
+ * catches it before closing the container — a try-with-resources block would
+ * close first and then catch, which would defeat the whole point.
+ *
  * <p>Process exit is the honest response: the work is done, the output is
  * deleted as asked, and the exit code is already decided. Running reflective
  * teardown against deleted files is the only thing left to skip.

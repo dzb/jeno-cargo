@@ -43,19 +43,25 @@ public final class Mjm {
         }
         int exit;
         Container container = openQuietly();
-        try (container) {
+        // Not try-with-resources: on ShutdownAfterBuildOutput the container must
+        // NOT be closed. Closing it runs @PreDestroy over beans whose class
+        // files were just deleted, which is exactly the failure that escape
+        // exists to avoid. try-with-resources closes before the catch runs.
+        try {
             exit = container.get(CommandRunner.class).run(args);
         } catch (ShutdownAfterBuildOutput e) {
-            // The command deleted this process's own class directory — see
-            // ShutdownAfterBuildOutput. Skip the container's @PreDestroy hooks
-            // and exit with the already-decided code.
+            // The command removed this process's own class directory — see
+            // ShutdownAfterBuildOutput. Exit with the command's own code and
+            // skip reflective teardown.
             System.exit(e.exitCode);
             return;
         } catch (RuntimeException e) {
+            container.close();
             System.err.println("mjm: " + describe(e));
             System.exit(1);
             return;
         }
+        container.close();
         System.exit(exit);
     }
 

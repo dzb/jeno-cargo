@@ -15,12 +15,13 @@ import java.util.stream.Stream;
  * unless the writer clears it. A stale jar looks like a current one: same
  * name, different bytes.
  *
- * <p>Two callers, two intents. A writer ({@code package}/{@code bundle}/
- * {@code publish}) calls it on the exact files it is about to rewrite — a
- * stale jar looks like a current one: same name, different bytes. {@code mjm
- * clean --dist} calls it on {@code dist/} itself, because the user asked for
- * the whole directory to go. Writers must keep their own paths precise;
- * removing the directory is a decision only a human makes.
+ * <p>Two callers, two intents. A writer clears only the paths its own run and
+ * version own — a single artifact file ({@code package}, and the descriptor and
+ * checksum of {@code publish}), or this version's bundle directory plus its
+ * tar.gz ({@code bundle}). {@code mjm clean --dist} calls it on {@code dist/}
+ * itself, because the user asked for the whole directory to go. Writers must
+ * keep their own paths precise; removing the directory is a decision only a
+ * human makes.
  */
 final class DistOutput {
 
