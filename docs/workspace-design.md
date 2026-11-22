@@ -90,20 +90,20 @@ note: libs/core (1.2.1) is a local checkout — this artifact contains unpublish
 ## 5. 文件
 
 ```toml
-# mjm.work.toml —— 工作区根目录
-[work]
+# mjm.w.toml —— 工作区根目录
+[w]
 modules = ["libs/core", "libs/util", "apps/web", "tools/cli"]
 ```
 
 - 路径相对工作区根;必须是目录且含 `mjm.toml`。
 - 查法:从当前目录向上找,取最近的一层;没有就是单模块(今天的行为)。
-- 工作区根目录不能同时是模块(既有 `mjm.toml` 又有 `mjm.work.toml` → 报错)。
+- 工作区根目录不能同时是模块(既有 `mjm.toml` 又有 `mjm.w.toml` → 报错)。
 - **只有 `modules`,没有任何策略字段。** 需要"放宽"的东西一律不该存在(§6.2)。
 - **本地文件,不提交。** git 归用户管,mjm 不写 `.gitignore`、不检查它是否被跟踪。
-- **生成方式**:`mjm init --work [--force]`
+- **生成方式**:`mjm init --w [--force]`
   - 无参数时,从当前目录向下扫(深度上限 3,跳过 `target`/`.git`/`node_modules`),
     凡是含 `mjm.toml` 的目录都列进去;
-  - 也可以显式给路径:`mjm init --work libs/core apps/web`;
+  - 也可以显式给路径:`mjm init --w libs/core apps/web`;
   - 已存在时需 `--force` 才覆盖;
   - 生成的顺序按路径字典序,不尝试推断拓扑序(那是运行期的事)。
 
@@ -169,13 +169,13 @@ mjm clean                              逐模块;遇错继续,汇总
 | `modules` 里路径不存在 / 没有 `mjm.toml` | 报错并列出 |
 | 两个模块产出同一个 id | 报错(不能让顺序决定胜负) |
 | 两个模块 realpath 相同(符号链接绕一圈) | 报错 |
-| 根目录同时有 `mjm.toml` 与 `mjm.work.toml` | 报错 |
+| 根目录同时有 `mjm.toml` 与 `mjm.w.toml` | 报错 |
 | 模块间成环 | 报错并给出环 |
 | 被替换模块未构建 | 报错 + `run mjm build in <path> first` |
 | classes 的版本戳与模块 `mjm.toml` 不一致 | 报错:旧版本构建产物 |
 | 本地版本与锁不同 | **正常**:一行信息,不阻断 |
-| 嵌套 `mjm.work.toml` | 取最近的一层,忽略外层 |
-| 运行中 `mjm.work.toml` 变了 | 不缓存,每次运行重新读取 |
+| 嵌套 `mjm.w.toml` | 取最近的一层,忽略外层 |
+| 运行中 `mjm.w.toml` 变了 | 不缓存,每次运行重新读取 |
 | 模块被移出 `modules` | 立即回到仓库版本;不改 lock;不警告 |
 | 兄弟 `target/classes` 比源码旧 | 不检查 mtime;版本戳是唯一依据 |
 
@@ -205,7 +205,7 @@ mjm clean                              逐模块;遇错继续,汇总
 |---|---|
 | Q1 版本是否必须相等 | **不要求**。不同模块各自迭代;相同或不同都允许,只在不同时给一行信息 |
 | Q2 根目录是否编排打包 | **允许**,也允许 `--module` 只打包一个。打包与发布正交,不做强制 |
-| Q3 work 文件是否提交 | **不提交**(本地文件)。git 由用户管;mjm 提供 `mjm init --work` 生成它 |
+| Q3 work 文件是否提交 | **不提交**(本地文件)。git 由用户管;mjm 提供 `mjm init --w` 生成它 |
 | Q4 版本目录 | **不做**。概念越多越难用 |
 
 ## 11. 验收标准(实现时照此写测试)
@@ -219,5 +219,5 @@ mjm clean                              逐模块;遇错继续,汇总
 7. `publish` 在本地字节命中时仍发布,并打那行 `note`。
 8. `tree` / `info` 对命中的行显示 `(local: <path>)`。
 9. 根目录 `add` / `run` 无 `--module` → 报错要求给一个(而不是"禁止")。
-10. 无 `mjm.work.toml` 时,所有命令的输出与今天逐字节一致。
-11. `mjm init --work` 能扫描出子目录里的模块并写出文件;已存在时需 `--force`。
+10. 无 `mjm.w.toml` 时,所有命令的输出与今天逐字节一致。
+11. `mjm init --w` 能扫描出子目录里的模块并写出文件;已存在时需 `--force`。
