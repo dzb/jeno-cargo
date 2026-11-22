@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * The gh: consumption chain end to end against a server that speaks the
  * GitHub release URL layout — descriptor, jar, transitive descriptor, all
  * downloaded through the store and pinned in mjm.lock. The host override
- * ({@code -Dmj.github.host}) is what lets this run on a loopback server;
+ * ({@code -Dmjm.github.host}) is what lets this run on a loopback server;
  * the URL shapes are the production shapes.
  */
 class NativeConsumptionTest {

@@ -166,7 +166,7 @@ public final class UpdateCommand implements Command {
     }
 
     /**
-     * The installer subprocess. {@code -Dmj.update.home=<dir>} redirects the
+     * The installer subprocess. {@code -Dmjm.update.home=<dir>} redirects the
      * packaged setup.sh's {@code $HOME} — the hermetic-update-test seam
      * (and an off-home install root, should one ever be wanted).
      */

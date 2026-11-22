@@ -14,14 +14,14 @@ public final class ArtifactLocations {
     /** Maven Central's canonical repository base — the default of {@link #centralBase()}. */
     public static final String CENTRAL_BASE = "https://repo.maven.apache.org/maven2/";
 
-    /** Maven Central's effective base — overridable by {@code -Dmj.central.base} (mirrors, tests). */
+    /** Maven Central's effective base — overridable by {@code -Dmjm.central.base} (mirrors, tests). */
     public static String centralBase() {
         return System.getProperty("mjm.central.base", CENTRAL_BASE);
     }
 
     /**
      * The mj-native hosts, overridable by system property for tests and
-     * in-house mirrors: {@code -Dmj.github.host=…} / {@code -Dmj.gitee.host=…}.
+     * in-house mirrors: {@code -Dmjm.github.host=…} / {@code -Dmjm.gitee.host=…}.
      * The URL shapes stay frozen — only the host swaps.
      */
     public static String githubHost() {
