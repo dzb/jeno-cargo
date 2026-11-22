@@ -79,6 +79,11 @@ public final class PublishCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        Integer workspace = WorkspaceRun.requireModule(projectDir, args,
+                (dir, rest) -> new PublishCommand(dir).execute(rest));
+        if (workspace != null) {
+            return workspace;
+        }
         // The upload reads the bytes in target/dist/, so the lock covers the network
         // phase too: locking only the write phase would let clean --dist pull a
         // jar out from under a running upload. The cost is that another writer

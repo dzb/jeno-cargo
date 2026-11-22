@@ -82,6 +82,17 @@ public final class InitCommand implements Command {
             return 2;
         }
 
+        // A workspace root is a composition of projects, not a project: writing
+        // mjm.toml here would make it a module and break the workspace (and the
+        // reader refuses that combination anyway). Plain init, --pom and --force
+        // are all refused; init --ws is the one command that belongs here.
+        if (Files.isRegularFile(projectDir.resolve(Workspaces.FILE))) {
+            System.err.println("mjm: " + projectDir + " is a workspace root (it has "
+                    + Workspaces.FILE + ") — run init from a parent directory, or cd into a "
+                    + "module; a workspace root does not hold mjm.toml");
+            return 1;
+        }
+
         Path target = projectDir.resolve("mjm.toml");
         if (Files.exists(target) && !force) {
             System.err.println("mjm: " + target + " already exists — pass --force to overwrite");

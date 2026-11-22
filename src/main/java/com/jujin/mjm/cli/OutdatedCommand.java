@@ -66,6 +66,11 @@ public final class OutdatedCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        Integer workspace = WorkspaceRun.requireModule(projectDir, args,
+                (dir, rest) -> new OutdatedCommand(dir).execute(rest));
+        if (workspace != null) {
+            return workspace;
+        }
         boolean json = false;
         for (String arg : args) {
             if (arg.equals("--json")) {

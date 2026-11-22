@@ -152,4 +152,23 @@ class InitWorkspaceTest {
             System.setErr(original);
         }
     }
+
+    @Test
+    void aWorkspaceRootRefusesToBecomeAProject() throws Exception {
+        module("mod");
+        Files.writeString(dir.resolve("mjm.ws.toml"), """
+            [ws]
+            modules = ["mod"]
+            """);
+
+        assertEquals(1, run(dir), "plain init is refused");
+        assertFalse(Files.exists(dir.resolve("mjm.toml")), "nothing is written");
+        assertEquals(1, run(dir, "--pom"), "migration is refused too");
+        assertFalse(Files.exists(dir.resolve("mjm.toml")));
+        assertEquals(1, run(dir, "--force"), "--force does not override the guard");
+        assertFalse(Files.exists(dir.resolve("mjm.toml")));
+
+        assertEquals(0, run(dir, "--ws", "--force"), "init --ws still belongs here");
+        assertFalse(Files.exists(dir.resolve("mjm.toml")));
+    }
 }
