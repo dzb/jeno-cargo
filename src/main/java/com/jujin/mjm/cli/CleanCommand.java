@@ -1,10 +1,5 @@
 package com.jujin.mjm.cli;
 
-import com.jujin.mjm.resolve.Scope;
-import com.jujin.mjm.store.ArtifactStore;
-import com.jujin.mjm.store.LockFileReader;
-import com.jujin.mjm.store.LockedArtifact;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

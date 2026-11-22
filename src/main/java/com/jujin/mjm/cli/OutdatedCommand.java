@@ -1,14 +1,11 @@
 package com.jujin.mjm.cli;
 
-import com.jujin.mjm.project.DescriptorSource;
 import com.jujin.mjm.project.MjProject;
 import com.jujin.mjm.project.ProjectReader;
 import com.jujin.mjm.resolve.ArtifactLocations;
 import com.jujin.mjm.resolve.Versions;
-import com.jujin.mjm.store.ArtifactStore;
 import com.jujin.mjm.store.LockFileReader;
 import com.jujin.mjm.store.LockedArtifact;
-import com.jujin.mjm.pom.PomSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -36,16 +33,9 @@ import java.util.List;
  */
 public final class OutdatedCommand implements Command {
 
-    private final ArtifactStore store;
-    private final PomSource pomSource;
-    private final DescriptorSource descriptorSource;
     private final Path projectDir;
 
-    public OutdatedCommand(ArtifactStore store, PomSource pomSource,
-                           DescriptorSource descriptorSource, Path projectDir) {
-        this.store = store;
-        this.pomSource = pomSource;
-        this.descriptorSource = descriptorSource;
+    public OutdatedCommand(Path projectDir) {
         this.projectDir = projectDir;
     }
 
@@ -94,6 +84,7 @@ public final class OutdatedCommand implements Command {
         List<String> majorJumps = new ArrayList<>();
         List<String> unchecked = new ArrayList<>();
         List<String> failures = new ArrayList<>();
+        int checked = 0;
 
         for (LockedArtifact artifact : locked) {
             String source = artifact.source();
@@ -121,6 +112,7 @@ public final class OutdatedCommand implements Command {
                 continue;
             }
 
+            checked++;
             String pinned = artifact.version();
             // A pre-release is not an "update" for someone on a stable version:
             // mjm pins exactly, so picking an alpha is a decision, not a patch.
@@ -136,13 +128,16 @@ public final class OutdatedCommand implements Command {
             (sameMajor ? updates : majorJumps).add(line);
         }
 
-        report(updates, majorJumps, unchecked, failures);
+        report(updates, majorJumps, unchecked, failures, checked);
         return failures.isEmpty() ? 0 : 1;
     }
 
     private void report(List<String> updates, List<String> majorJumps,
-                        List<String> unchecked, List<String> failures) {
-        if (updates.isEmpty() && majorJumps.isEmpty()) {
+                        List<String> unchecked, List<String> failures, int checked) {
+        // "up to date" is a claim about a comparison that happened. With nothing
+        // checked (every source is gh:/url/local:) or a failed lookup, the honest
+        // answer is the "not checked" / "could not check" section below.
+        if (checked > 0 && updates.isEmpty() && majorJumps.isEmpty() && failures.isEmpty()) {
             System.out.println("everything is up to date");
         }
         if (!updates.isEmpty()) {
