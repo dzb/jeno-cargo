@@ -366,6 +366,50 @@ class AddCommandTest {
     }
 
     @Test
+    void aVendoredPomIsRereadAfterItChanges(@TempDir Path projectStore) throws Exception {
+        Path project = Files.createDirectories(dir.resolve("reread"));
+        vendorProject(project);
+        Files.createDirectories(project.resolve("vendor/com/example/lib-b/1.0.0"));
+        Files.writeString(project.resolve("vendor/com/example/lib-b/1.0.0/lib-b-1.0.0.pom"),
+                LIB_A_POM.replace("lib-a", "lib-b"));
+        Files.write(project.resolve("vendor/com/example/lib-b/1.0.0/lib-b-1.0.0.jar"),
+                "lib-b".getBytes());
+        ArtifactLocations.useProjectRoot(project);
+        ArtifactStore store = new ArtifactStore(projectStore);
+        LockService lockService = new LockService(store, new StorePomSource(store),
+                new StoreDescriptorSource(store));
+        try {
+            assertEquals(1, lockService.refresh(project).artifacts().size());
+
+            // the vendor tree is a working copy: lib-a gains a dependency on
+            // lib-b, and the next lock has to notice — the URL is unchanged, so
+            // an index hit would serve the old pom forever
+            Path pom = project.resolve("vendor/com/example/lib-a/1.0.0/lib-a-1.0.0.pom");
+            Files.writeString(pom, """
+                <project>
+                  <modelVersion>4.0.0</modelVersion>
+                  <groupId>com.example</groupId>
+                  <artifactId>lib-a</artifactId>
+                  <version>1.0.0</version>
+                  <dependencies>
+                    <dependency>
+                      <groupId>com.example</groupId>
+                      <artifactId>lib-b</artifactId>
+                      <version>1.0.0</version>
+                    </dependency>
+                  </dependencies>
+                </project>
+                """);
+
+            var graph = lockService.refresh(project);
+            assertEquals(2, graph.artifacts().size(),
+                    "the rewritten pom must be read again, not answered from the URL index");
+        } finally {
+            ArtifactLocations.useProjectRoot(Path.of("").toAbsolutePath());
+        }
+    }
+
+    @Test
     void anAddWaitsWhileTheProjectLockIsHeld(@TempDir Path projectStore) throws Exception {
         Path project = Files.createDirectories(dir.resolve("waits"));
         Files.writeString(project.resolve("mjm.toml"), """

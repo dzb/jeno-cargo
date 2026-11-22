@@ -118,22 +118,35 @@ public final class ArtifactStore {
      * Ensures the content at {@code url} is in the store and returns its path.
      * The digest is remembered for the session — {@code DigestSource} reads it
      * when the lockfile is written.
+     *
+     * <p>A {@code local:} repository's files are the one thing the durable index
+     * must not answer for: a vendored jar or pom is edited in place (that is how
+     * the self-bootstrap channel gets updated), and the index only knows "this
+     * URL hashed to X last time", so a hit would serve stale bytes forever.
+     * Online, those URLs are re-read and re-hashed on every run; offline, the
+     * index is still consulted, because it is the only way a moved checkout can
+     * find bytes it already has (SPEC §1.5).
      */
     public Path ensure(String url, Kind kind) {
-        String known = digestByUrl.get(url);
-        if (known != null) {
-            Path cached = root.resolve(known + "." + kind.extension());
-            if (Files.exists(cached)) {
-                return cached;  // this session already fetched this URL
+        boolean localFile = url.startsWith("file:");
+        if (!localFile) {
+            String known = digestByUrl.get(url);
+            if (known != null) {
+                Path cached = root.resolve(known + "." + kind.extension());
+                if (Files.exists(cached)) {
+                    return cached;  // this session already fetched this URL
+                }
             }
         }
         // The durable index answers the same question across processes. A hit
         // means the bytes are on disk AND we know what they hashed to — no
         // network, no re-hash.
-        String indexed = index.lookup(url, kind.extension(), root);
-        if (indexed != null) {
-            digestByUrl.put(url, indexed);
-            return root.resolve(indexed + "." + kind.extension());
+        if (offline || !localFile) {
+            String indexed = index.lookup(url, kind.extension(), root);
+            if (indexed != null) {
+                digestByUrl.put(url, indexed);
+                return root.resolve(indexed + "." + kind.extension());
+            }
         }
         if (offline) {
             throw new StoreException(url + " is not in the store and --offline forbids "
