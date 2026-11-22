@@ -372,6 +372,25 @@ class CleanOutdatedTest {
     }
 
     @Test
+    void theRequestTimeoutIsClamped() {
+        try {
+            System.setProperty("mjm.http.request.timeout.ms", "0");
+            assertEquals(java.time.Duration.ofMillis(100), MetadataVersions.requestTimeout(),
+                    "0 would mean no deadline at all: raised to the floor");
+
+            System.setProperty("mjm.http.request.timeout.ms", "999999999");
+            assertEquals(java.time.Duration.ofMillis(120_000), MetadataVersions.requestTimeout(),
+                    "a huge value is a hang by another name: capped at the ceiling");
+
+            System.clearProperty("mjm.http.request.timeout.ms");
+            assertEquals(java.time.Duration.ofMillis(30_000), MetadataVersions.requestTimeout(),
+                    "the shipped default");
+        } finally {
+            System.clearProperty("mjm.http.request.timeout.ms");
+        }
+    }
+
+    @Test
     void aServerThatNeverAnswersFailsInBoundedTime() throws Exception {
         try (ServerSocket socket = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
             Thread acceptor = new Thread(() -> {

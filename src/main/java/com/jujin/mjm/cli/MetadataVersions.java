@@ -44,9 +44,17 @@ final class MetadataVersions {
             .connectTimeout(CONNECT_TIMEOUT)
             .build();
 
-    private static java.time.Duration requestTimeout() {
-        return java.time.Duration.ofMillis(
-                Long.getLong("mjm.http.request.timeout.ms", 30_000L));
+    /**
+     * The request timeout, clamped to 100 ms … 120 s. The property exists so a
+     * test can prove the bound quickly; it must never turn the tool into a
+     * patient waiter — 0 or a negative value would mean "no deadline" and a
+     * huge one is a hang by another name, so out-of-range values are raised or
+     * capped instead of trusted.
+     */
+    static java.time.Duration requestTimeout() {
+        long millis = Long.getLong("mjm.http.request.timeout.ms", 30_000L);
+        millis = Math.max(100L, Math.min(120_000L, millis));
+        return java.time.Duration.ofMillis(millis);
     }
 
     private MetadataVersions() {}

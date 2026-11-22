@@ -341,7 +341,7 @@ git tags。GITHUB_TOKEN 的推送不触发新 run(平台防环),bump commit 无�
 | `mjm info <id> [--source]` | ✅ | 身份/来源/依赖/源码地址;`--source` 取源码树 |
 | `mjm clean [--target] [--dist]` | ✅ | **默认只清 `target/`**(无参或 `--target`);`--dist` 才清 `dist/`(交付物,可能含其他版本的产物,所以是显式要求);两个都给就都清;**永不触碰 store** |
 | `mjm outdated` | ✅ | 已钉版本 vs 仓库可用版本;只查 Central 与命名 https 仓库,`gh:`/`gitee:`/`url`/`local:` 列为"未检查";预发布默认不报(除非当前就是预发布);跨 major 单独一节 |
-| `--offline` | ✅ | 禁止一切网络访问;store 有则用,缺则报错。`update`/`publish` 不适用 |
+| `--offline` | ✅ | 禁止一切网络访问;store 有则用,缺则报错。`update`/`publish`/`outdated` 不适用 |
 | daemon 常驻 | **M6** | 已确认需要:常驻 JVM 热命令,mvnd 已验证可快 2–4 倍 |
 | workspaces/monorepo | V2 | 设计模板 = go.work 模式:`mjm.work.toml` 本地覆盖文件,gitignore 不提交 |
 | `mjm audit` | V2 | 依赖漏洞扫描,OSV.dev JSON API(commons 解析器现成);govulncheck 先例 |
