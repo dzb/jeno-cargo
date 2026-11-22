@@ -92,6 +92,13 @@ final class ProjectLock {
         try (FileChannel channel = FileChannel.open(lockPath,
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              FileLock ignored = channel.lock()) {
+            // a sidecar, written once: `mjm cache prune` can then tell a dead
+            // project's lock from a live one. Old empty files stay empty.
+            if (channel.size() == 0) {
+                String project = "project=" + canonical(projectDir) + "\n";
+                channel.write(java.nio.ByteBuffer.wrap(
+                        project.getBytes(StandardCharsets.UTF_8)));
+            }
             return body.getAsInt();
         } catch (IOException e) {
             System.err.println("mjm: cannot lock " + lockPath + " — " + e.getMessage());

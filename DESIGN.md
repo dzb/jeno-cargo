@@ -362,6 +362,8 @@ push tag v*  →  验证 + 发行
 | `mjm init [--pom] [--force]` | ✅ | 骨架,或从 pom.xml 迁移(逐条报告不可表达的事实) |
 | `mjm remove <id>` | ✅ | 删除一行声明并重锁 |
 | `mjm info <id> [--source]` | ✅ | 身份/来源/依赖/源码地址;`--source` 取源码树 |
+| `mjm cache dir | size | prune` | ✅ | 只看不删:`dir` 三个根、`size` 各自占用 + 合计、`prune` 只删可证明无用的东西(项目已消失的锁文件、`part-*.tmp` 残留、悬空索引条目);锁文件带 `project=` 侧车 |
+| `mjm cache clean` | ✅ | 显式删除 store 与 sources 并报释放量;不动锁文件、不动项目、不改 `mjm.lock` |
 | `mjm clean [--target] [--dist]` | ✅ | **默认整棵删 `target/`**(无参或 `--target`;Maven 惯例——包括你自己放进 `target/` 的东西;里面只有可重建的 `classes`/`test-classes`,依赖缓存在 XDG cache 的 `mjm/store` 不在此);`--dist` 才清 `dist/`(交付物,可能含其他版本的产物,所以是显式要求);两个都给就都清;**两个目标先全部探测,任一(含其内部嵌套)是挂载点则整次拒绝、一个字节不删**;**永不触碰 store** |
 | `mjm outdated [--json]` | ✅ | 已钉版本 vs 仓库可用版本;只查 Central 与命名 https 仓库,`gh:`/`url`/`local:`/`mjm:` 列为"未检查";预发布默认不报(除非当前就是预发布);跨 major 单独一节;`--json` 输出 `upToDate`/`updates`/`notChecked`/`failures` |
 | `--offline` | ✅ | 禁止一切网络访问;store 有则用,缺则报错。`update`/`publish`/`outdated` 不适用 |

@@ -172,7 +172,7 @@ uv 的 `.python-version` 本质是「工具链版本进仓库」;mjm 的 `[java]
   需要一版过渡(两个位置都写、读优先新位置)。必须在用户规模还小的时候做——现在最便宜
 - **动 manifest**:否
 
-### A2 ★★ 加 `cache` 动词(学 uv)
+### A2 ★★ 加 `cache` 动词(学 uv) — **已实施**
 
 - **吸收谁**:uv 的 `cache {clean,prune,dir,size}`(实测);bazel 的 `clean --expunge` 作对照
 - **它替谁**:`~/.mjm/{store,sources,locks}` 目前没有任何查看/清理手段。`REMINDS.md` 里两条债
@@ -187,7 +187,7 @@ uv 的 `.python-version` 本质是「工具链版本进仓库」;mjm 的 `[java]
 - **代价**:低。三个子命令,无破坏性默认
 - **动 manifest**:否
 
-### A3 ★★ 全局目录迁到 XDG
+### A3 ★★ 全局目录迁到 XDG — **已实施**
 
 - **吸收谁**:uv / go / bazel(实测都在 `~/.cache` 下)
 - **形态**
