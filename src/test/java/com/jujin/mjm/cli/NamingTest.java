@@ -22,6 +22,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>Two kinds of occurrence are legitimate and listed below: the term
  * {@code mj-native} (a fixed species name, not an abbreviation of the tool) and
  * two internal temp-name prefixes that are never shown to a user.
+ *
+ * <p>The second check is narrower and stricter: the system properties the tool
+ * reads are {@code -Dmjm.*}, and a document naming the short form (dash, D, the
+ * two letters, a dot) sends the user to a flag nothing looks at.
  */
 class NamingTest {
 
@@ -31,6 +35,14 @@ class NamingTest {
             "----mj");      // multipart boundary prefix in the upload request
 
     private static final Pattern BARE_MJ = Pattern.compile("\\bmj\\b");
+
+    /**
+     * A system property is spelled {@code -Dmjm.<name>}; the short form is
+     * exactly the wrong key, and a user who copies it from a document gets a
+     * silently ignored flag. Built from two pieces so this guard never trips
+     * its own grep.
+     */
+    private static final String WRONG_PROPERTY = "-D" + "mj.";
 
     @Test
     void everySourceSaysMjm() throws IOException {
@@ -59,6 +71,41 @@ class NamingTest {
                 violations.add(file + ":" + (i + 1) + ": " + lines.get(i).strip());
             }
         }
+    }
+
+    @Test
+    void noSourceOrDocumentNamesAnMjSystemProperty() throws IOException {
+        List<String> violations = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(sourceRoot())) {
+            for (Path file : files.filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(".java")).toList()) {
+                checkProperty(file, violations);
+            }
+        }
+        Path root = projectRoot();
+        for (String document : List.of("DESIGN.md", "SPEC.md", "README.md")) {
+            Path file = root.resolve(document);
+            if (Files.isRegularFile(file)) {
+                checkProperty(file, violations);
+            }
+        }
+        assertTrue(violations.isEmpty(),
+                "a system property is -Dmjm.<name>; the short two-letter form is ignored "
+                        + "at runtime:\n  " + String.join("\n  ", violations));
+    }
+
+    private static void checkProperty(Path file, List<String> violations) throws IOException {
+        List<String> lines = Files.readAllLines(file);
+        for (int i = 0; i < lines.size(); i++) {
+            if (lines.get(i).contains(WRONG_PROPERTY)) {
+                violations.add(file + ":" + (i + 1) + ": " + lines.get(i).strip());
+            }
+        }
+    }
+
+    /** The project root above {@code src/main/java}. */
+    private static Path projectRoot() {
+        return sourceRoot().getParent().getParent().getParent();
     }
 
     /** The test JVM may start in the project root or anywhere below it. */
