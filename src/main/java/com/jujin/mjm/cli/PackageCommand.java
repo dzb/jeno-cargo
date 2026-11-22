@@ -88,6 +88,14 @@ public final class PackageCommand implements Command {
             }
         }
 
+        // package writes dist/; clean --dist and the other writers take the
+        // same project lock, so a deliverable is never deleted mid-write
+        boolean uberJar = uber;
+        String requestedMain = mainClass;
+        return ProjectLock.with(projectDir, () -> write(requestedMain, uberJar));
+    }
+
+    private int write(String mainClass, boolean uber) {
         MjProject project;
         List<LockedArtifact> locked;
         Map<String, Path> jars;

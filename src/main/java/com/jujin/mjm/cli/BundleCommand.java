@@ -146,6 +146,11 @@ public final class BundleCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        // the whole assembly writes dist/: skeleton, toolchain, launcher, tar.gz
+        return ProjectLock.with(projectDir, this::assemble);
+    }
+
+    private int assemble() {
         MjProject project;
         List<LockedArtifact> locked;
         Map<String, Path> jars;

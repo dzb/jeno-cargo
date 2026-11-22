@@ -375,10 +375,12 @@ manifest 可以使用值形态；旧二进制不能 lock 新形态”，并在 C
 
 ## 13. `add` / `remove` / `lock` 持项目锁（2026-11-22 记录）
 
-**位置**:`ProjectLock`（`build`/`test`/`clean`/`add`/`remove`/`lock` 共用的一把项目锁）。
+**位置**:`ProjectLock`（`build`/`test`/`clean`/`add`/`remove`/`lock`/`package`/`bundle`/`publish` 共用的一把项目锁）。
 
 **现状**:写 `mjm.toml`/`mjm.lock` 的三个命令现在也排队。`prepare` 会访问网络（取 pom/描述符）
 并写 store，整段都在锁内，所以一个正在跑的 `add` 会让并发的 `build`/`test`/`clean` 等它。
+写 `dist/` 的三个命令（`package`/`bundle`/`publish`）同样持锁；**`publish` 连上传阶段也在锁内**——
+它上传读的就是 `dist/` 里的字节，只锁写盘阶段的话，`clean --dist` 仍可能在上传中途把 jar 抽走。
 
 **为什么可接受**:三个写命令本来就秒级；排队换来的是“磁盘上永远是一个完整状态”，这比几个命令的
 并发度重要。同 JVM 内用 `ReentrantLock` 先排队，跨进程用文件锁。

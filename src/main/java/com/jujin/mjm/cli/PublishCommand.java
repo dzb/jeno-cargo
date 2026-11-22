@@ -75,6 +75,14 @@ public final class PublishCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        // The upload reads the bytes in dist/, so the lock covers the network
+        // phase too: locking only the write phase would let clean --dist pull a
+        // jar out from under a running upload. The cost is that another writer
+        // waits for the upload — on purpose (REMINDS 13).
+        return ProjectLock.with(projectDir, () -> publish(args));
+    }
+
+    private int publish(List<String> args) {
         MjProject project;
         try {
             project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));

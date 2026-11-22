@@ -226,6 +226,7 @@ scopes 只关心 compile/runtime;provided/test 大部分忽略。
 ### 6.1 存储
 
 - `~/.mjm/store/` 按 sha256 内容寻址存 jar,全机一份
+- **项目锁**:同一项目同时只允许一个写命令。锁文件在 `~/.mjm/locks/<sha256(real path)>.lock`(不在项目里——`clean` 会删 `target/`),同 JVM 内先排 `ReentrantLock` 队列再取 OS 文件锁。持锁命令:`lock`、`build`、`test`、`clean`、`add`、`remove`、`package`、`bundle`、`publish`;只读命令(`run`/`tree`/`why`/`info`)不参与,`info --source` 写的是 `~/.mjm/sources` 而非项目树,也不参与
 - URL→digest 索引以**锁里的 url 原样**为 key:相对 `file:` 行因此能跨 checkout 命中,`--offline` 在搬迁后的目录里仍然可用
 - classpath 直接指向 store 内文件,**不拷贝、不链接**(Java 无 node_modules 式目录约束)
 - store 目录只读(555)+ 下载用文件锁保证并发安全(吸收自 Go module cache:防工具误改 jar)
