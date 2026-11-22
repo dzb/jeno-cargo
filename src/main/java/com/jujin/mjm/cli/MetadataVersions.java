@@ -79,7 +79,7 @@ final class MetadataVersions {
 
     /** Every version listed under {@code base/group/path/artifact/maven-metadata.xml}. */
     static List<String> from(String base, String group, String artifactId) {
-        String root = ArtifactLocations.baseUrl(base);
+        String root = base.endsWith("/") ? base : base + "/";
         String url = root + group.replace('.', '/') + "/" + artifactId + "/maven-metadata.xml";
         return parse(text(url), url);
     }

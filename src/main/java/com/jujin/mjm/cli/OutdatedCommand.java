@@ -2,6 +2,7 @@ package com.jujin.mjm.cli;
 
 import com.jujin.mjm.project.MjProject;
 import com.jujin.mjm.project.ProjectReader;
+import com.jujin.mjm.project.Repository;
 import com.jujin.mjm.resolve.ArtifactLocations;
 import com.jujin.mjm.resolve.Versions;
 import com.jujin.mjm.store.LockFileReader;
@@ -112,21 +113,29 @@ public final class OutdatedCommand implements Command {
                 continue;
             }
 
-            if (source.startsWith("local:") || source.startsWith("file:")) {
+            Repository repository;
+            try {
+                repository = source.equals("central") ? null : Repository.parse(source);
+            } catch (IllegalArgumentException e) {
+                failures.add(new Failed(artifact.id(), e.getMessage()));
+                continue;
+            }
+            if (repository != null && repository.isLocal()) {
                 unchecked.add(new Skipped(artifact.id(), "local-repository",
                         "local repository: no version listing"));
                 continue;
             }
-            if (source.startsWith("mjm:")) {
+            if (repository != null && repository.layout() == Repository.Layout.MJM) {
                 unchecked.add(new Skipped(artifact.id(), "mjm-repository",
-                        "mjm: repository: the layout has no version index"));
+                        "mjm layout: no version index"));
                 continue;
             }
 
             List<String> available;
             try {
                 available = MetadataVersions.from(
-                        source.equals("central") ? ArtifactLocations.centralBase() : source,
+                        repository == null ? ArtifactLocations.centralBase()
+                                : repository.networkBase(),
                         group(artifact.id()), artifactName(artifact.id()));
             } catch (RuntimeException e) {
                 failures.add(new Failed(artifact.id(), String.valueOf(e.getMessage())));

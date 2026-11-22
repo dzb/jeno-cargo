@@ -120,7 +120,7 @@ public final class ProjectReader {
             javaVersion = requireInteger(javaSection, "java", "version", 1, 100);
         }
 
-        Map<String, String> repos = new LinkedHashMap<>();
+        Map<String, Repository> repos = new LinkedHashMap<>();
         Map<String, Object> reposSection = optionalSection(root, "repos");
         if (reposSection != null) {
             for (Map.Entry<String, Object> entry : reposSection.entrySet()) {
@@ -137,26 +137,14 @@ public final class ProjectReader {
                             + "[repos]." + entry.getKey() + " is reserved for the "
                             + entry.getKey() + ": prefix — pick another name");
                 }
-                String baseUrl = requireString(reposSection, "repos", entry.getKey());
-                boolean remote = baseUrl.startsWith("https://");
-                boolean local = baseUrl.startsWith("local:");
-                boolean mjm = baseUrl.startsWith("mjm:");
-                if (mjm) {
-                    String host = baseUrl.substring("mjm:".length());
-                    boolean loopback = host.startsWith("http://localhost")
-                            || host.startsWith("http://127.0.0.1");
-                    if (!host.startsWith("https://") && !loopback) {
-                        throw new ProjectException(at(file, source.key("repos", entry.getKey()))
-                                + "[repos]." + entry.getKey() + " = \"" + baseUrl
-                                + "\" — a mjm: repository is https-only (mjm:https://…)");
-                    }
+                String declaration = requireString(reposSection, "repos", entry.getKey());
+                try {
+                    repos.put(entry.getKey(), Repository.parse(entry.getKey(), declaration));
+                } catch (IllegalArgumentException e) {
+                    throw new ProjectException(at(file, source.key("repos", entry.getKey()))
+                            + "[repos]." + entry.getKey() + " = \"" + declaration + "\" — "
+                            + e.getMessage());
                 }
-                if (!remote && !local && !mjm) {
-                    throw new ProjectException("[repos]." + entry.getKey()
-                            + " must be an https URL, a local: directory, or an mjm:https:// "
-                            + "repository — repository selection belongs to mjm.toml alone");
-                }
-                repos.put(entry.getKey(), baseUrl);
             }
         }
 
@@ -303,13 +291,13 @@ public final class ProjectReader {
      * instead (SPEC.md §3.2).
      */
     static List<Requirement> extractDependencies(
-            Map<String, Object> deps, Map<String, String> repos, String where) {
+            Map<String, Object> deps, Map<String, Repository> repos, String where) {
         return extractDependencies(deps, repos, where, null);
     }
 
     /** The full form: {@code sibling} is set when the file came from an mjm: repository. */
     static List<Requirement> extractDependencies(
-            Map<String, Object> deps, Map<String, String> repos, String where, String sibling) {
+            Map<String, Object> deps, Map<String, Repository> repos, String where, String sibling) {
 
         List<Requirement> requirements = new ArrayList<>();
         Set<String> ids = new LinkedHashSet<>();
@@ -347,7 +335,7 @@ public final class ProjectReader {
 
     /** One {@code key = value} entry, classified by the value's shape. */
     static Requirement requirement(String key, Object value, String repository, String where,
-                                   Map<String, String> repos, boolean checkRepos) {
+                                   Map<String, Repository> repos, boolean checkRepos) {
         return requirement(key, value, repository, where, repos, checkRepos, null);
     }
 
@@ -358,7 +346,7 @@ public final class ProjectReader {
      * can say "the sibling called gadget, version 0.9.0".
      */
     static Requirement requirement(String key, Object value, String repository, String where,
-                                   Map<String, String> repos, boolean checkRepos, String sibling) {
+                                   Map<String, Repository> repos, boolean checkRepos, String sibling) {
         if (repository == null && sibling != null && value instanceof String raw
                 && !raw.isBlank() && !raw.startsWith("gh:") && !raw.startsWith("https://")
                 && !raw.contains(":") && !key.contains(":")) {
@@ -366,7 +354,8 @@ public final class ProjectReader {
         }
         // [deps.mine] where mine is an mjm: repository: the native layout, no group
         if (repository != null && repos != null
-                && com.jujin.mjm.resolve.ArtifactLocations.isMjmRepository(repos.get(repository))) {
+                && repos.get(repository) != null
+                && repos.get(repository).layout() == Repository.Layout.MJM) {
             return nativeInNamedRepository(key, (String) value, repository, where);
         }
         if (key.isBlank() || key.contains(" ") || key.contains("\t")) {
@@ -431,7 +420,8 @@ public final class ProjectReader {
                             + "in the consumer's mjm.toml (SPEC.md §3.2)");
                 }
                 boolean namedMjm = repos != null && checkRepos
-                        && com.jujin.mjm.resolve.ArtifactLocations.isMjmRepository(repos.get(name));
+                        && repos.get(name) != null
+                        && repos.get(name).layout() == Repository.Layout.MJM;
                 if (namedMjm || (!checkRepos && !key.contains(":"))) {
                     // "name:version": a named mjm: repository, keyed by artifact name
                     return nativeInNamedRepository(key, version, name, where);

@@ -3,6 +3,7 @@ package com.jujin.mjm.cli;
 import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.mjm.project.Descriptor;
 import com.jujin.mjm.project.DescriptorReader;
+import com.jujin.mjm.project.Repository;
 import com.jujin.mjm.resolve.ArtifactLocations;
 import com.jujin.mjm.store.ArtifactStore;
 import com.jujin.mjm.store.LockFileReader;
@@ -200,12 +201,14 @@ public final class InfoCommand implements Command {
                     + "carries no tag, so there is no source tree to fetch");
             return 1;
         }
-        if (artifact.source().startsWith("mjm:")) {
-            System.err.println("mjm: '" + artifact.id() + "' comes from an mjm: repository — "
+        Repository repository = artifact.source().equals("central")
+                ? null : Repository.parse(artifact.source());
+        if (repository != null && repository.layout() == Repository.Layout.MJM) {
+            System.err.println("mjm: '" + artifact.id() + "' comes from an mjm-layout repository — "
                     + "this origin has no source tree (it publishes jars only)");
             return 1;
         }
-        return fetchCentralSources(artifact, target);
+        return fetchCentralSources(artifact, repository, target);
     }
 
     private int fetchNativeTree(LockedArtifact artifact, Path target) {
@@ -238,7 +241,7 @@ public final class InfoCommand implements Command {
         return 0;
     }
 
-    private int fetchCentralSources(LockedArtifact artifact, Path target) {
+    private int fetchCentralSources(LockedArtifact artifact, Repository repository, Path target) {
         int colon = artifact.id().indexOf(':');
         if (colon < 0) {
             System.err.println("mjm: '" + artifact.id() + "' is not a group:artifact coordinate");
@@ -246,13 +249,10 @@ public final class InfoCommand implements Command {
         }
         String group = artifact.id().substring(0, colon);
         String name = artifact.id().substring(colon + 1);
-        String base = artifact.source().equals("central")
-                ? ArtifactLocations.centralBase()
-                : artifact.source();
-        String root = base.endsWith("/") ? base : base + "/";
-        // Maven's classifier layout: lib-1.0.0-sources.jar
-        String url = root + group.replace('.', '/') + "/" + name + "/" + artifact.version()
-                + "/" + name + "-" + artifact.version() + "-sources.jar";
+        String url = ArtifactLocations.mavenFile(
+                repository == null
+                        ? ArtifactLocations.centralBase() : repository.declaration(),
+                group, name, artifact.version(), "sources", "jar");
 
         Path jar;
         try {

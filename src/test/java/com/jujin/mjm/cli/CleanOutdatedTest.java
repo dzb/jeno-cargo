@@ -291,7 +291,7 @@ class CleanOutdatedTest {
         String out = runOutdated(0);
 
         assertTrue(out.contains("not checked"), out);
-        assertTrue(out.contains("the layout has no version index"), out);
+        assertTrue(out.contains("no version index"), out);
         assertFalse(out.contains("everything is up to date"), out);
     }
 

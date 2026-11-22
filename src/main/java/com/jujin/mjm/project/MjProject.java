@@ -16,8 +16,9 @@ import java.util.Map;
  *                        address the library as {@code group:artifact}
  * @param javaVersion     the {@code [java].version} major, or null when unset
  * @param maxDepth        the dependency-chain budget, 1–255, default 2
- * @param repos           named repositories (name → https base URL), plus nothing
- *                        for Central — Central is always the implicit default
+ * @param repos           named repositories (name → {@link Repository}: a location
+ *                        plus a layout), plus nothing for Central — Central is
+ *                        always the implicit default
  * @param processors      {@code [build].processors} — annotation-processor
  *                        coordinates, resolved as their own closure and put on
  *                        javac's {@code -processorpath}; empty means javac's
@@ -37,7 +38,7 @@ public record MjProject(
         List<Requirement> requirements,
         Map<String, String> overrides,
         Map<String, String> scripts,
-        Map<String, String> repos,
+        Map<String, Repository> repos,
         List<String> buildParameters,
         List<Requirement> devRequirements,
         String summary,

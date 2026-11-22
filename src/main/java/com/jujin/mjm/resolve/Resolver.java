@@ -10,6 +10,7 @@ import com.jujin.mjm.project.DescriptorReader;
 import com.jujin.mjm.project.DescriptorSource;
 import com.jujin.mjm.project.MjProject;
 import com.jujin.mjm.project.ProjectException;
+import com.jujin.mjm.project.Repository;
 import com.jujin.mjm.project.Requirement;
 import com.jujin.mjm.project.Species;
 
@@ -230,8 +231,9 @@ public final class Resolver {
         }
 
         private Metadata loadMetadata(String id, String version, Requirement template) {
-            String repositoryBase = ArtifactLocations.repositoryBase(project.repos(),
-                    template.repository());
+            String repositoryBase = template.repository() == null
+                    ? ArtifactLocations.centralBase()
+                    : project.repos().get(template.repository()).declaration();
             try {
                 return switch (template.species()) {
                     case CENTRAL -> {
@@ -266,8 +268,9 @@ public final class Resolver {
                         yield new Metadata(edges, descriptor.retract());
                     }
                     case NAMED -> {
-                        String base = ArtifactLocations.repositoryBase(project.repos(),
-                                template.repository());
+                        String base = template.repository() == null
+                                ? ArtifactLocations.centralBase()
+                                : project.repos().get(template.repository()).declaration();
                         String url = ArtifactLocations.mjmFile(base, template.id(), version,
                                 "mjm.toml");
                         String text = descriptorSource.descriptor(url);
@@ -488,9 +491,9 @@ public final class Resolver {
                 String source = switch (species) {
                     case CENTRAL -> template.repository() == null
                             ? "central"
-                            : project.repos().get(template.repository());
+                            : project.repos().get(template.repository()).declaration();
                     case GH -> originById.get(id);
-                    case NAMED -> project.repos().get(template.repository());
+                    case NAMED -> project.repos().get(template.repository()).declaration();
                     case URL -> "url";
                 };
                 artifacts.add(new ResolvedGraph.ResolvedArtifact(id, version, species, source,
@@ -528,26 +531,47 @@ public final class Resolver {
             return reached;
         }
 
+        /** The repository a requirement names, or null for Central's default. */
+        private Repository repository(Requirement template) {
+            return template.repository() == null
+                    ? null
+                    : project.repos().get(template.repository());
+        }
+
+        /** The base a POM fetch uses: the https base, or the directory itself. */
+        private String fetchBase(String repositoryName) {
+            return repositoryName == null
+                    ? ArtifactLocations.centralBase()
+                    : ArtifactLocations.fetchBase(project.repos().get(repositoryName));
+        }
+
         private String jarUrl(Requirement template, String version) {
-            String base = ArtifactLocations.repositoryBase(project.repos(), template.repository());
+            Repository named = repository(template);
             return switch (template.species()) {
-                case CENTRAL -> ArtifactLocations.mavenFile(base, template.group(),
-                        template.artifactId(), version, template.classifier(), "jar");
+                case CENTRAL -> named == null
+                        ? ArtifactLocations.mavenFile(ArtifactLocations.centralBase(),
+                                template.group(), template.artifactId(), version,
+                                template.classifier(), "jar")
+                        : ArtifactLocations.mavenFile(named, template.group(),
+                                template.artifactId(), version, template.classifier(), "jar");
                 case GH -> ArtifactLocations.releaseFile(ArtifactLocations.githubHost(),
                         template.owner(), template.repo(), template.tag(), version, "jar");
-                case NAMED -> ArtifactLocations.mjmFile(base, template.id(), version, "jar");
+                case NAMED -> ArtifactLocations.mjmFile(named, template.id(), version, "jar");
                 case URL -> template.url();
             };
         }
 
         private String metadataUrl(Requirement template, String version) {
-            String base = ArtifactLocations.repositoryBase(project.repos(), template.repository());
+            Repository named = repository(template);
             return switch (template.species()) {
-                case CENTRAL -> ArtifactLocations.mavenFile(base, template.group(),
-                        template.artifactId(), version, "pom");
+                case CENTRAL -> named == null
+                        ? ArtifactLocations.mavenFile(ArtifactLocations.centralBase(),
+                                template.group(), template.artifactId(), version, "pom")
+                        : ArtifactLocations.mavenFile(named, template.group(),
+                                template.artifactId(), version, "pom");
                 case GH -> ArtifactLocations.releaseFile(ArtifactLocations.githubHost(),
                         template.owner(), template.repo(), template.tag(), version, "mjm.toml");
-                case NAMED -> ArtifactLocations.mjmFile(base, template.id(), version, "mjm.toml");
+                case NAMED -> ArtifactLocations.mjmFile(named, template.id(), version, "mjm.toml");
                 case URL -> null;  // a bare leaf has no metadata
             };
         }

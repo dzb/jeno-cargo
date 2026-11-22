@@ -1,6 +1,7 @@
 package com.jujin.mjm.cli;
 
 import com.jujin.freeway.commons.json.JsonUtils;
+import com.jujin.mjm.project.Repository;
 import com.jujin.mjm.resolve.Versions;
 import com.jujin.mjm.store.LockFileReader;
 import com.jujin.mjm.store.LockedArtifact;
@@ -381,16 +382,19 @@ public final class AuditCommand implements Command {
         if (source.startsWith("gh:")) {
             return "mj-native";
         }
-        if (source.startsWith("mjm:")) {
-            return "mj-native";
-        }
-        if (source.startsWith("local:") || source.startsWith("file:")) {
-            return "local-repository";
-        }
         if (source.equals("url")) {
             return "bare-url";
         }
-        return "named-repository";
+        Repository repository;
+        try {
+            repository = Repository.parse(source);
+        } catch (IllegalArgumentException notARepository) {
+            return "named-repository";
+        }
+        if (repository.layout() == Repository.Layout.MJM) {
+            return "mj-native";
+        }
+        return repository.isLocal() ? "local-repository" : "named-repository";
     }
 
     // ------------------------------------------------------------------

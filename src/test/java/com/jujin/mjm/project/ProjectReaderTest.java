@@ -234,15 +234,18 @@ class ProjectReaderTest {
     }
 
     @Test
-    void aMjmRepositoryIsHttpsOnly() {
-        assertRejects("""
+    void aMjmRepositoryIsEitherNetworkOrLocal() {
+        // mjm:local:<dir> is the mjm layout on disk — a legal repository now
+        MjProject local = ProjectReader.parse("""
             [project]
             name = "demo"
             version = "0.1.0"
 
             [repos]
             mine = "mjm:local:/tmp/repo"
-            """, "mjm: repository is https-only");
+            """);
+        assertEquals(Repository.Layout.MJM, local.repos().get("mine").layout());
+        assertEquals(Repository.Transport.LOCAL, local.repos().get("mine").transport());
 
         assertRejects("""
             [project]
@@ -251,7 +254,7 @@ class ProjectReaderTest {
 
             [repos]
             mine = "mjm:http://repo.example/"
-            """, "mjm: repository is https-only");
+            """, "mjm:local:");
     }
 
     @Test

@@ -1,5 +1,7 @@
 package com.jujin.mjm.resolve;
 
+import com.jujin.mjm.project.Repository;
+
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.Map;
@@ -71,15 +73,24 @@ public final class ArtifactLocations {
      * as written ({@code ~} expands to the home directory); a relative one is
      * resolved against the project root where the URL is built.
      */
-    public static String repositoryBase(Map<String, String> repos, String name) {
+    public static String repositoryBase(Map<String, Repository> repos, String name) {
         if (name == null) {
             return centralBase();
         }
-        String base = repos.get(name);
-        if (base == null) {
+        Repository repository = repos.get(name);
+        if (repository == null) {
             throw new IllegalArgumentException("repository '" + name + "' is not declared in [repos]");
         }
-        return base;
+        return repository.declaration();
+    }
+
+    /** The declaration text a repository is addressed by — the lock's {@code source}. */
+    public static String repositoryDeclaration(Map<String, Repository> repos, String name) {
+        Repository repository = repos.get(name);
+        if (repository == null) {
+            throw new IllegalArgumentException("repository '" + name + "' is not declared in [repos]");
+        }
+        return repository.declaration();
     }
 
     /**
@@ -88,22 +99,40 @@ public final class ArtifactLocations {
      */
     public static String mavenFile(
             String base, String group, String artifactId, String version, String extension) {
-        return mavenFile(base, group, artifactId, version, null, extension);
+        return mavenFile(Repository.parse(base), group, artifactId, version, null, extension);
     }
 
-    /**
-     * The Maven repository layout with an optional classifier:
-     * {@code artifact-version-classifier.ext}. Maven puts the classifier
-     * between version and extension — {@code netty-4.1.0-linux-x86_64.jar},
-     * never {@code netty-4.1.0.linux-x86_64.jar}. Dropping it silently fetches
-     * the base jar, which for a native dependency is the wrong artifact.
-     */
-    public static String mavenFile(String base, String group, String artifactId,
-                                   String version, String classifier, String extension) {
+    /** The Maven layout under a repository, local or remote. */
+    public static String mavenFile(
+            Repository repository, String group, String artifactId, String version,
+            String extension) {
+        return mavenFile(repository, group, artifactId, version, null, extension);
+    }
+
+    public static String mavenFile(
+            Repository repository, String group, String artifactId, String version,
+            String classifier, String extension) {
+        String directory = group.replace('.', '/') + "/" + artifactId + "/" + version + "/";
         String file = artifactId + "-" + version
                 + (classifier == null || classifier.isBlank() ? "" : "-" + classifier)
                 + "." + extension;
-        return file(base, group.replace('.', '/') + "/" + artifactId + "/" + version + "/" + file);
+        if (repository.isLocal()) {
+            Path artifact = repository.directory(projectRoot).resolve(directory + file).normalize();
+            return lockUrl(artifact, projectRoot);
+        }
+        return repository.networkBase() + directory + file;
+    }
+
+    /**
+     * The Maven layout for a declaration or a base URL: local ones become the
+     * lock's portable {@code file:} form, https ones the absolute URL. The
+     * classifier sits between version and extension
+     * ({@code netty-4.1.0-linux-x86_64.jar}), as Maven writes it.
+     */
+    public static String mavenFile(String base, String group, String artifactId,
+                                   String version, String classifier, String extension) {
+        return mavenFile(Repository.parse(base), group, artifactId, version,
+                classifier, extension);
     }
 
     /**
@@ -117,30 +146,20 @@ public final class ArtifactLocations {
     }
 
     /**
-     * A repository base as a fetchable URL prefix, always ending in {@code /}.
-     * A {@code local:} directory becomes an absolute {@code file:///} URL: this
-     * is for callers that fetch a path outside the artifact layout (a version
-     * listing), where the lock's relative form does not apply. The lock's own
-     * form stays {@link #lockUrl}'s business.
-     */
-    public static String baseUrl(String base) {
-        if (!base.startsWith("local:")) {
-            return base.endsWith("/") ? base : base + "/";
-        }
-        String url = localBase(base).toUri().toString();
-        return url.endsWith("/") ? url : url + "/";
-    }
-
-    /**
      * A repository base normalized for <em>comparison</em>: scheme and host
      * lowercased, the scheme's default port dropped, the path closed with a
      * slash. No redirects, no DNS — two spellings of one base compare equal,
      * anything that could reach a different server does not.
      */
+    public static String canonicalBase(Repository repository) {
+        return canonicalBaseOf(repository.networkBase());
+    }
+
     public static String canonicalBase(String declaration) {
-        String host = declaration != null && declaration.startsWith("mjm:")
-                ? declaration.substring("mjm:".length())
-                : declaration;
+        return canonicalBase(Repository.parse(declaration));
+    }
+
+    private static String canonicalBaseOf(String host) {
         if (host == null) {
             return "";
         }
@@ -166,39 +185,49 @@ public final class ArtifactLocations {
         }
     }
 
-    /** Whether a declared base is an {@code mjm:} repository (the native layout). */
-    public static boolean isMjmRepository(String base) {
-        return base != null && base.startsWith("mjm:");
-    }
-
     /**
      * The mjm repository layout: {@code <base>/<name>/<version>/<name>-<version>.<ext>} —
      * two levels, no group. {@code base} is the declaration, {@code mjm:https://…},
      * whose prefix is stripped here.
      */
-    public static String mjmFile(String base, String name, String version, String extension) {
-        String root = baseUrl(base.substring("mjm:".length()));
-        return root + name + "/" + version + "/" + name + "-" + version + "." + extension;
+    /** The mjm two-level layout under a repository, local or remote. */
+    public static String mjmFile(Repository repository, String name, String version,
+                                 String extension) {
+        String path = name + "/" + version + "/" + name + "-" + version + "." + extension;
+        if (repository.isLocal()) {
+            Path artifact = repository.directory(projectRoot).resolve(path).normalize();
+            return lockUrl(artifact, projectRoot);
+        }
+        return repository.networkBase() + path;
     }
 
-    private static String file(String base, String path) {
-        if (!base.startsWith("local:")) {
-            return (base.endsWith("/") ? base : base + "/") + path;
-        }
-        Path artifact = localBase(base).resolve(path).normalize();
-        return lockUrl(artifact, projectRoot);
+    /** Same, for a declaration read from a lock row or a command line. */
+    public static String mjmFile(String declaration, String name, String version,
+                                 String extension) {
+        return mjmFile(Repository.parse(declaration), name, version, extension);
     }
 
-    /** The declared {@code local:} directory as an absolute path on this machine. */
-    private static Path localBase(String base) {
-        String raw = base.substring("local:".length()).strip();
-        if (raw.startsWith("~/") || raw.equals("~")) {
-            raw = System.getProperty("user.home") + raw.substring(1);
+    /**
+     * The absolute base a POM fetch uses: the https base, or a {@code file:}
+     * directory URL for a local repository. POMs are read immediately, so the
+     * relative lock form is not wanted here.
+     */
+    public static String fetchBase(Repository repository) {
+        if (!repository.isLocal()) {
+            return repository.networkBase();
         }
-        Path declared = Path.of(raw);
-        return declared.isAbsolute()
-                ? declared.normalize()
-                : projectRoot.resolve(declared).normalize();
+        String url = repository.directory(projectRoot).toUri().toString();
+        return url.endsWith("/") ? url : url + "/";
+    }
+
+    /** The local directory of a {@code local:} repository. */
+    public static Path localDirectory(Repository repository) {
+        return repository.directory(projectRoot);
+    }
+
+    /** The local directory named by a declaration (publish target, tests). */
+    public static Path localDirectory(String declaration) {
+        return localDirectory(Repository.parse(declaration));
     }
 
     /**

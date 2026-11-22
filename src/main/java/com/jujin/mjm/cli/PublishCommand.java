@@ -4,6 +4,7 @@ import com.jujin.freeway.commons.json.JsonObject;
 import com.jujin.freeway.commons.json.JsonUtils;
 import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.mjm.project.MjProject;
+import com.jujin.mjm.project.Repository;
 import com.jujin.mjm.project.ProjectReader;
 import com.jujin.mjm.project.Requirement;
 import com.jujin.mjm.project.Species;
@@ -19,6 +20,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -111,22 +113,35 @@ public final class PublishCommand implements Command {
         // descriptor can say "gadget, 0.9.0" and the consumer's resolver reads it
         // back as another artifact in that same repository. Anything bound to a
         // different repository stays a rule, and rules do not travel.
-        String publishBase = target != null && target.startsWith("mjm:")
-                ? ArtifactLocations.canonicalBase(target) : null;
+        Repository publishTarget = null;
+        if (target != null && !target.startsWith("gh:")
+                && !target.startsWith("https://") && !target.startsWith("http://")) {
+            try {
+                publishTarget = Repository.parse(target);
+            } catch (IllegalArgumentException e) {
+                System.err.println("mjm: " + e.getMessage());
+                return 1;
+            }
+        }
+        String publishBase = publishTarget != null && publishTarget.isMjmLayout()
+                && !publishTarget.isLocal()
+                ? ArtifactLocations.canonicalBase(publishTarget) : null;
         java.util.Set<String> siblings = new java.util.HashSet<>();
         for (var requirement : project.requirements()) {
             if (requirement.repository() == null) {
                 continue;
             }
-            String where = ArtifactLocations.canonicalBase(
-                    project.repos().get(requirement.repository()));
-            if (publishBase != null && publishBase.equals(where)) {
+            Repository declared = project.repos().get(requirement.repository());
+            String where = declared.isLocal()
+                    ? declared.declaration()
+                    : ArtifactLocations.canonicalBase(declared);
+            if (publishBase != null && !declared.isLocal() && publishBase.equals(where)) {
                 siblings.add(requirement.id());
                 continue;
             }
             System.err.println("mjm: '" + requirement.id() + "' belongs to repository '"
                     + requirement.repository() + "' (" + where + ") — you are publishing to "
-                    + (publishBase == null ? target : "mjm:" + publishBase)
+                    + target
                     + "; a descriptor can only name siblings in the repository it is "
                     + "published to. Move that dependency to Central/GitHub, publish it to "
                     + "this same repository first, or drop it");
@@ -187,16 +202,24 @@ public final class PublishCommand implements Command {
             return 0;
         }
 
-        // target given — attempt native upload
-        if (target != null && target.startsWith("mjm:")) {
-            return uploadToMjmRepository(target, project, dist, jarName, descriptorName, shaName);
+        // target given — the layout decides how it is written
+        if (publishTarget != null) {
+            return switch (publishTarget.layout()) {
+                case MJM -> publishTarget.isLocal()
+                        ? publishToLocalMjmRepository(publishTarget, project, dist,
+                                jarName, descriptorName, shaName)
+                        : uploadToMjmRepository(publishTarget, project, dist,
+                                jarName, descriptorName, shaName);
+                case MAVEN -> publishTarget.isLocal()
+                        ? localMavenNotSupported(publishTarget)
+                        : uploadToHost(target, project, dist, jarName, descriptorName, shaName);
+            };
         }
         if (target != null && (target.startsWith("https://") || target.startsWith("http://"))) {
             return uploadToHost(target, project, dist, jarName, descriptorName, shaName);
         }
         if (target != null && !target.startsWith("gh:")) {
-            System.err.println("mjm: unknown publish target '" + target
-                    + "' — use gh:owner/repo, mjm:https://host/, or an http(s) base URL");
+            System.err.println("mjm: unknown publish target '" + target + "'");
             return 1;
         }
 
@@ -274,9 +297,10 @@ public final class PublishCommand implements Command {
      * {@code <base>/<name>/<version>/<name>-<version>.{jar,mjm.toml,sha256}}.
      * No {@code [project].group} is needed: that is the point of the layout.
      */
-    private int uploadToMjmRepository(String target, MjProject project, Path dist,
+    private int uploadToMjmRepository(Repository repository, MjProject project, Path dist,
                                       String jarName, String descriptorName, String shaName) {
-        String root = ArtifactLocations.baseUrl(target.substring("mjm:".length()));
+        String target = repository.declaration();
+        String root = repository.networkBase();
         String directory = project.name() + "/" + project.version() + "/";
 
         List<Path> files = List.of(
@@ -301,6 +325,73 @@ public final class PublishCommand implements Command {
         System.out.println("  mine = \"" + target + "\"");
         System.out.println("  \"" + project.name() + "\" = \"mine:" + project.version() + "\"");
         return 0;
+    }
+
+    private int localMavenNotSupported(Repository repository) {
+        System.err.println("mjm: cannot publish to " + repository.declaration()
+                + " — a local: repository is a Maven layout read as-is; publish writes the "
+                + "mjm layout (mjm:local:<dir>) or an http(s) host");
+        return 1;
+    }
+
+    /**
+     * {@code mjm publish mjm:local:<dir>} — copies the same three files into the
+     * mjm layout on disk, creating the directory. No network, no account: this
+     * is how a repository inside a checkout gets filled without hand-writing a
+     * {@code jar} command and a Maven pom beside it.
+     */
+    private int publishToLocalMjmRepository(Repository repository, MjProject project, Path dist,
+                                            String jarName, String descriptorName,
+                                            String shaName) {
+        String target = repository.declaration();
+        Path directory;
+        try {
+            directory = ArtifactLocations.localDirectory(repository)
+                    .resolve(project.name()).resolve(project.version());
+        } catch (RuntimeException e) {
+            System.err.println("mjm: cannot resolve " + target + " — " + e.getMessage());
+            return 1;
+        }
+
+        List<Path> files = List.of(
+                dist.resolve(jarName),
+                dist.resolve(descriptorName),
+                dist.resolve(shaName));
+        try {
+            Files.createDirectories(directory);
+            for (Path file : files) {
+                writeAtomically(directory.resolve(file.getFileName()),
+                        Files.readAllBytes(file));
+            }
+        } catch (IOException e) {
+            System.err.println("mjm: cannot write " + directory + " — " + e.getMessage());
+            return 1;
+        }
+        for (Path file : files) {
+            System.out.println("  " + directory.resolve(file.getFileName()));
+        }
+
+        System.out.println("published to " + target + " — consume it with:");
+        System.out.println("  [repos]");
+        System.out.println("  mine = \"" + target + "\"");
+        System.out.println("  \"" + project.name() + "\" = \"mine:" + project.version() + "\"");
+        return 0;
+    }
+
+    /** Writes beside the target and moves it into place, so a reader never sees half a file. */
+    private static void writeAtomically(Path target, byte[] bytes) throws IOException {
+        Path temp = Files.createTempFile(target.getParent(), ".mjm-publish-", ".tmp");
+        try {
+            Files.write(temp, bytes);
+            try {
+                Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temp);
+        }
     }
 
     /** One PUT, treating 200/201/204 as success. */
@@ -525,14 +616,6 @@ public final class PublishCommand implements Command {
                     + response.body().substring(0, Math.min(200, response.body().length())));
         }
         System.out.println("  uploaded " + fileName);
-    }
-
-    /** The base an mjm: declaration points at, normalized with a trailing slash. */
-    private static String mjmBase(String declaration) {
-        String host = declaration != null && declaration.startsWith("mjm:")
-                ? declaration.substring("mjm:".length())
-                : declaration;
-        return ArtifactLocations.baseUrl(host);
     }
 
     private static String descriptor(MjProject project, java.util.Set<String> siblings) {

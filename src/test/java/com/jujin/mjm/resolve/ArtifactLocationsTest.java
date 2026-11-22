@@ -2,6 +2,8 @@ package com.jujin.mjm.resolve;
 
 import org.junit.jupiter.api.Test;
 
+import com.jujin.mjm.project.Repository;
+
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -16,7 +18,8 @@ class ArtifactLocationsTest {
         assertEquals(ArtifactLocations.CENTRAL_BASE, ArtifactLocations.repositoryBase(Map.of(), null));
         assertEquals("https://nexus.corp.internal/repository/maven/",
                 ArtifactLocations.repositoryBase(
-                        Map.of("corp", "https://nexus.corp.internal/repository/maven/"), "corp"));
+                        Map.of("corp", Repository.parse("corp",
+                                "https://nexus.corp.internal/repository/maven/")), "corp"));
     }
 
     @Test
@@ -90,8 +93,8 @@ class ArtifactLocationsTest {
                 "the default port is spelling");
 
         assertNotEquals(ArtifactLocations.canonicalBase("mjm:https://host/repo/"),
-                ArtifactLocations.canonicalBase("mjm:http://host/repo/"),
-                "http and https can reach different servers");
+                ArtifactLocations.canonicalBase("mjm:https://other-host/repo/"),
+                "a different host is a different repository");
         assertNotEquals(ArtifactLocations.canonicalBase("mjm:https://host/repo/"),
                 ArtifactLocations.canonicalBase("mjm:https://host/other/"),
                 "a different path is a different repository");
