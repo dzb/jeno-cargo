@@ -249,6 +249,8 @@ the next invocation.
 | `info [--source]` | everything about one dependency, including its source |
 | `package [--uber]` | the jar. `--uber` merges the closure and writes `...-uber.jar`, so the two never overwrite each other |
 | `bundle` | an installable distribution (bin + lib + setup.sh + tar.gz) |
+| `clean [--target\|--dist]` | remove build output; never the store |
+| `outdated` | pinned dependencies with newer versions available |
 | `publish [target]` | the release triple; `gh:`, `gitee:`, or any `http(s)://` host (Maven layout over PUT) |
 | `update` / `upgrade` | self-upgrade from GitHub Releases |
 | `--offline` (flag) | refuse all network access — store hits only. Not for `update`/`publish`, which are network by nature |
@@ -282,9 +284,10 @@ make someone re-decide.
 upgrades itself, and builds every freeway module in CI. The test suite is
 green on every push that touches code — the badge above tracks the release.
 
-Not yet done, and known: `mjm clean`, `mjm outdated`, JUnit XML reports for CI
-tooling. A discovery/index layer is deliberately deferred until there is an
-ecosystem worth indexing — knowing a package's coordinates has to work first.
+Not yet done, and known: JUnit XML reports for CI tooling, multi-module
+(workspace) builds. A discovery/index layer is deliberately deferred until
+there is an ecosystem worth indexing — knowing a package's coordinates has to
+work first.
 
 ## License
 

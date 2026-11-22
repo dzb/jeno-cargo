@@ -45,6 +45,12 @@ public final class Mjm {
         Container container = openQuietly();
         try (container) {
             exit = container.get(CommandRunner.class).run(args);
+        } catch (ShutdownAfterBuildOutput e) {
+            // The command deleted this process's own class directory — see
+            // ShutdownAfterBuildOutput. Skip the container's @PreDestroy hooks
+            // and exit with the already-decided code.
+            System.exit(e.exitCode);
+            return;
         } catch (RuntimeException e) {
             System.err.println("mjm: " + describe(e));
             System.exit(1);

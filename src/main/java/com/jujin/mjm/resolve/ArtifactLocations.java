@@ -110,6 +110,21 @@ public final class ArtifactLocations {
         return host + "/" + owner + "/" + repo + "/releases/download/" + tag + "/" + file;
     }
 
+    /**
+     * A repository base as a fetchable URL prefix, always ending in {@code /}.
+     * A {@code local:} directory becomes an absolute {@code file:///} URL: this
+     * is for callers that fetch a path outside the artifact layout (the
+     * {@code maven-metadata.xml} listing), where the lock's relative form does
+     * not apply. The lock's own form stays {@link #lockUrl}'s business.
+     */
+    public static String baseUrl(String base) {
+        if (!base.startsWith("local:")) {
+            return base.endsWith("/") ? base : base + "/";
+        }
+        String url = localBase(base).toUri().toString();
+        return url.endsWith("/") ? url : url + "/";
+    }
+
     private static String file(String base, String path) {
         if (!base.startsWith("local:")) {
             return (base.endsWith("/") ? base : base + "/") + path;
