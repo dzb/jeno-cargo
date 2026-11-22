@@ -346,8 +346,8 @@ push tag v*  →  验证 + 发行
 | 命令 | 状态 | 说明 |
 |---|---|---|
 | `mjm add <dep> [ver]` | ✅ | 写入 [deps] 并立即解析;精确版本 + maven-metadata.xml 列版本;裸名走 Central 索引搜索 |
-| `mjm lock` | ✅ | 解析并写出 mjm.lock |
-| `mjm tree` | ✅ | 依赖树 + 深度标注(dev 工件标 `, dev`) |
+| `mjm lock [--check] [--refresh]` | ✅ | 解析并写出 mjm.lock;`--check` 只在内存里重新生成并与磁盘逐字节比对(Cargo `--locked` 语义,比 build 的"id 在锁里"更严格)、不写任何文件;**需要取元数据**;`--check` 与 `--refresh` 互斥 |
+| `mjm tree [--json]` | ✅ | 依赖树 + 深度标注(dev 工件标 `, dev`);`--json` 输出单个 JSON 文档(artifacts 按 id 排序、children 排序,不嵌套) |
 | `mjm why <dep>` | ✅ | 谁引入的、占多少深度预算 |
 | `mjm build` | ✅ | javac 编译(严格可见性 classpath —— 只含 MAIN 声明);`--release N` 目标化字节码;`-processorpath` 注入处理器;`src/main/resources` 拷入产物 |
 | `mjm run <main>` / scripts | ✅ | runtime classpath 运行(排除 dev) |
@@ -361,7 +361,7 @@ push tag v*  →  验证 + 发行
 | `mjm remove <id>` | ✅ | 删除一行声明并重锁 |
 | `mjm info <id> [--source]` | ✅ | 身份/来源/依赖/源码地址;`--source` 取源码树 |
 | `mjm clean [--target] [--dist]` | ✅ | **默认整棵删 `target/`**(无参或 `--target`;Maven 惯例——包括你自己放进 `target/` 的东西;里面只有可重建的 `classes`/`test-classes`,依赖缓存在 `~/.mjm/store` 不在此);`--dist` 才清 `dist/`(交付物,可能含其他版本的产物,所以是显式要求);两个都给就都清;**两个目标先全部探测,任一(含其内部嵌套)是挂载点则整次拒绝、一个字节不删**;**永不触碰 store** |
-| `mjm outdated` | ✅ | 已钉版本 vs 仓库可用版本;只查 Central 与命名 https 仓库,`gh:`/`url`/`local:` 列为"未检查";预发布默认不报(除非当前就是预发布);跨 major 单独一节 |
+| `mjm outdated [--json]` | ✅ | 已钉版本 vs 仓库可用版本;只查 Central 与命名 https 仓库,`gh:`/`url`/`local:`/`mjm:` 列为"未检查";预发布默认不报(除非当前就是预发布);跨 major 单独一节;`--json` 输出 `upToDate`/`updates`/`notChecked`/`failures` |
 | `--offline` | ✅ | 禁止一切网络访问;store 有则用,缺则报错。`update`/`publish`/`outdated` 不适用 |
 | daemon 常驻 | **M6** | 已确认需要:常驻 JVM 热命令,mvnd 已验证可快 2–4 倍 |
 | workspaces/monorepo | V2 | 设计模板 = go.work 模式:`mjm.work.toml` 本地覆盖文件,gitignore 不提交 |

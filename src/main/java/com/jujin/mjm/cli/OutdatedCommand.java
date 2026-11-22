@@ -54,11 +54,25 @@ public final class OutdatedCommand implements Command {
         return false;
     }
 
+    /** One newer version that is the same major as the pin. */
+    private record Update(String id, String pinned, String available, boolean major) {}
+
+    /** A row nobody can compare, with a short machine label and the human text. */
+    private record Skipped(String id, String reason, String detail) {}
+
+    /** A lookup that failed. */
+    private record Failed(String id, String error) {}
+
     @Override
     public int execute(List<String> args) {
-        if (!args.isEmpty()) {
-            System.err.println("mjm: outdated takes no arguments");
-            return 2;
+        boolean json = false;
+        for (String arg : args) {
+            if (arg.equals("--json")) {
+                json = true;
+            } else {
+                System.err.println("mjm: outdated takes no arguments except --json");
+                return 2;
+            }
         }
         MjProject project;
         Path lock = projectDir.resolve("mjm.lock");
@@ -79,30 +93,33 @@ public final class OutdatedCommand implements Command {
             return 1;
         }
 
-        List<String> updates = new ArrayList<>();
-        List<String> majorJumps = new ArrayList<>();
-        List<String> unchecked = new ArrayList<>();
-        List<String> failures = new ArrayList<>();
+        List<Update> updates = new ArrayList<>();
+        List<Update> majorJumps = new ArrayList<>();
+        List<Skipped> unchecked = new ArrayList<>();
+        List<Failed> failures = new ArrayList<>();
         int checked = 0;
 
         for (LockedArtifact artifact : locked) {
             String source = artifact.source();
             if (source.startsWith("gh:")) {
-                unchecked.add(artifact.id() + " (mj-native: the tag is the version)");
+                unchecked.add(new Skipped(artifact.id(), "mj-native",
+                        "mj-native: the tag is the version"));
                 continue;
             }
             if (source.equals("url")) {
-                unchecked.add(artifact.id() + " (bare URL: no metadata)");
+                unchecked.add(new Skipped(artifact.id(), "bare-url",
+                        "bare URL: no metadata"));
                 continue;
             }
 
             if (source.startsWith("local:") || source.startsWith("file:")) {
-                unchecked.add(artifact.id() + " (local repository: no version listing)");
+                unchecked.add(new Skipped(artifact.id(), "local-repository",
+                        "local repository: no version listing"));
                 continue;
             }
             if (source.startsWith("mjm:")) {
-                unchecked.add(artifact.id()
-                        + " (mjm: repository: the layout has no version index)");
+                unchecked.add(new Skipped(artifact.id(), "mjm-repository",
+                        "mjm: repository: the layout has no version index"));
                 continue;
             }
 
@@ -112,12 +129,12 @@ public final class OutdatedCommand implements Command {
                         source.equals("central") ? ArtifactLocations.centralBase() : source,
                         group(artifact.id()), artifactName(artifact.id()));
             } catch (RuntimeException e) {
-                failures.add(artifact.id() + " — " + e.getMessage());
+                failures.add(new Failed(artifact.id(), String.valueOf(e.getMessage())));
                 continue;
             }
 
             if (available.isEmpty()) {
-                failures.add(artifact.id() + " — no versions listed");
+                failures.add(new Failed(artifact.id(), "no versions listed"));
                 continue;
             }
             checked++;
@@ -132,48 +149,102 @@ public final class OutdatedCommand implements Command {
             Integer pinnedMajor = Versions.majorOf(pinned);
             Integer newestMajor = Versions.majorOf(newest);
             boolean sameMajor = pinnedMajor != null && pinnedMajor.equals(newestMajor);
-            String line = artifact.id() + "  " + pinned + " → " + newest;
-            (sameMajor ? updates : majorJumps).add(line);
+            (sameMajor ? updates : majorJumps).add(
+                    new Update(artifact.id(), pinned, newest, !sameMajor));
         }
 
-        report(updates, majorJumps, unchecked, failures, checked);
+        boolean upToDate = checked > 0 && unchecked.isEmpty() && failures.isEmpty()
+                && updates.isEmpty() && majorJumps.isEmpty();
+        if (json) {
+            printJson(updates, majorJumps, unchecked, failures, upToDate);
+        } else {
+            report(updates, majorJumps, unchecked, failures, upToDate);
+        }
         return failures.isEmpty() ? 0 : 1;
     }
 
-    private void report(List<String> updates, List<String> majorJumps,
-                        List<String> unchecked, List<String> failures, int checked) {
+    /** One JSON document on stdout; nothing else. */
+    private void printJson(List<Update> updates, List<Update> majorJumps,
+                           List<Skipped> unchecked, List<Failed> failures,
+                           boolean upToDate) {
+        var root = com.jujin.freeway.commons.json.JsonUtils.object();
+        root.put("upToDate", upToDate);
+
+        var updateArray = com.jujin.freeway.commons.json.JsonUtils.array();
+        for (Update update : updates) {
+            var entry = com.jujin.freeway.commons.json.JsonUtils.object();
+            entry.put("id", update.id());
+            entry.put("pinned", update.pinned());
+            entry.put("available", update.available());
+            entry.put("major", update.major());
+            updateArray.add(entry);
+        }
+        for (Update update : majorJumps) {
+            var entry = com.jujin.freeway.commons.json.JsonUtils.object();
+            entry.put("id", update.id());
+            entry.put("pinned", update.pinned());
+            entry.put("available", update.available());
+            entry.put("major", true);
+            updateArray.add(entry);
+        }
+        root.put("updates", updateArray);
+
+        var skippedArray = com.jujin.freeway.commons.json.JsonUtils.array();
+        for (Skipped skipped : unchecked) {
+            var entry = com.jujin.freeway.commons.json.JsonUtils.object();
+            entry.put("id", skipped.id());
+            entry.put("reason", skipped.reason());
+            skippedArray.add(entry);
+        }
+        root.put("notChecked", skippedArray);
+
+        var failedArray = com.jujin.freeway.commons.json.JsonUtils.array();
+        for (Failed failure : failures) {
+            var entry = com.jujin.freeway.commons.json.JsonUtils.object();
+            entry.put("id", failure.id());
+            entry.put("error", failure.error());
+            failedArray.add(entry);
+        }
+        root.put("failures", failedArray);
+
+        System.out.println(root);
+    }
+
+    private void report(List<Update> updates, List<Update> majorJumps,
+                        List<Skipped> unchecked, List<Failed> failures, boolean upToDate) {
         // "up to date" is a claim about the whole closure: it needs a comparison
         // for every row. Nothing checked (all gh:/url/local:), a skipped source,
         // or a failed lookup each make the honest answer the section below.
-        if (checked > 0 && unchecked.isEmpty() && failures.isEmpty()
-                && updates.isEmpty() && majorJumps.isEmpty()) {
+        if (upToDate) {
             System.out.println("everything is up to date");
         }
         if (!updates.isEmpty()) {
             System.out.println("updates available:");
-            for (String line : updates) {
-                System.out.println("  " + line);
+            for (Update update : updates) {
+                System.out.println("  " + update.id() + "  " + update.pinned()
+                        + " → " + update.available());
             }
         }
         if (!majorJumps.isEmpty()) {
             System.out.println();
             System.out.println("major version changes (the resolver refuses these silently):");
-            for (String line : majorJumps) {
-                System.out.println("  " + line);
+            for (Update update : majorJumps) {
+                System.out.println("  " + update.id() + "  " + update.pinned()
+                        + " → " + update.available());
             }
         }
         if (!unchecked.isEmpty()) {
             System.out.println();
             System.out.println("not checked:");
-            for (String line : unchecked) {
-                System.out.println("  " + line);
+            for (Skipped skipped : unchecked) {
+                System.out.println("  " + skipped.id() + " (" + skipped.detail() + ")");
             }
         }
         if (!failures.isEmpty()) {
             System.out.println();
             System.out.println("could not check:");
-            for (String line : failures) {
-                System.out.println("  " + line);
+            for (Failed failure : failures) {
+                System.out.println("  " + failure.id() + " — " + failure.error());
             }
         }
         if (!updates.isEmpty()) {

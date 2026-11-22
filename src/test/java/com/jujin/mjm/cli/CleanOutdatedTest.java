@@ -295,6 +295,78 @@ class CleanOutdatedTest {
     }
 
     @Test
+    void theJsonReportHasTheSameThreeSections() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        byte[] minor = metadata("1.0.0", "1.1.0");
+        server.createContext("/com/example/lib-a/maven-metadata.xml", exchange -> {
+            exchange.sendResponseHeaders(200, minor.length);
+            exchange.getResponseBody().write(minor);
+            exchange.close();
+        });
+        server.createContext("/", exchange -> {
+            exchange.sendResponseHeaders(404, -1);
+            exchange.close();
+        });
+        server.start();
+        System.setProperty("mjm.central.base",
+                "http://localhost:" + server.getAddress().getPort() + "/");
+        try {
+            projectWithLock(centralRow("com.example:lib-a", "1.0.0")
+                    + centralRow("com.example:lib-c", "1.0.0") + """
+                [[artifacts]]
+                id = "acme:mylib"
+                version = "1.0.0"
+                source = "gh:acme/mylib"
+                url = "https://github.com/acme/mylib/releases/download/v1.0.0/mylib-1.0.0.jar"
+                sha256 = "%s"
+                meta-sha256 = "%s"
+                depth = 1
+                """.formatted(SHA, SHA));
+
+            String out = runOutdated(1, "--json");
+
+            var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(out);
+            assertEquals(false, json.getBoolean("upToDate"));
+            var updates = json.getArray("updates");
+            assertEquals(1, updates.size());
+            assertEquals("com.example:lib-a", updates.getObject(0).getString("id"));
+            assertEquals("1.0.0", updates.getObject(0).getString("pinned"));
+            assertEquals("1.1.0", updates.getObject(0).getString("available"));
+            assertEquals(false, updates.getObject(0).getBoolean("major"));
+            var skipped = json.getArray("notChecked");
+            assertEquals(1, skipped.size());
+            assertEquals("mj-native", skipped.getObject(0).getString("reason"));
+            var failures = json.getArray("failures");
+            assertEquals(1, failures.size());
+            assertEquals("com.example:lib-c", failures.getObject(0).getString("id"));
+        } finally {
+            server.stop(0);
+            System.clearProperty("mjm.central.base");
+        }
+    }
+
+    @Test
+    void theJsonReportSaysUpToDateWhenItIs() throws Exception {
+        HttpServer server = server(200, metadata("1.0.0"));
+        System.setProperty("mjm.central.base",
+                "http://localhost:" + server.getAddress().getPort() + "/");
+        try {
+            projectWithLock(centralRow("com.example:lib-a", "1.0.0"));
+
+            var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                    runOutdated(0, "--json"));
+
+            assertEquals(true, json.getBoolean("upToDate"));
+            assertEquals(0, json.getArray("updates").size());
+            assertEquals(0, json.getArray("notChecked").size());
+            assertEquals(0, json.getArray("failures").size());
+        } finally {
+            server.stop(0);
+            System.clearProperty("mjm.central.base");
+        }
+    }
+
+    @Test
     void nothingCheckedMeansNoUpToDateClaim() throws Exception {
         projectWithLock("""
             [[artifacts]]
@@ -562,12 +634,16 @@ class CleanOutdatedTest {
     }
 
     private String runOutdated(int expectedExit) {
+        return runOutdated(expectedExit, new String[0]);
+    }
+
+    private String runOutdated(int expectedExit, String... args) {
         PrintStream original = System.out;
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         int exit;
         try {
             System.setOut(new PrintStream(buffer, true, StandardCharsets.UTF_8));
-            exit = new OutdatedCommand(dir).execute(List.of());
+            exit = new OutdatedCommand(dir).execute(List.of(args));
         } finally {
             System.setOut(original);
         }

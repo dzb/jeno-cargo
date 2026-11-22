@@ -247,16 +247,16 @@ the next invocation.
 |---|---|
 | `init` / `init --pom` | create a project, or migrate one from Maven |
 | `add` / `remove` | edit a declaration and re-lock. `add` writes the value shape (`1.2.3`, `corp:1.2.3`, `gh:owner/repo@tag`, or the shorthand `owner/repo@tag`) |
-| `lock` | resolve, download, pin |
+| `lock [--check] [--refresh]` | resolve, download, pin. `--check` regenerates in memory and compares byte-for-byte with the lock on disk (Cargo's `--locked`); it fetches metadata, so it needs the network unless every byte is already in the store |
 | `build` | compile against declared deps only |
 | `test` | forked JVM: `@MjmTest` + JUnit Jupiter |
 | `run` | run on the resolved closure |
-| `tree` / `why` | see the graph and every introduction path |
+| `tree [--json]` / `why` | see the graph and every introduction path; `tree --json` is one machine-readable document (id-sorted artifacts, sorted children) |
 | `info [--source]` | everything about one dependency, including its source |
 | `package [--uber]` | the jar. `--uber` merges the closure and writes `...-uber.jar`, so the two never overwrite each other |
 | `bundle` | an installable distribution (bin + lib + setup.sh + tar.gz) |
 | `clean [--target] [--dist]` | remove `target/` by default; `--dist` also removes `dist/`; never the store |
-| `outdated` | pinned dependencies with newer versions available |
+| `outdated [--json]` | pinned dependencies with newer versions available; `--json` gives `upToDate`/`updates`/`notChecked`/`failures` |
 | `publish [target]` | the release triple; `gh:owner/repo`, `mjm:https://host/` (two levels, no group), or any `http(s)://` host (Maven layout over PUT, needs group) |
 | `update` / `upgrade` | self-upgrade from GitHub Releases |
 | `--offline` (flag) | refuse all network access — store hits only. Not for `update`/`publish`/`outdated`, which are network by nature |

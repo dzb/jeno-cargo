@@ -57,6 +57,11 @@ public final class TreeCommand implements Command {
     }
 
     @Override
+    public String usage() {
+        return "[--json]";
+    }
+
+    @Override
     public String help() {
         return """
                each artifact prints once, at its first occurrence: a declared
@@ -66,6 +71,15 @@ public final class TreeCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        boolean json = false;
+        for (String arg : args) {
+            if (arg.equals("--json")) {
+                json = true;
+            } else {
+                System.err.println("mjm: tree takes no arguments except --json");
+                return 2;
+            }
+        }
         MjProject project;
         try {
             project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
@@ -79,6 +93,11 @@ public final class TreeCommand implements Command {
         Map<String, ResolvedGraph.ResolvedArtifact> byId = new java.util.LinkedHashMap<>();
         for (ResolvedGraph.ResolvedArtifact artifact : graph.artifacts()) {
             byId.put(artifact.id(), artifact);
+        }
+
+        if (json) {
+            printJson(project, graph);
+            return 0;
         }
 
         System.out.println(project.name() + "@" + project.version()
@@ -115,6 +134,50 @@ public final class TreeCommand implements Command {
                 expand(child, prefix + (last ? "   " : "│  "), graph, printed);
             }
         }
+    }
+
+    /**
+     * One JSON document, nothing else: the artifact list plus each artifact's
+     * children. No nested tree — a consumer walks {@code children}, so the same
+     * fact is never represented twice.
+     */
+    private static void printJson(MjProject project, ResolvedGraph graph) {
+        var root = com.jujin.freeway.commons.json.JsonUtils.object();
+        var identity = com.jujin.freeway.commons.json.JsonUtils.object();
+        identity.put("name", project.name());
+        identity.put("version", project.version());
+        root.put("project", identity);
+        root.put("budget", project.maxDepth());
+
+        var roots = com.jujin.freeway.commons.json.JsonUtils.array();
+        java.util.List<Requirement> requirements = new ArrayList<>(project.requirements());
+        requirements.addAll(project.devRequirements());
+        for (Requirement requirement : requirements) {
+            roots.add(requirement.id());
+        }
+        root.put("roots", roots);
+
+        var artifacts = com.jujin.freeway.commons.json.JsonUtils.array();
+        graph.artifacts().stream()
+                .sorted(java.util.Comparator.comparing(ResolvedGraph.ResolvedArtifact::id))
+                .forEach(artifact -> {
+                    var entry = com.jujin.freeway.commons.json.JsonUtils.object();
+                    entry.put("id", artifact.id());
+                    entry.put("version", artifact.version());
+                    entry.put("depth", artifact.depth());
+                    entry.put("declared", artifact.declared());
+                    entry.put("dev", artifact.scope()
+                            == com.jujin.mjm.resolve.Scope.DEV);
+                    var children = com.jujin.freeway.commons.json.JsonUtils.array();
+                    graph.edges().getOrDefault(artifact.id(), List.of()).stream()
+                            .sorted()
+                            .forEach(children::add);
+                    entry.put("children", children);
+                    artifacts.add(entry);
+                });
+        root.put("artifacts", artifacts);
+
+        System.out.println(root);
     }
 
     private static String line(ResolvedGraph.ResolvedArtifact artifact, String suffix) {

@@ -248,6 +248,70 @@ class TreeWhyTest {
     }
 
     @Test
+    void treeJsonIsOneDocumentWithTheSameFacts() throws Exception {
+        Path repo = dir.resolve("fix-repo");
+        pom(repo, "com/example/lib-a/1.0.0", "lib-a", "1.0.0", """
+            <dependencies>
+              <dependency>
+                <groupId>com.example</groupId>
+                <artifactId>lib-b</artifactId>
+                <version>1.1.0</version>
+              </dependency>
+            </dependencies>
+            """);
+        pom(repo, "com/example/lib-b/1.1.0", "lib-b", "1.1.0", """
+            <dependencies>
+              <dependency>
+                <groupId>com.example</groupId>
+                <artifactId>lib-c</artifactId>
+                <version>2.0.0</version>
+              </dependency>
+            </dependencies>
+            """);
+        pom(repo, "com/example/lib-c/2.0.0", "lib-c", "2.0.0", "");
+        pom(repo, "com/example/lib-d/1.0.0", "lib-d", "1.0.0", "");
+        Files.writeString(dir.resolve("mjm.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [limits]
+            max-depth = 5
+
+            [repos]
+            fix = "local:%s"
+
+            [deps.fix]
+            "com.example:lib-a" = "1.0.0"
+            "com.example:lib-d" = "1.0.0"
+            """.formatted(repo));
+
+        TreeCommand tree = new TreeCommand(new ArtifactStore(dir.resolve("store")),
+                localPomSource(), text -> { throw new IllegalStateException("no natives here"); },
+                dir);
+        assertEquals(0, tree.execute(List.of("--json")));
+
+        String json = readConsole();
+        var root = com.jujin.freeway.commons.json.JsonUtils.parseObject(json);
+        var roots = root.getArray("roots");
+        assertEquals(2, roots.size(), "one entry per declaration");
+        assertEquals("com.example:lib-a", roots.getString(0), "declaration order");
+        assertEquals("com.example:lib-d", roots.getString(1));
+
+        var artifacts = root.getArray("artifacts");
+        java.util.List<String> ids = new java.util.ArrayList<>();
+        java.util.Map<String, Integer> depths = new java.util.HashMap<>();
+        for (int i = 0; i < artifacts.size(); i++) {
+            var entry = artifacts.getObject(i);
+            ids.add(entry.getString("id"));
+            depths.put(entry.getString("id"), entry.getInt("depth"));
+        }
+        assertEquals(ids.stream().sorted().toList(), ids, "artifacts are id-sorted");
+        assertEquals(3, depths.get("com.example:lib-c"), "the same depth the tree prints");
+        assertEquals(5, root.getInt("budget"));
+    }
+
+    @Test
     void treeMarksDevRootsAndTheirSubtrees() throws Exception {
         Path repo = dir.resolve("fix-repo");
         pom(repo, "com/example/lib-b/1.1.0", "lib-b", "1.1.0", """
