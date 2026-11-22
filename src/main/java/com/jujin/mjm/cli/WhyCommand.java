@@ -68,6 +68,7 @@ public final class WhyCommand implements Command {
             return 1;
         }
         ResolvedGraph graph = Resolver.resolve(project, pomSource, descriptorSource);
+        Substitutions substitutions = Substitutions.forProject(projectDir);
 
         ResolvedGraph.ResolvedArtifact artifact = graph.artifacts().stream()
                 .filter(a -> a.id().equals(target))
@@ -80,7 +81,8 @@ public final class WhyCommand implements Command {
         }
 
         System.out.println(target + "@" + artifact.version() + " — depth " + artifact.depth()
-                + (artifact.declared() ? ", declared directly" : ""));
+                + (artifact.declared() ? ", declared directly" : "")
+                + substitutions.marker(artifact.id()));
         List<List<String>> paths = paths(graph, target);
         if (paths.isEmpty()) {
             System.out.println("  (declared: the root of its own path)");

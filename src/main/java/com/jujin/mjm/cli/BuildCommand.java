@@ -84,9 +84,12 @@ public final class BuildCommand implements Command {
             }
         }
 
-        Map<String, Path> jarById;
+        Substitutions substitutions;
         try {
-            jarById = store.verifiedJars(locked);
+            substitutions = Substitutions.forProject(projectDir);
+            // a workspace module supplies its own classes; every other row must
+            // still be present and intact in the store
+            store.verifiedJars(locked, artifact -> substitutions.find(artifact.id()) != null);
         } catch (RuntimeException e) {
             System.err.println("mjm: " + e.getMessage());
             return 1;
@@ -95,8 +98,8 @@ public final class BuildCommand implements Command {
         String compileClasspath;
         try {
             compileClasspath = ClasspathAssembler.of(ClasspathAssembler.Mode.COMPILE,
-                    projectDir, store,
-                    ClasspathAssembler.Input.compile(project, jarById)).joined();
+                    projectDir, store, substitutions,
+                    ClasspathAssembler.Input.compile(project, locked)).joined();
         } catch (ClasspathAssembler.ClasspathException e) {
             System.err.println("mjm: " + e.getMessage());
             return 1;
@@ -136,7 +139,8 @@ public final class BuildCommand implements Command {
         List<String> processorPath = new ArrayList<>();
         for (LockedArtifact artifact : locked) {
             if (artifact.scope() == com.jujin.mjm.resolve.Scope.PROCESSOR) {
-                processorPath.add(jarById.get(artifact.id()).toString());
+                processorPath.add(ClasspathAssembler.artifactPath(
+                        artifact, store, substitutions, false).toString());
             }
         }
         if (!processorPath.isEmpty()) {

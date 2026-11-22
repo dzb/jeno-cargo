@@ -100,6 +100,7 @@ public final class PackageCommand implements Command {
         MjProject project;
         List<LockedArtifact> locked;
         Map<String, Path> jars;
+        Substitutions substitutions;
         try {
             var mjToml = projectDir.resolve("mjm.toml");
             var mjLock = projectDir.resolve("mjm.lock");
@@ -114,7 +115,9 @@ public final class PackageCommand implements Command {
                 return 1;
             }
             locked = LockFileReader.read(Files.readString(mjLock));
-            jars = store.verifiedJars(locked);
+            substitutions = Substitutions.forProject(projectDir);
+            jars = store.verifiedJars(locked,
+                    artifact -> substitutions.find(artifact.id()) != null);
         } catch (IOException | RuntimeException e) {
             System.err.println("mjm: " + e.getMessage());
             return 1;
@@ -124,7 +127,7 @@ public final class PackageCommand implements Command {
             mainClass = project.main();
         }
 
-        return uber ? uberJar(project, locked, jars, mainClass)
+        return uber ? uberJar(project, locked, jars, substitutions, mainClass)
                     : plainJar(project, mainClass);
     }
 
@@ -192,7 +195,8 @@ public final class PackageCommand implements Command {
 
     /** --uber: project classes + all closure jars merged into one. */
     private int uberJar(MjProject project, List<LockedArtifact> locked,
-                        Map<String, Path> jars, String mainClass) {
+                        Map<String, Path> jars, Substitutions substitutions,
+                        String mainClass) {
         String name = project.name();
         String version = project.version();
         // distinct from the plain jar: the two carry different bytes, and one
@@ -211,12 +215,29 @@ public final class PackageCommand implements Command {
             System.err.println("mjm: " + CLASSES + " is missing — run mjm build first");
             return 1;
         }
+        // the closure in lock order: a workspace module contributes its classes,
+        // everything else its verified jar — never a stale copy of the former
+        List<Path> mergeJars = new ArrayList<>();
+        List<Path> mergeDirs = new ArrayList<>();
+        for (LockedArtifact artifact : locked) {
+            if (!artifact.isMain()) {
+                continue;
+            }
+            Substitutions.Module local = substitutions.find(artifact.id());
+            if (local != null) {
+                mergeDirs.add(substitutions.localClasses(local, artifact.version()));
+                substitutions.noteEmbedded(local);
+            } else {
+                Path jar = jars.get(artifact.id());
+                if (jar != null) {
+                    mergeJars.add(jar);
+                }
+            }
+        }
         try {
             DistOutput.clear(output);
             UberJar.write(output,
-                    new UberJar.Input(classes, new ArrayList<>(
-                            UberJar.mainJars(locked, jars).values()),
-                            UberJar.labels(locked)),
+                    new UberJar.Input(classes, mergeJars, mergeDirs, UberJar.labels(locked)),
                     new UberJar.Header(name, version, mainClass));
         } catch (IOException e) {
             System.err.println("mjm: packaging failed: " + e.getMessage());

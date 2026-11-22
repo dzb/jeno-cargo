@@ -33,6 +33,11 @@ import java.util.Map;
  *       except processors; the IDE's test classpath.</li>
  * </ul>
  *
+ * <p>Workspace lookups go through {@link Substitutions}: a lock row that names
+ * a local module becomes that module's {@code target/classes}, and only a row
+ * that does not is looked up in the store. The decision lives in one method
+ * ({@link #artifactPath}) so every mode — and packaging — cannot disagree.
+ *
  * <p><b>Known inconsistency, deliberately unchanged:</b> {@code TEST} includes
  * processor-scope artifacts while {@code EXPORT_TEST} excludes them. Both
  * behaviours predate this class; deciding which is right is its own change
@@ -47,8 +52,8 @@ final class ClasspathAssembler {
                  Map<String, Path> verifiedJars, List<Path> toolchain,
                  Path runtimeLocation, boolean includeTestOutput) {
 
-        static Input compile(MjProject project, Map<String, Path> verifiedJars) {
-            return new Input(project, List.of(), verifiedJars, List.of(), null, false);
+        static Input compile(MjProject project, List<LockedArtifact> locked) {
+            return new Input(project, locked, Map.of(), List.of(), null, false);
         }
 
         static Input test(List<LockedArtifact> locked, List<Path> toolchain,
@@ -80,16 +85,25 @@ final class ClasspathAssembler {
     }
 
     static Classpath of(Mode mode, Path projectDir, ArtifactStore store, Input input) {
+        return of(mode, projectDir, store, Substitutions.forProject(projectDir), input);
+    }
+
+    static Classpath of(Mode mode, Path projectDir, ArtifactStore store,
+                        Substitutions substitutions, Input input) {
         List<Path> entries = new ArrayList<>();
         switch (mode) {
             case COMPILE -> {
+                Map<String, LockedArtifact> byId = new LinkedHashMap<>();
+                for (LockedArtifact artifact : input.locked()) {
+                    byId.put(artifact.id(), artifact);
+                }
                 for (Requirement requirement : input.project().requirements()) {
-                    Path jar = input.verifiedJars().get(requirement.id());
-                    if (jar == null) {
+                    LockedArtifact artifact = byId.get(requirement.id());
+                    if (artifact == null) {
                         throw new ClasspathException("mjm.lock is stale — '" + requirement.id()
                                 + "' is declared in mjm.toml but not locked; run mjm lock");
                     }
-                    entries.add(jar);
+                    entries.add(artifactPath(artifact, store, substitutions, false));
                 }
             }
             case TEST -> {
@@ -99,7 +113,7 @@ final class ClasspathAssembler {
                 }
                 entries.add(projectDir.resolve("target/classes"));
                 for (LockedArtifact artifact : input.locked()) {
-                    Path jar = storeJar(artifact, store, true);
+                    Path jar = artifactPath(artifact, store, substitutions, true);
                     if (jar != null) {
                         entries.add(jar);
                     }
@@ -113,7 +127,7 @@ final class ClasspathAssembler {
                     if (!artifact.isMain()) {
                         continue;  // [dev-deps] never reaches a production run
                     }
-                    entries.add(storeJar(artifact, store, false));
+                    entries.add(artifactPath(artifact, store, substitutions, false));
                 }
             }
             case EXPORT_MAIN -> {
@@ -129,7 +143,7 @@ final class ClasspathAssembler {
                                 + requirement.id() + "' is declared in mjm.toml but not locked; "
                                 + "run mjm lock");
                     }
-                    entries.add(storeJar(artifact, store, false));
+                    entries.add(artifactPath(artifact, store, substitutions, false));
                 }
             }
             case EXPORT_TEST -> {
@@ -139,7 +153,7 @@ final class ClasspathAssembler {
                     if (artifact.scope() == Scope.PROCESSOR) {
                         continue;  // processors are build tools, not an API
                     }
-                    entries.add(storeJar(artifact, store, false));
+                    entries.add(artifactPath(artifact, store, substitutions, false));
                 }
             }
         }
@@ -147,21 +161,19 @@ final class ClasspathAssembler {
     }
 
     /**
-     * The one place an artifact becomes a path on disk. A workspace replacing a
-     * lock row with a local project will hook in here — nothing else knows how
-     * a classpath entry is found.
+     * The one place an artifact becomes a path on disk: a workspace module wins,
+     * otherwise the store copy. Nothing else knows how a classpath entry is found.
      *
      * @param tolerateMissing TEST skips jars the store lost (it always did);
      *                        every other mode fails with the next action
      */
-    private static Path storeJar(LockedArtifact artifact, ArtifactStore store,
-                                 boolean tolerateMissing) {
-        Path jar = store.findByDigest(artifact.sha256(), ArtifactStore.Kind.JAR);
-        if (jar == null && !tolerateMissing) {
-            throw new ClasspathException(artifact.id() + "@" + artifact.version()
-                    + " is not in the store — run mjm lock");
+    static Path artifactPath(LockedArtifact artifact, ArtifactStore store,
+                             Substitutions substitutions, boolean tolerateMissing) {
+        try {
+            return substitutions.pathOf(artifact, store, tolerateMissing);
+        } catch (Substitutions.LocalException e) {
+            throw new ClasspathException(e.getMessage());
         }
-        return jar;
     }
 
     /** Joining for the one non-classpath path list (the processor path). */

@@ -118,7 +118,7 @@ class ClasspathAssemblerTest {
     @Test
     void everyModeKeepsItsOldShape() throws Exception {
         List<String> compile = strings(ClasspathAssembler.Mode.COMPILE,
-                ClasspathAssembler.Input.compile(project, store.verifiedJars(locked)));
+                ClasspathAssembler.Input.compile(project, locked));
         List<String> test = strings(ClasspathAssembler.Mode.TEST,
                 ClasspathAssembler.Input.test(locked, List.of(),
                         dir.resolve("target/classes"), true));
@@ -168,7 +168,7 @@ class ClasspathAssemblerTest {
     void aStaleLockIsNamedByTheAssembler() throws Exception {
         var error = assertThrows(ClasspathAssembler.ClasspathException.class,
                 () -> ClasspathAssembler.of(ClasspathAssembler.Mode.COMPILE, dir, store,
-                        ClasspathAssembler.Input.compile(project, Map.of())));
+                        ClasspathAssembler.Input.compile(project, List.of())));
 
         assertTrue(error.getMessage().contains("mjm.lock is stale"), error.getMessage());
         assertTrue(error.getMessage().contains("com.example:lib-main"), error.getMessage());

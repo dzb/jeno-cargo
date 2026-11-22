@@ -155,12 +155,15 @@ public final class BundleCommand implements Command {
         MjProject project;
         List<LockedArtifact> locked;
         Map<String, Path> jars;
+        Substitutions substitutions;
         try {
             project = ProjectReader.parse(
                     Files.readString(projectDir.resolve("mjm.toml")));
             locked = LockFileReader.read(
                     Files.readString(projectDir.resolve("mjm.lock")));
-            jars = store.verifiedJars(locked);
+            substitutions = Substitutions.forProject(projectDir);
+            jars = store.verifiedJars(locked,
+                    artifact -> substitutions.find(artifact.id()) != null);
         } catch (IOException | RuntimeException e) {
             System.err.println("mjm: " + e.getMessage());
             return 1;
@@ -201,19 +204,35 @@ public final class BundleCommand implements Command {
             // (freeway, slf4j) merged in. They are mjm's skeleton, not swappable
             // dependencies — a user never picks a different freeway-ioc. The
             // lifecycle toolchain (junit) is separate: only `mjm test` needs it.
-            Map<String, Path> mainJars = UberJar.mainJars(locked, jars);
-            List<Path> toolchainJars = toolchainJars(locked, jars);
-            // the skeleton alone merges; test-only jars go to lib/toolchain
+            // the skeleton alone merges; test-only jars go to lib/toolchain.
+            // A workspace module contributes its classes wherever its jar would
+            // have gone, so the dist carries the local code, not the locked copy.
             List<Path> mergeJars = new ArrayList<>();
-            for (Map.Entry<String, Path> entry : mainJars.entrySet()) {
-                if (!isTestOnly(entry.getKey())) {
-                    mergeJars.add(entry.getValue());
+            List<Path> mergeDirs = new ArrayList<>();
+            List<LockedArtifact> toolchainRows = new ArrayList<>();
+            for (LockedArtifact artifact : locked) {
+                if (!artifact.isMain()) {
+                    continue;
+                }
+                if (isTestOnly(artifact.id())) {
+                    toolchainRows.add(artifact);
+                    continue;
+                }
+                Substitutions.Module local = substitutions.find(artifact.id());
+                if (local != null) {
+                    mergeDirs.add(substitutions.localClasses(local, artifact.version()));
+                    substitutions.noteEmbedded(local);
+                } else {
+                    Path jar = jars.get(artifact.id());
+                    if (jar != null) {
+                        mergeJars.add(jar);
+                    }
                 }
             }
             try {
                 UberJar.write(lib.resolve(name + "-" + version + ".jar"),
                         new UberJar.Input(projectDir.resolve(CLASSES), mergeJars,
-                                UberJar.labels(locked)),
+                                mergeDirs, UberJar.labels(locked)),
                         new UberJar.Header(name, version,
                                 project.main() == null || project.main().isBlank()
                                         ? null : project.main()));
@@ -223,17 +242,24 @@ public final class BundleCommand implements Command {
             }
 
             // the lifecycle toolchain — shipped apart, loaded only by mjm test
-            if (!toolchainJars.isEmpty()) {
+            if (!toolchainRows.isEmpty()) {
                 Path toolchainDir = lib.resolve("toolchain");
                 Files.createDirectories(toolchainDir);
-                for (LockedArtifact artifact : locked) {
-                    if (!isTestOnly(artifact.id())) {
+                for (LockedArtifact artifact : toolchainRows) {
+                    Path destination = toolchainDir.resolve(originalName(artifact));
+                    Substitutions.Module local = substitutions.find(artifact.id());
+                    if (local != null) {
+                        substitutions.localClasses(local, artifact.version());
+                        substitutions.noteEmbedded(local);
+                        if (jar(local.classes(), destination, local.id(), local.version(),
+                                null) != 0) {
+                            return 1;
+                        }
                         continue;
                     }
                     Path jar = jars.get(artifact.id());
                     if (jar != null) {
-                        Files.copy(jar, toolchainDir.resolve(originalName(artifact)),
-                                StandardCopyOption.REPLACE_EXISTING);
+                        Files.copy(jar, destination, StandardCopyOption.REPLACE_EXISTING);
                     }
                 }
             }
@@ -357,20 +383,6 @@ public final class BundleCommand implements Command {
      * <p>Recognized by group: {@code org.junit.*} and {@code org.opentest4j}.
      * Anything else in the closure is skeleton and merges into the jar.
      */
-    private static List<Path> toolchainJars(List<LockedArtifact> locked,
-                                            Map<String, Path> jars) {
-        List<Path> toolchain = new ArrayList<>();
-        for (LockedArtifact artifact : locked) {
-            if (isTestOnly(artifact.id())) {
-                Path jar = jars.get(artifact.id());
-                if (jar != null) {
-                    toolchain.add(jar);
-                }
-            }
-        }
-        return toolchain;
-    }
-
     /** Jars that exist only to run tests — the lifecycle toolchain. */
     private static boolean isTestOnly(String id) {
         // apiguardian rides with junit: it is the annotation jar junit's own API

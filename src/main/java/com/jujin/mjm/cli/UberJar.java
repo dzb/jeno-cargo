@@ -34,12 +34,21 @@ final class UberJar {
 
     private UberJar() {}
 
-    /** What to merge: the classes tree plus the jars, in merge order. */
-    record Input(Path classes, List<Path> jars, List<String> dependencyLabels) {
+    /**
+     * What to merge: the project's classes, any local workspace module's classes
+     * (its jar never existed), then the jars, in merge order.
+     */
+    record Input(Path classes, List<Path> jars, List<Path> classDirs,
+                 List<String> dependencyLabels) {
 
         Input {
             jars = List.copyOf(jars);
+            classDirs = List.copyOf(classDirs);
             dependencyLabels = List.copyOf(dependencyLabels);
+        }
+
+        Input(Path classes, List<Path> jars, List<String> dependencyLabels) {
+            this(classes, jars, List.of(), dependencyLabels);
         }
     }
 
@@ -77,7 +86,7 @@ final class UberJar {
             // are dead weight, and with it set for a jar that has none the JVM
             // just finds nothing to override — both harmless, but only one is
             // correct for a jar that does carry them.
-            if (carriesVersionedEntries(input.jars())) {
+            if (carriesVersionedEntries(input.jars(), input.classDirs())) {
                 attributes.put(new Attributes.Name("Multi-Release"), "true");
             }
             out.putNextEntry(new ZipEntry("META-INF/MANIFEST.MF"));
@@ -96,6 +105,26 @@ final class UberJar {
             }
 
             Map<String, Set<String>> services = new TreeMap<>();
+            for (Path classDir : input.classDirs()) {
+                try (Stream<Path> stream = Files.walk(classDir)) {
+                    for (Path file : stream.filter(Files::isRegularFile).toList()) {
+                        String name = classDir.relativize(file).toString().replace('\\', '/');
+                        if (name.equals("META-INF/MANIFEST.MF") || isSignature(name)
+                                || isModuleInfo(name)) {
+                            continue;
+                        }
+                        byte[] bytes = Files.readAllBytes(file);
+                        if (name.startsWith("META-INF/services/")) {
+                            services.computeIfAbsent(name, key -> new LinkedHashSet<>())
+                                    .addAll(serviceLines(bytes));
+                            continue;
+                        }
+                        if (written.add(name)) {
+                            writeEntry(out, name, bytes);
+                        }
+                    }
+                }
+            }
             for (Path jar : input.jars()) {
                 try (JarInputStream in = new JarInputStream(Files.newInputStream(jar))) {
                     JarEntry entry;
@@ -124,8 +153,17 @@ final class UberJar {
         }
     }
 
-    /** Whether any of these jars carries {@code META-INF/versions/} entries. */
-    private static boolean carriesVersionedEntries(List<Path> jars) throws IOException {
+    /** Whether any of these sources carries {@code META-INF/versions/} entries. */
+    private static boolean carriesVersionedEntries(List<Path> jars, List<Path> classDirs)
+            throws IOException {
+        for (Path dir : classDirs) {
+            try (Stream<Path> stream = Files.walk(dir)) {
+                if (stream.anyMatch(file -> file.toString().replace('\\', '/')
+                        .contains("/META-INF/versions/"))) {
+                    return true;
+                }
+            }
+        }
         for (Path jar : jars) {
             try (JarInputStream in = new JarInputStream(Files.newInputStream(jar))) {
                 JarEntry entry;
@@ -181,18 +219,4 @@ final class UberJar {
         return labels;
     }
 
-    /** A jar-per-artifact map filtered to MAIN rows, in lock order. */
-    static Map<String, Path> mainJars(List<com.jujin.mjm.store.LockedArtifact> locked,
-                                      Map<String, Path> jarsById) {
-        Map<String, Path> ordered = new LinkedHashMap<>();
-        for (var artifact : locked) {
-            if (artifact.isMain()) {
-                Path jar = jarsById.get(artifact.id());
-                if (jar != null) {
-                    ordered.put(artifact.id(), jar);
-                }
-            }
-        }
-        return ordered;
-    }
 }

@@ -89,6 +89,7 @@ public final class TreeCommand implements Command {
             return 1;
         }
         ResolvedGraph graph = Resolver.resolve(project, pomSource, descriptorSource);
+        Substitutions substitutions = Substitutions.forProject(projectDir);
 
         Map<String, ResolvedGraph.ResolvedArtifact> byId = new java.util.LinkedHashMap<>();
         for (ResolvedGraph.ResolvedArtifact artifact : graph.artifacts()) {
@@ -115,23 +116,25 @@ public final class TreeCommand implements Command {
             if (!printed.add(root.id())) {
                 continue;  // the same root reached twice is still one line
             }
-            System.out.println(line(root, ""));
-            expand(root, "", graph, printed);
+            System.out.println(line(root, "", substitutions));
+            expand(root, "", graph, printed, substitutions);
         }
         return 0;
     }
 
     private void expand(ResolvedGraph.ResolvedArtifact artifact, String prefix,
-                        ResolvedGraph graph, Set<String> printed) {
+                        ResolvedGraph graph, Set<String> printed,
+                        Substitutions substitutions) {
         List<String> children = graph.edges().getOrDefault(artifact.id(), List.of());
         for (int i = 0; i < children.size(); i++) {
             boolean last = i == children.size() - 1;
             ResolvedGraph.ResolvedArtifact child = byId(graph, children.get(i));
             boolean repeat = !printed.add(child.id());
             System.out.println(prefix + (last ? "└─ " : "├─ ")
-                    + line(child, repeat ? "  (*) above" : ""));
+                    + line(child, repeat ? "  (*) above" : "", substitutions));
             if (!repeat) {
-                expand(child, prefix + (last ? "   " : "│  "), graph, printed);
+                expand(child, prefix + (last ? "   " : "│  "), graph, printed,
+                        substitutions);
             }
         }
     }
@@ -180,8 +183,10 @@ public final class TreeCommand implements Command {
         System.out.println(root);
     }
 
-    private static String line(ResolvedGraph.ResolvedArtifact artifact, String suffix) {
+    private static String line(ResolvedGraph.ResolvedArtifact artifact, String suffix,
+                               Substitutions substitutions) {
         return artifact.id() + "@" + artifact.version()
+                + substitutions.marker(artifact.id())
                 + "  [depth " + artifact.depth()
                 + (artifact.declared() ? ", declared" : "")
                 + (artifact.scope() == com.jujin.mjm.resolve.Scope.DEV ? ", dev" : "")

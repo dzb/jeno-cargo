@@ -101,8 +101,10 @@ public final class InfoCommand implements Command {
             return 1;
         }
 
+        Substitutions substitutions = Substitutions.forProject(projectDir);
         System.out.println(artifact.id() + "@" + artifact.version()
-                + (artifact.isMain() ? "" : "  [dev]"));
+                + (artifact.isMain() ? "" : "  [dev]")
+                + substitutions.marker(artifact.id()));
 
         Descriptor descriptor = descriptor(artifact);
         if (descriptor != null) {
@@ -127,7 +129,9 @@ public final class InfoCommand implements Command {
 
         System.out.println("  origin:   " + artifact.source());
         System.out.println("  depth:    " + artifact.depth());
-        System.out.println("  jar:      " + artifact.url());
+        Path localClasses = substitutions.classesOrNull(artifact.id());
+        System.out.println("  jar:      " + (localClasses != null
+                ? localClasses + "  (local classes)" : artifact.url()));
         String sourcePage = sourcePage(artifact);
         if (sourcePage != null) {
             System.out.println("  source:   " + sourcePage);

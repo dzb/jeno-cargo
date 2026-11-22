@@ -194,8 +194,21 @@ public final class ArtifactStore {
      * next action when the store is missing a file or a copy drifted.
      */
     public Map<String, Path> verifiedJars(List<LockedArtifact> locked) {
+        return verifiedJars(locked, artifact -> false);
+    }
+
+    /**
+     * The jar map, skipping rows the caller has replaced by something else —
+     * a workspace module supplies its own classes, so demanding its locked jar
+     * from the store would fail a build that never needs it.
+     */
+    public Map<String, Path> verifiedJars(List<LockedArtifact> locked,
+                                          java.util.function.Predicate<LockedArtifact> skip) {
         Map<String, Path> jars = new LinkedHashMap<>();
         for (LockedArtifact artifact : locked) {
+            if (skip.test(artifact)) {
+                continue;
+            }
             Path jar = findByDigest(artifact.sha256(), Kind.JAR);
             if (jar == null) {
                 throw new StoreException(artifact.id() + "@" + artifact.version()
