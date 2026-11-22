@@ -149,18 +149,38 @@ key = 坐标,value 形态决定物种:
 
 **[repos]**
 
+每个仓库是一张子表,**类型决定布局**:
+
+```toml
+[repos.corp]          # Maven 布局(缺省 type 可省)
+url = "https://nexus.corp/"
+
+[repos.mine]          # 同一台静态主机,也可以是 mjm 布局
+type = "mjm"
+url = "https://my.host/"
+
+[repos.vendor]        # 裸路径 = 本地目录(~ 与相对项目根均可)
+type = "mjm"
+url = "vendor"
+```
+
 | 字段 | 规则 |
 |---|---|
 | key | 仓库名,`^[a-z][a-z0-9-]*$` |
-| value | **位置 × 布局**,只有四种组合(见下表):`https://…`、`local:<dir>`、`mjm:https://…`、`mjm:local:<dir>`。`local:` 展开 `~`,相对路径相对项目根 |
+| `type` | `maven` \| `mjm`(封闭枚举;缺省 `maven`) |
+| `url` | `https://…`(loopback `http://` 仅测试)或文件系统路径。以 http 开头即 URL,否则即目录 |
 
-| 布局 \ 传输 | HTTPS | 本地目录 |
+| 布局(由 `type` 决定) \ 位置(由 `url` 决定) | HTTPS | 本地路径 |
 |---|---|---|
-| **Maven** | `https://host/…` | `local:<dir>` |
-| **mjm 两层** | `mjm:https://host/…` | `mjm:local:<dir>` |
+| **`type = "maven"`** | `https://host/…` | `url = "vendor"` |
+| **`type = "mjm"`** | `url = "https://host/"` | `url = "vendor"` |
 
-布局是声明的属性,不是 URL 的属性:同一个 `local:` 目录可以是 Maven 布局(Maven pom)或 mjm 布局
-(描述符),由前缀决定,解析后作为两个独立事实传递。
+布局是声明的属性,不是 URL 的属性:同一台 https 主机可以装任一布局,所以协议必须由 `type`
+声明,不能从 URL 前缀猜。子表里只允许 `type`、`url` 两个键,未知键报错(带 `file:line:column`)。
+
+**legacy 字符串写法**(仍可读,等价于上表):
+`"https://…"` = maven+https;`"local:<dir>"` = maven+本地;`"mjm:https://…"` = mjm+https;
+`"mjm:local:<dir>"` = mjm+本地。写锁时两种写法都归一成这四个规范串,锁格式不变。
 
 查找顺序:**互不回退**——`[deps.{repo}]` 只查对应仓库,`[deps]` 只查 Central。
 `local:` 仓库的字节同样经过 store 的 sha256 钉定,与远程仓库同等可审计。

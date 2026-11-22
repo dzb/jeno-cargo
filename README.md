@@ -147,9 +147,9 @@ mylib-1.2.0.sha256
 |---|---|---|
 | GitHub Releases | `gh:owner/repo@v1.2.3` | `mjm publish gh:owner/repo` |
 | ~~Gitee Releases~~ | 已移除:附件匿名下载需令牌,违反零配置;用裸 URL 或自建主机 | — |
-| **your own host** — mjm layout | `[repos] mine = "mjm:https://my.host/"` + `"lib" = "mine:1.2.3"` | `mjm publish mjm:https://my.host/` — two levels, no `group` needed |
-| **your own host** — Maven layout (legacy) | `[repos] corp = …` + `"com.corp:lib" = "corp:1.2.3"` | `mjm publish https://my.host/repo/` — needs `[project].group` |
-| a local directory | `local:/path` | `cp target/dist/* …` (mjm reads it; nothing to upload) |
+| **your own host** — mjm layout | `[repos.mine]` `type = "mjm"`, `url = "https://my.host/"` + `"lib" = "mine:1.2.3"` | `mjm publish mjm:https://my.host/` — two levels, no `group` needed |
+| **your own host** — Maven layout (the default type) | `[repos.corp]` `url = "https://nexus.corp/"` + `"com.corp:lib" = "corp:1.2.3"` | `mjm publish https://my.host/repo/` — needs `[project].group` |
+| a local directory | `[repos.vend]` `type = "mjm"`, `url = "vendor"` (or the legacy `local:/path` string) | `mjm publish mjm:local:vendor` (writes the triple in place) |
 | any static server | a bare `https://…/x.jar` leaf | upload the jar your way |
 
 The `mjm:` layout is the shortest one: `mjm publish mjm:https://my.host/` writes

@@ -356,7 +356,7 @@ push tag v*  →  验证 + 发行
 | `mjm test` | ✅ | fork JVM runner:`@MjmTest` + JUnit Platform;classpath 含 MAIN + dev;`[test]` include/exclude 过滤源;每次开跑前清空 `target/test-results/`,跑完每个测试类一个 surefire 形状的 `TEST-<类名>.xml`(无 timestamp、可逐字节 diff) |
 | `mjm package` | ✅ | 纯 jar;`--uber` 合并闭包(排除 dev)并输出 `target/dist/<name>-<ver>-uber.jar`——与普通 jar 不同名,互不覆盖 |
 | `mjm bundle` | ✅ | 发行目录 + setup.sh + tar.gz,输出 `target/dist/`(应用自用;库不需要) |
-| `mjm publish` | ✅ | 三件套(`target/dist/`);`gh:` 原生上传;**任意 http(s) 主机 → Maven 布局 + HTTP PUT**;`mjm:https://…` 两层布局 PUT;`mjm:local:<dir>` 本地两层布局原子写入(不联网);描述符只含 MAIN 依赖 |
+| `mjm publish` | ✅ | 三件套(`target/dist/`);`gh:` 原生上传;**任意 http(s) 主机 → Maven 布局 + HTTP PUT**;`mjm:https://…` 两层布局 PUT;`mjm:local:<dir>` 本地两层布局原子写入(不联网);`[repos]` 以 `type = "maven"\|"mjm"` 显式声明布局(字符串写法为 legacy);描述符只含 MAIN 依赖 |
 | `mjm update` / `mjm upgrade` | ✅ | 自升级(alias 同一实现) |
 | ~~`mjm release`~~ | **已删除** | 生命周期属于项目自己的 CI;mjm 只提供单步机制 |
 | `mjm init [--pom] [--ws] [--force]` | ✅ | 骨架;`--pom` 从 pom.xml 迁移(逐条报告不可表达的事实);`--ws` 写 `mjm.ws.toml`(本地工作区,见 `docs/workspace-design.md`) |
