@@ -251,7 +251,7 @@ the next invocation.
 | `build` | compile against declared deps only |
 | `test` | forked JVM: `@MjmTest` + JUnit Jupiter. Writes surefire-shaped XML to `target/test-results/` (one `TEST-<class>.xml` per class) |
 | `run` | run a main class, a `[scripts]` entry, or `[project].main` when given no argument |
-| `tree [--json]` / `why` | see the graph and every introduction path; `tree --json` is one machine-readable document (id-sorted artifacts, sorted children) |
+| `tree [--json]` / `why` | see the graph and every introduction path. Both read `mjm.lock` as the authority and resolve the manifest only for the edges the lock does not carry; if the two drift they exit 1 naming up to ten differences and print no graph. `tree --json` is one machine-readable document (id-sorted artifacts, sorted children) |
 | `info [--source]` | everything about one dependency, including its source |
 | `classpath [--test] [--file <p>]` | the classpath an IDE should use. Default is the **compile** classpath under strict visibility — project classes plus the jars you declare directly, no transitive jars, so the IDE never accepts code `mjm build` rejects. `--test` widens it to the test classpath (test classes + main classes + full closure). Paths are the store's content-addressed jars; nothing is copied. Local-only: do not commit `--file` output |
 | `package [--uber]` | the jar. `--uber` merges the closure and writes `...-uber.jar`, so the two never overwrite each other |
@@ -276,7 +276,10 @@ the module directories it finds (or from explicit paths); `[ws] modules = [...]`
 lists them. Inside a workspace, a lock row whose id is one of those modules
 resolves to that module's `target/classes` instead of the store jar, and a root
 directory runs `lock` / `build` / `test` / `package` / `bundle` / `clean` once
-per module in dependency order (`--module <path>` narrows it to one).
+per module in dependency order (`--module <path>` narrows it to one). A root
+refuses `mjm init` / `init --pom` (it must not become a project), and commands
+that act on one project — `add`, `remove`, `run`, `info`, `tree`, `why`,
+`classpath`, `publish`, `audit`, `outdated` — require `--module` there.
 
 The substitution happens where the classpath is assembled, so it is visible to
 `mjm build`, `mjm test`, `mjm run` and `mjm classpath`; the lockfile itself is

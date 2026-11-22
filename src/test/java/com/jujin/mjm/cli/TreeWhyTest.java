@@ -78,6 +78,7 @@ class TreeWhyTest {
             "com.example:lib-d" = "1.0.0"
             """.formatted(fixRepo));
 
+        writeLock();
         PomSource pomSource = localPomSource();
 
         TreeCommand tree = new TreeCommand(new ArtifactStore(dir.resolve("store")),
@@ -131,6 +132,103 @@ class TreeWhyTest {
         assertEquals(0, absentExit);
         assertTrue(absent.contains("not in the graph"), "got: " + absent);
         assertFalse(absent.contains("depth"), "an absent id prints, it does not guess");
+    }
+
+    @Test
+    void treeWithoutALockSaysWhatToRunAndDrawsNothing() throws Exception {
+        Files.writeString(dir.resolve("mjm.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+            """);
+
+        TreeCommand tree = new TreeCommand(new ArtifactStore(dir.resolve("store")),
+                localPomSource(), text -> { throw new IllegalStateException("no natives here"); },
+                dir);
+        java.io.ByteArrayOutputStream errors = new java.io.ByteArrayOutputStream();
+        java.io.PrintStream originalErr = System.err;
+        int exit;
+        try {
+            System.setErr(new java.io.PrintStream(errors));
+            exit = tree.execute(List.of());
+        } finally {
+            System.setErr(originalErr);
+        }
+
+        assertEquals(1, exit);
+        assertTrue(errors.toString().contains("no mjm.lock in " + dir), errors.toString());
+        assertEquals("", readConsole(), "nothing is drawn without a lock");
+    }
+
+    @Test
+    void aDriftedManifestIsRefusedInsteadOfDrawn() throws Exception {
+        Path repo = dir.resolve("fix-repo");
+        pom(repo, "com/example/lib-a/1.0.0", "lib-a", "1.0.0", "");
+        pom(repo, "com/example/lib-a/1.1.0", "lib-a", "1.1.0", "");
+        Files.writeString(dir.resolve("mjm.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [repos]
+            fix = "local:%s"
+
+            [deps.fix]
+            "com.example:lib-a" = "1.0.0"
+            """.formatted(repo));
+        writeLock();
+        // bump the declaration without re-locking: the lock still pins 1.0.0
+        Files.writeString(dir.resolve("mjm.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [repos]
+            fix = "local:%s"
+
+            [deps.fix]
+            "com.example:lib-a" = "1.1.0"
+            """.formatted(repo));
+
+        TreeCommand tree = new TreeCommand(new ArtifactStore(dir.resolve("store")),
+                localPomSource(), text -> { throw new IllegalStateException("no natives here"); },
+                dir);
+        java.io.ByteArrayOutputStream errors = new java.io.ByteArrayOutputStream();
+        java.io.PrintStream originalErr = System.err;
+        int exit;
+        try {
+            System.setErr(new java.io.PrintStream(errors));
+            exit = tree.execute(List.of());
+        } finally {
+            System.setErr(originalErr);
+        }
+
+        assertEquals(1, exit);
+        assertTrue(errors.toString().contains("mjm.lock is out of date — run mjm lock"),
+                errors.toString());
+        assertTrue(errors.toString().contains("com.example:lib-a: lock 1.0.0, manifest 1.1.0"),
+                errors.toString());
+        assertEquals("", readConsole(), "no graph is printed when the lock disagrees");
+
+        WhyCommand why = new WhyCommand(new ArtifactStore(dir.resolve("store")),
+                localPomSource(), text -> { throw new IllegalStateException("no natives here"); },
+                dir);
+        try {
+            System.setErr(new java.io.PrintStream(errors = new java.io.ByteArrayOutputStream()));
+            exit = why.execute(List.of("com.example:lib-a"));
+        } finally {
+            System.setErr(originalErr);
+        }
+        assertEquals(1, exit);
+        assertTrue(errors.toString().contains("mjm.lock is out of date"), errors.toString());
+        assertEquals("", readConsole(), "why draws no paths either");
+    }
+
+    /** Generates the lock the tests' fixtures need; same local repository as the commands. */
+    private void writeLock() throws Exception {
+        ArtifactStore store = new ArtifactStore(dir.resolve("store"));
+        new LockService(store, localPomSource(),
+                text -> { throw new IllegalStateException("no natives here"); }).refresh(dir);
     }
 
     // ------------------------------------------------------------------
@@ -222,6 +320,7 @@ class TreeWhyTest {
             "com.example:root-c" = "1.0.0"
             """.formatted(repo));
 
+        writeLock();
         TreeCommand tree = new TreeCommand(new ArtifactStore(dir.resolve("store")),
                 localPomSource(), text -> { throw new IllegalStateException("no natives here"); },
                 dir);
@@ -286,6 +385,7 @@ class TreeWhyTest {
             "com.example:lib-d" = "1.0.0"
             """.formatted(repo));
 
+        writeLock();
         TreeCommand tree = new TreeCommand(new ArtifactStore(dir.resolve("store")),
                 localPomSource(), text -> { throw new IllegalStateException("no natives here"); },
                 dir);
@@ -336,6 +436,8 @@ class TreeWhyTest {
             "com.example:lib-b" = "1.1.0"
             """.formatted(repo));
 
+        writeLock();
+        writeLock();
         TreeCommand tree = new TreeCommand(new ArtifactStore(dir.resolve("store")),
                 localPomSource(), text -> { throw new IllegalStateException("no natives here"); },
                 dir);
@@ -383,6 +485,8 @@ class TreeWhyTest {
               %s
             </project>
             """.formatted(layoutGroup(layout), artifactId, version, dependencies));
+        Files.write(pom.resolveSibling(artifactId + "-" + version + ".jar"),
+                new byte[0]);
     }
 
     private static String layoutGroup(String layout) {

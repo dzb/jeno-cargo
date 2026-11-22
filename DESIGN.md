@@ -349,8 +349,8 @@ push tag v*  →  验证 + 发行
 |---|---|---|
 | `mjm add <dep> [ver]` | ✅ | 写入 [deps] 并立即解析;精确版本 + maven-metadata.xml 列版本;裸名走 Central 索引搜索。值形态:精确版本(`1.2.3`)、命名仓库(`corp:1.2.3`)、原生 release(`gh:owner/repo@tag` 或简写 `owner/repo@tag`) |
 | `mjm lock [--check] [--refresh]` | ✅ | 解析并写出 mjm.lock;`--check` 只在内存里重新生成并与磁盘逐字节比对(Cargo `--locked` 语义,比 build 的"id 在锁里"更严格)、不写任何文件;**需要取元数据**;`--check` 与 `--refresh` 互斥 |
-| `mjm tree [--json]` | ✅ | 依赖树 + 深度标注(dev 工件标 `, dev`);`--json` 输出单个 JSON 文档(artifacts 按 id 排序、children 排序,不嵌套) |
-| `mjm why <dep>` | ✅ | 谁引入的、占多少深度预算 |
+| `mjm tree [--json]` | ✅ | 依赖树 + 深度标注(dev 工件标 `, dev`);`--json` 输出单个 JSON 文档(artifacts 按 id 排序、children 排序,不嵌套)。**以 `mjm.lock` 为准**:先读锁,再解析 manifest 只为补边;id/version/source/depth/scope 任一不一致 → exit 1、列出至多 10 行差异、不输出图 |
+| `mjm why <dep>` | ✅ | 谁引入的、占多少深度预算。同样以锁为准,漂移时拒绝画图(与 tree 共用同一个一致性 helper) |
 | `mjm build` | ✅ | javac 编译(严格可见性 classpath —— 只含 MAIN 声明);`--release N` 目标化字节码;`-processorpath` 注入处理器;`src/main/resources` 拷入产物 |
 | `mjm run [<main>]` / scripts | ✅ | runtime classpath 运行(排除 dev);不给参数时用 `[project].main`(`package` 写进 MANIFEST、`bundle` 写进 launcher 的同一个入口) |
 | `mjm test` | ✅ | fork JVM runner:`@MjmTest` + JUnit Platform;classpath 含 MAIN + dev;`[test]` include/exclude 过滤源;每次开跑前清空 `target/test-results/`,跑完每个测试类一个 surefire 形状的 `TEST-<类名>.xml`(无 timestamp、可逐字节 diff) |
@@ -359,7 +359,7 @@ push tag v*  →  验证 + 发行
 | `mjm publish` | ✅ | 三件套(`target/dist/`);`gh:` 原生上传;**任意 http(s) 主机 → Maven 布局 + HTTP PUT**;`mjm:https://…` 两层布局 PUT;`mjm:local:<dir>` 本地两层布局原子写入(不联网);`[repos]` 以 `type = "maven"\|"mjm"` 显式声明布局(字符串写法为 legacy);描述符只含 MAIN 依赖 |
 | `mjm update` / `mjm upgrade` | ✅ | 自升级(alias 同一实现) |
 | ~~`mjm release`~~ | **已删除** | 生命周期属于项目自己的 CI;mjm 只提供单步机制 |
-| `mjm init [--pom] [--ws] [--force]` | ✅ | 骨架;`--pom` 从 pom.xml 迁移(逐条报告不可表达的事实);`--ws` 写 `mjm.ws.toml`(本地工作区,见 `docs/workspace-design.md`) |
+| `mjm init [--pom] [--ws] [--force]` | ✅ | 骨架;`--pom` 从 pom.xml 迁移(逐条报告不可表达的事实);`--ws` 写 `mjm.ws.toml`(本地工作区,见 `docs/workspace-design.md`)。**工作区根目录拒绝 `init`/`--pom`**(即使 `--force`),否则会把根变成模块;`--ws` 仍可用 |
 | `mjm remove <id>` | ✅ | 删除一行声明并重锁 |
 | `mjm classpath [--test] [--file <path>]` | ✅ | 给 IDE 的 classpath:**默认严格可见性的编译 classpath**(target/classes + 直接声明的 jar,不含传递依赖,避免“IDE 能编过、mjm build 又拒绝”),`--test` 为测试 classpath(test-classes + classes + MAIN/DEV 闭包);jar 用 store 的内容寻址路径,不拷贝不链接;输出仅供本机 IDE,不应提交 |
 | `mjm info <id> [--source]` | ✅ | 身份/来源/依赖/源码地址;`--source` 取源码树 |

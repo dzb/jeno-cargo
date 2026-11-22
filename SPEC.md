@@ -347,7 +347,7 @@ scope = "dev"             # 可选:[dev-deps] 可达的工件。缺省 = main
 3. url 必须 https;唯一例外是 loopback `mjm:` 仓库(`http://localhost` / `http://127.0.0.1`,仅供测试)
 4. depth ≥ 1
 5. 按 id 字典序输出(稳定 diff)
-6. 一致性:lock 的依赖集合与 mjm.toml + 描述符闭包一致;不一致 → 拒绝 build/run,提示 `mjm lock`
+6. 一致性:lock 的依赖集合与 mjm.toml + 描述符闭包一致;不一致 → 拒绝 build/run,提示 `mjm lock`。`tree`/`why` 也以锁为权威:二者先读锁、再解析 manifest 只为补父子边,id/version/source/depth/scope 任一不一致即 exit 1(至多 10 行差异,不输出图);无锁 → exit 1
 7. 命中策略:lock 有效 → 直接采用(sha256 权威,不重新解析);`mjm lock --refresh` 强制重解
 8. 兼容性:旧锁里 `source` 以 `gitee:` 开头的行,**读锁即报**可执行的迁移错误(gitee: 物种已移除),而不是留给下游命令各自报 URI 错误;`source` 以 `mjm:` 开头的行照常读
 

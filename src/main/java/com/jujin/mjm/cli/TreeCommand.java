@@ -94,7 +94,13 @@ public final class TreeCommand implements Command {
                     + " — run mjm init to create one");
             return 1;
         }
-        ResolvedGraph graph = Resolver.resolve(project, pomSource, descriptorSource);
+        ResolvedGraph graph;
+        try {
+            graph = LockedGraphView.graph(projectDir, project, pomSource, descriptorSource);
+        } catch (LockedGraphView.OutOfDateException e) {
+            System.err.println("mjm: " + e.getMessage());
+            return 1;
+        }
         Substitutions substitutions = Substitutions.forProject(projectDir);
 
         Map<String, ResolvedGraph.ResolvedArtifact> byId = new java.util.LinkedHashMap<>();
