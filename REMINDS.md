@@ -230,3 +230,36 @@ git commit ... && git push ... && git tag vX && git push --tags
 
 **事故后的处置**:v0.1.2–v0.1.9 的 release 与 tag 全部撤销,全部改动重切成
 **单个 v0.1.2**。版本史回到可读状态。
+
+---
+
+## 9. 自举构建的 87 条 javac 警告（known issue，2026-11-22 记录）
+
+**位置**:`mjm build`（编译 `src/main/java`）的输出；来源是 vendor 里的 junit jar。
+
+**现状**:`mjm build` 每次刷 87 条
+`警告: 未知的枚举常量 Status.MAINTAINED` / `Status.STABLE` / …，
+首条带原因:`找不到 org.apiguardian.api.API$Status 的类文件`。编译成功、产物无异常，
+只是输出噪音——`mjm test` 与 `mjm build` 的数字（87）因此不能当作"零警告"。
+
+**成因**:junit 的 class 文件带 `@API(...)` 注解，注解的枚举来自
+`org.apiguardian.api`。`vendor/` 是手工裁剪的 Maven 布局仓库（只有 freeway 三件 +
+junit 六件的 pom/jar，pom 是无 parent 链的独立清单），**没有 `org.apiguardian.api` 的
+jar 也没有它的 pom**。javac 在编译消费者的源码时看到注解里引用了找不到的枚举，就逐处警告。
+
+**为什么现在可接受**:
+- 是 `vendor/` 的内容问题，不是代码问题；生产构建（不编译 junit 消费者）不会出现。
+- 不影响字节、不影响测试、不影响发布；`mjm` 是当前唯一受影响的构建。
+
+**代价/风险**:
+- 87 条噪音盖住真正的警告——新增一条编译警告时没人会看见。
+- 任何"构建零警告"的 CI 门禁都没法开。
+
+**触发重新决定的条件**（任一即可）:
+- 有人开始给构建加"零警告"门禁，或需要从输出里分辨真实警告
+- junit 版本升级后把 apiguardian 变成必需依赖（届时 vendor 必须补它，否则 lock 解析就会缺件）
+- 有用户把这段输出当成构建错误上报
+
+**正确的解法**:把 `org.apiguardian:apiguardian-api` 的 jar 与 pom 一起放进 `vendor/`
+（sha256 由 `mjm lock` 钉住），补齐闭包——这比在构建参数里压警告更符合"vendor 是一个仓库"
+的定位。**不要**为了让警告消失而把 `@API` 注解从 vendor 的 jar 里删掉（那就动了别人的字节）。
