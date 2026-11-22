@@ -241,9 +241,20 @@ public final class ProjectReader {
                     requirement(processorId, processorVersion, null, "build.processors"));
         }
 
+        // [test].include / [test].exclude: typed and closed here, so TestCommand
+        // consumes validated patterns instead of re-reading (and swallowing) the file
+        List<String> testInclude = List.of();
+        List<String> testExclude = List.of();
+        Map<String, Object> testSection = optionalSection(root, "test");
+        if (testSection != null) {
+            testInclude = stringArrayAt(testSection, source, file, "test", "include");
+            testExclude = stringArrayAt(testSection, source, file, "test", "exclude");
+        }
+
         return new MjProject(name, group, version, main, javaVersion, maxDepth, requirements,
                 overrides, scripts, repos, buildParameters, devRequirements,
-                summary, homepage, license, processors, processorRequirements);
+                summary, homepage, license, processors, processorRequirements,
+                testInclude, testExclude);
     }
 
     /**
@@ -402,6 +413,33 @@ public final class ProjectReader {
         for (Object entry : entries) {
             if (!(entry instanceof String text) || text.isBlank()) {
                 throw new ProjectException(where + " entries must be non-blank strings");
+            }
+            result.add(text);
+        }
+        return result;
+    }
+
+    /**
+     * The same shape check, with the key's line and column on failure — used by
+     * {@code [test]}, whose patterns used to be read a second time (and errors
+     * swallowed) by {@code TestCommand}.
+     */
+    private static List<String> stringArrayAt(Map<String, Object> section, SchemaSource source,
+                                              String file, String sectionName, String key) {
+        Object value = section.get(key);
+        if (value == null) {
+            return List.of();
+        }
+        String where = "[" + sectionName + "]" + "." + key;
+        SchemaSource.Site site = source.key(sectionName, key);
+        if (!(value instanceof List<?> entries)) {
+            throw new ProjectException(at(file, site) + where + " must be a string array");
+        }
+        List<String> result = new ArrayList<>();
+        for (Object entry : entries) {
+            if (!(entry instanceof String text) || text.isBlank()) {
+                throw new ProjectException(at(file, site) + where
+                        + " entries must be non-blank strings");
             }
             result.add(text);
         }

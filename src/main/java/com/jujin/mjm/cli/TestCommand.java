@@ -1,6 +1,7 @@
 package com.jujin.mjm.cli;
 
 import com.jujin.freeway.ioc.annotation.Inject;
+import com.jujin.mjm.project.MjProject;
 import com.jujin.mjm.resolve.ArtifactLocations;
 import com.jujin.mjm.project.ProjectReader;
 import com.jujin.mjm.store.ArtifactStore;
@@ -14,7 +15,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -68,8 +68,7 @@ public final class TestCommand implements Command {
             return 1;
         }
         List<String> testSources = sources(projectDir.resolve(TEST_SOURCES),
-                Filter.from(projectDir));
-        if (testSources.isEmpty()) {
+                Filter.from(projectDir));        if (testSources.isEmpty()) {
             System.out.println("no tests under " + projectDir.resolve(TEST_SOURCES));
             return 0;
         }
@@ -191,30 +190,16 @@ public final class TestCommand implements Command {
         }
 
         static Filter from(Path projectDir) {
+            // ProjectReader owns [test]: patterns arrive typed and closed, so an
+            // error in mjm.toml surfaces here instead of silently meaning "run all".
+            MjProject project;
             try {
-                Map<String, Object> root = com.jujin.freeway.commons.toml.TomlUtils.parse(
-                        Files.readString(projectDir.resolve("mjm.toml")));
-                Object section = root.get("test");
-                if (!(section instanceof Map<?, ?> test)) {
-                    return new Filter(List.of(), List.of());
-                }
-                return new Filter(strings(test.get("include")), strings(test.get("exclude")));
-            } catch (IOException | RuntimeException e) {
+                project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
+            } catch (IOException e) {
+                // no manifest: build/lock already report it; test without filters
                 return new Filter(List.of(), List.of());
             }
-        }
-
-        private static List<String> strings(Object value) {
-            if (!(value instanceof List<?> entries)) {
-                return List.of();
-            }
-            List<String> result = new ArrayList<>();
-            for (Object entry : entries) {
-                if (entry instanceof String text && !text.isBlank()) {
-                    result.add(text);
-                }
-            }
-            return result;
+            return new Filter(project.testInclude(), project.testExclude());
         }
 
         /** A source path is kept when it matches no exclude and, if includes exist, one include. */

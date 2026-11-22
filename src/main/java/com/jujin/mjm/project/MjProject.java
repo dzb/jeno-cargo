@@ -44,7 +44,9 @@ public record MjProject(
         String homepage,
         String license,
         List<String> processors,
-        List<Requirement> processorRequirements) {
+        List<Requirement> processorRequirements,
+        List<String> testInclude,
+        List<String> testExclude) {
 
     public MjProject {
         if (requirements == null) {
@@ -79,5 +81,13 @@ public record MjProject(
             processorRequirements = List.of();
         }
         processorRequirements = List.copyOf(processorRequirements);
+        if (testInclude == null) {
+            testInclude = List.of();
+        }
+        testInclude = List.copyOf(testInclude);
+        if (testExclude == null) {
+            testExclude = List.of();
+        }
+        testExclude = List.copyOf(testExclude);
     }
 }

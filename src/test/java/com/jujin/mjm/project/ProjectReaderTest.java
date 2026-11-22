@@ -119,6 +119,65 @@ class ProjectReaderTest {
         assertEquals(List.of("-parameters"), project.buildParameters());
         assertEquals(1, project.processorRequirements().size(),
                 "the processor coordinate resolves as its own closure");
+        assertEquals(List.of("*Test"), project.testInclude());
+        assertEquals(List.of("*Slow*"), project.testExclude());
+    }
+
+    @Test
+    void theTestSectionIsTypedAndClosed() {
+        ProjectException wrongType = assertThrows(ProjectException.class,
+            () -> ProjectReader.parse("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+
+                [test]
+                include = "x"
+                """));
+        assertTrue(wrongType.getMessage().contains("mjm.toml:6:1"),
+                "the wrong-typed key names its line and column, got: "
+                        + wrongType.getMessage());
+        assertTrue(wrongType.getMessage().contains("[test].include must be a string array"),
+                "got: " + wrongType.getMessage());
+
+        assertRejects("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [test]
+            bogus = 1
+            """, "[test].bogus is not a key");
+
+        assertRejects("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [limits]
+            max-depth = 2
+            bogus = 1
+            """, "[limits].bogus is not a key");
+
+        assertRejects("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [java]
+            version = 21
+            bogus = 1
+            """, "[java].bogus is not a key");
+
+        assertRejects("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [build]
+            parameters = ["-parameters"]
+            bogus = 1
+            """, "[build].bogus is not a key");
     }
 
     @Test
