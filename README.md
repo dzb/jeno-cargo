@@ -257,16 +257,31 @@ the next invocation.
 | `package [--uber]` | the jar. `--uber` merges the closure and writes `...-uber.jar`, so the two never overwrite each other |
 | `bundle` | an installable distribution (bin + lib + setup.sh + tar.gz), in `target/dist/` |
 | `clean [--target \| --dist]` | remove the whole `target/` by default (deliverables live in `target/dist/`); `--dist` removes only `target/dist/` and keeps classes; never the store |
+| `cache dir \| size \| prune \| clean` | inspect or reclaim the user-level store, sources and lock files (`dir` shows the three roots, `size` their occupancy, `prune` removes only provably useless files, `clean` deletes store and sources) |
 | `outdated [--json]` | pinned dependencies with newer versions available; `--json` gives `upToDate`/`updates`/`notChecked`/`failures` |
 | `audit [--json] [--dev]` | known vulnerabilities for the locked closure (OSV). Maven-coordinate artifacts are checked; `gh:`/`url`/`local:`/`mjm:`/named repositories are listed as `notChecked` with the reason — never as clean. Vulnerabilities or failed queries exit 1; `--json` gives `vulnerabilities`/`notChecked`/`failures` |
 | `publish [target]` | the release triple; `gh:owner/repo`, `mjm:https://host/` (two levels, no group), or any `http(s)://` host (Maven layout over PUT, needs group) |
 | `update` / `upgrade` | self-upgrade from GitHub Releases |
-| `-o`, `--offline` (flag) | refuse all network access — store hits only. Not for `update`/`publish`/`outdated`, which are network by nature |
+| `-o`, `--offline` (flag) | refuse all network access — store hits only. Not for `update`/`publish`/`outdated`/`audit`, which are network by nature |
 | `mjm <command> --help` | that command's syntax and explanation (may run to several lines) |
 Deliverables moved: `dist/` is now `target/dist/` (it is build output, and
 `mjm clean` removes the whole `target/` tree). Scripts that read `dist/` need
 one edit; an existing `dist/` is no longer read and `publish` tells you so.
 
+
+### Local workspaces
+
+`mjm.ws.toml` is a local file — do not commit it. `mjm init --ws` writes it from
+the module directories it finds (or from explicit paths); `[ws] modules = [...]`
+lists them. Inside a workspace, a lock row whose id is one of those modules
+resolves to that module's `target/classes` instead of the store jar, and a root
+directory runs `lock` / `build` / `test` / `package` / `bundle` / `clean` once
+per module in dependency order (`--module <path>` narrows it to one).
+
+The substitution happens where the classpath is assembled, so it is visible to
+`mjm build`, `mjm test`, `mjm run` and `mjm classpath`; the lockfile itself is
+unchanged. The design record, including why `publish` is unaffected, is in
+[docs/workspace-design.md](docs/workspace-design.md).
 
 ## Design notes
 

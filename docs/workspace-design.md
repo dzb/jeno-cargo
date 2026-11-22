@@ -1,7 +1,9 @@
 # 多模块设计草案（workspaces）
 
-状态:**草案,待评审,未实现**
-更新:2026-11-22(v4)
+状态:**已实现的设计记录(v4)**。四个阶段均已落地:第 1 阶段(抽出唯一的
+`ClasspathAssembler`,四个调用点收口)在 0.2.9;`mjm.ws.toml` 与 `init --ws`、
+替换生效、根目录编排在 0.2.10。
+更新:2026-11-22(v4);实现状态补记于同一日期
 
 v1 的前提错(以为 classpath 只有一处装配);v2 补了 seam 与命令表,但对打包与版本
 加了强制;v3 的强制被维护者否决。v4 按维护者定的原则重写:**简单、可组合、概念少,
@@ -74,12 +76,12 @@ v1 的前提错(以为 classpath 只有一处装配);v2 补了 seam 与命令表
 | `[scripts]` 的 `MJM_CLASSPATH` | 同上;脚本拿到的是本地真实可用的 classpath |
 | `package`(普通与 `--uber`) | 用替换后的字节打包。`--uber` 会把本地 classes 嵌进去——这是用户要的,不是错误 |
 | `bundle` | 同上:发行目录里带本地 classes,由用户自己决定拿去做什么 |
-| `publish` | 照常发布;描述符写的是**声明里的版本**。若本次字节包含本地检出,打一行提示 |
+| `publish` | 上传的始终是普通 `package` 的 jar(只含本项目 classes);描述符写的是**声明里的版本**。工作区的本地 classes 只出现在 `--uber` / `bundle` 的产物里,publish 不会读取它们,因此也不打 note |
 | `info` / `tree` / `why` | 展示锁图,命中替换的行加 `(local: <path>)` 标记 —— 图是图,字节是字节,两个都告诉用户 |
 | `lock` | 不参与替换(替换不影响解析) |
 
-**唯一的提示**(不是阻断):当一次**产出可分发物**的操作(仅 `package`/`bundle`/`publish`)
-使用了本地检出的字节时,打印一行:
+**唯一的提示**(不是阻断):当 `package --uber` / `bundle` 真的把本地检出的字节
+嵌入产物时,打印一行(publish 不在此列:它上传的普通 jar 不含依赖字节):
 
 ```
 note: libs/core (1.2.1) is a local checkout — this artifact contains unpublished classes
@@ -143,8 +145,9 @@ modules = ["libs/core", "libs/util", "apps/web", "tools/cli"]
   只在两者不同时出现,每次运行一行。
 - **不提供** `allow-version-skew` 这类开关:没有需要放宽的规则,就不需要放宽的开关。
 
-代价(记录下来,不隐藏):本地字节与锁里声明的版本可能不一致,而 `publish` 的描述符
-写的仍是声明版本。这是"灵活优先"的直接结果,由 §4 的那行 `note` 提示。
+代价(记录下来,不隐藏):本地字节与锁里声明的版本可能不一致;`package --uber` /
+`bundle` 的产物会把这种不一致带出去,由 §4 的那行 `note` 提示。`publish` 上传的是
+普通 `package` 的 jar(只含本项目 classes),既不含依赖字节,也不受替换影响。
 
 ### 6.3 根目录的编排
 
@@ -225,7 +228,7 @@ mjm clean                              逐模块;遇错继续,汇总
 4. 本地版本与锁不同 → 构建成功,输出含一行 `core: local 1.2.1, locked 1.2.0`。
 5. 根目录 `build` 按拓扑序;成环 → 报错并列出环。
 6. 根目录 `package` / `bundle` 一次处理全部模块;`--module apps/web` 只处理一个。
-7. `publish` 在本地字节命中时仍发布,并打那行 `note`。
+7. `publish` 上传普通 `package` 的 jar(只含本项目 classes),不受替换影响,也不打 note。
 8. `tree` / `info` 对命中的行显示 `(local: <path>)`。
 9. 根目录 `add` / `run` 无 `--module` → 报错要求给一个(而不是"禁止")。
 10. 无 `mjm.ws.toml` 时,所有命令的输出与今天逐字节一致。

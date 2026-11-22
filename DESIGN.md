@@ -346,12 +346,12 @@ push tag v*  →  验证 + 发行
 
 | 命令 | 状态 | 说明 |
 |---|---|---|
-| `mjm add <dep> [ver]` | ✅ | 写入 [deps] 并立即解析;精确版本 + maven-metadata.xml 列版本;裸名走 Central 索引搜索 |
+| `mjm add <dep> [ver]` | ✅ | 写入 [deps] 并立即解析;精确版本 + maven-metadata.xml 列版本;裸名走 Central 索引搜索。值形态:精确版本(`1.2.3`)、命名仓库(`corp:1.2.3`)、原生 release(`gh:owner/repo@tag` 或简写 `owner/repo@tag`) |
 | `mjm lock [--check] [--refresh]` | ✅ | 解析并写出 mjm.lock;`--check` 只在内存里重新生成并与磁盘逐字节比对(Cargo `--locked` 语义,比 build 的"id 在锁里"更严格)、不写任何文件;**需要取元数据**;`--check` 与 `--refresh` 互斥 |
 | `mjm tree [--json]` | ✅ | 依赖树 + 深度标注(dev 工件标 `, dev`);`--json` 输出单个 JSON 文档(artifacts 按 id 排序、children 排序,不嵌套) |
 | `mjm why <dep>` | ✅ | 谁引入的、占多少深度预算 |
 | `mjm build` | ✅ | javac 编译(严格可见性 classpath —— 只含 MAIN 声明);`--release N` 目标化字节码;`-processorpath` 注入处理器;`src/main/resources` 拷入产物 |
-| `mjm run <main>` / scripts | ✅ | runtime classpath 运行(排除 dev) |
+| `mjm run [<main>]` / scripts | ✅ | runtime classpath 运行(排除 dev);不给参数时用 `[project].main`(`package` 写进 MANIFEST、`bundle` 写进 launcher 的同一个入口) |
 | `mjm test` | ✅ | fork JVM runner:`@MjmTest` + JUnit Platform;classpath 含 MAIN + dev;`[test]` include/exclude 过滤源;每次开跑前清空 `target/test-results/`,跑完每个测试类一个 surefire 形状的 `TEST-<类名>.xml`(无 timestamp、可逐字节 diff) |
 | `mjm package` | ✅ | 纯 jar;`--uber` 合并闭包(排除 dev)并输出 `target/dist/<name>-<ver>-uber.jar`——与普通 jar 不同名,互不覆盖 |
 | `mjm bundle` | ✅ | 发行目录 + setup.sh + tar.gz,输出 `target/dist/`(应用自用;库不需要) |
@@ -366,9 +366,9 @@ push tag v*  →  验证 + 发行
 | `mjm cache clean` | ✅ | 显式删除 store 与 sources 并报释放量;不动锁文件、不动项目、不改 `mjm.lock` |
 | `mjm clean [--target (default) \| --dist]` | ✅ | **默认整棵删 `target/`**(无参或 `--target`;Maven 惯例——交付物也在 `target/dist/`,所以一并清掉;里面只有可重建的 `classes`/`test-classes` 与可重发的 `target/dist`,依赖缓存在 XDG cache 的 `mjm/store` 不在此);`--dist` 只删 `target/dist/`(保留 classes,重发发行物不用重编译);两个都给就都清;**两个目标先全部探测,任一(含其内部嵌套)是挂载点则整次拒绝、一个字节不删**;**永不触碰 store**;旧的项目根 `dist/` 不再被读取(给一行迁移提示) |
 | `mjm outdated [--json]` | ✅ | 已钉版本 vs 仓库可用版本;只查 Central 与命名 https 仓库,`gh:`/`url`/`local:`/`mjm:` 列为"未检查";预发布默认不报(除非当前就是预发布);跨 major 单独一节;`--json` 输出 `upToDate`/`updates`/`notChecked`/`failures` |
-| `-o`, `--offline` | ✅ | 禁止一切网络访问;store 有则用,缺则报错。`update`/`publish`/`outdated` 不适用 |
+| `-o`, `--offline` | ✅ | 禁止一切网络访问;store 有则用,缺则报错。`update`/`publish`/`outdated`/`audit` 不适用 |
 | daemon 常驻 | **M6** | 已确认需要:常驻 JVM 热命令,mvnd 已验证可快 2–4 倍 |
-| workspaces/monorepo | V2 | 设计模板 = go.work 模式:`mjm.ws.toml`(表名 `[ws]`,旗标 `init --ws`)本地文件,gitignore 不提交 |
+| workspaces/monorepo | ✅ | `mjm.ws.toml`(表名 `[ws]`,旗标 `init --ws`,本地文件不提交)列出同级模块;**替换发生在 classpath 装配**——锁行的 id 命中模块时用该模块的 `target/classes`,否则用 store;`build`/`test`/`run`/`classpath` 可见,`package --uber`/`bundle` 把本地 classes 嵌入产物并打 note;根目录 `lock`/`build`/`test`/`package`/`bundle`/`clean` 按依赖拓扑序逐模块执行(`--module` 只跑一个,环是错误)。详见 `docs/workspace-design.md` |
 | `mjm audit [--json] [--dev]` | ✅ | 依赖漏洞扫描(OSV.dev);只查 Central 坐标(gh:/url/local:/mjm:/命名仓库列为未检查并给原因,不当作干净);发现漏洞或查询失败 exit 1,全干净 exit 0;`--json` 输出 `vulnerabilities`/`notChecked`/`failures`;`--offline` 不适用(exit 2) |
 | ~~`mjm jdk`~~ | **不做** | toolchain 管理:2026-11-22 决定不做。现状已足够:JDK major 不符时报错并说明怎么办;新增它会引入下载通道、平台矩阵、外部二进制的校验信任、以及 build 里的第二个 JVM(子进程 javac),换来的只是省一次手工装 JDK |
 
@@ -411,6 +411,7 @@ IoC 接缝(未来扩展点,不引入插件机制):
 > 本节是**历史快照**:每条记录该里程碑完成当天的事实,包括当时的测试数与产物大小。
 > 这些数字不随代码演进更新,它们的作用是让人能回溯"那一刻是什么样"。
 > 描述**当前**能力时不要引用这里的计数——当前状态看命令的 usage 输出与 CI。
+> ※ 已快照:其中部分事实已被后续推翻(`gitee:` 通道已删除、交付物从 `target/{name}-{version}.jar` 迁到 `target/dist/`),权威定义见 §8;此处保留完成当天的原记录,不重写历史。
 
 - **M1a** ✅ 完成(2026-11-21):freeway-commons `toml` 包(SPEC §1 文法,40 测试)+ boot 配置级联接入 `.toml`;freeway 全仓 7 模块测试绿
 - **M1b** ✅ 完成(2026-11-21):mjm 骨架(groupId `com.jujin8.mjm`,JDK 25,依赖 freeway-commons)+ pom 解码器(`Poms`/`PomXml`/模型,23 测试)——parent 链递归、属性插值 fixpoint(`${revision}` 支持)、DM/BOM 合并、依赖过滤(compile/runtime、非 optional)、子集拒绝(ranges/snapshots/打包类型/坐标不一致/循环父链/DOCTYPE)全部落地

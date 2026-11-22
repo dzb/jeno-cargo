@@ -18,7 +18,7 @@
 
 | 工具 | 版本/位置 | 跑过什么 | 得到的结论 |
 |---|---|---|---|
-| mjm | `~/.mjm/bin/mjm` 0.2.4 | `mjm`(usage 列表)、`ls target dist`、`du -sh ~/.mjm/*` | 16 个动词;项目内 `target/` + `dist/` 两棵树;全局三处 `~/.mjm/{store,sources,locks}` |
+| mjm | `~/.mjm/bin/mjm` 0.2.4(当时快照) | `mjm`(usage 列表)、`ls target dist`、`du -sh ~/.mjm/*` | 当时:16 个动词;项目内 `target/` + `dist/` 两棵树;全局三处 `~/.mjm/{store,sources,locks}`。**现在**:19 个动词;交付物只在 `target/dist/`;store/sources 在 `${XDG_CACHE_HOME:-~/.cache}/mjm`,锁在 `${XDG_STATE_HOME:-~/.local/state}/mjm`(旧 `~/.mjm` 存在则仍优先) |
 | uv | `~/.local/bin/uv` | `uv --help`、`uv cache --help`、`uv python --help`、`uv sync --help`、`uv init` + `uv lock` + `uv sync`(空项目)、`uv cache dir` | 24 个动词;`uv init` 产出 `pyproject.toml`/`uv.lock`/`.python-version`/`src/`/`README`/`.git`;`uv sync` 之后才出现 `.venv`;`uv.lock` 首行 `version = 1` / `revision = 5`;缓存 `~/.cache/uv/{archive-v0,builds-v0,interpreter-v5,sdists-v10,CACHEDIR.TAG}`;`sync` 有 `--locked` / `--frozen` / `--offline` 三个与锁相关的旗标 |
 | go | `/usr/bin/go` | `go help`、`go help mod`、`go env GOMODCACHE GOCACHE` | 20 个动词;`mod` 子命令含 `download/vendor/verify/why`;`GOMODCACHE=~/go/pkg/mod`、`GOCACHE=~/.cache/go-build` |
 | npm | `/usr/bin/npm` | `npm config get cache` | 缓存 `~/.npm`(非 XDG) |
@@ -45,13 +45,13 @@ mjm 自身的数据(命令面、目录语义)直接读代码与 `mjm` 的 usage 
 
 | 工具 | 动词数 | 来源 |
 |---|---|---|
-| **mjm** | **16** | 实测 |
+| **mjm** | **19** | 实测(当前;首次实测的 0.2.4 快照为 16) |
 | go | 20 | 实测 |
 | uv | 24 | 实测 |
 | cargo | ~40 | 文档 |
 | npm | ~70 | 文档 |
 
-mjm 现有 16 个:`add build bundle clean info init lock outdated package publish remove run test tree why update`。
+mjm 现有 19 个:`add audit build bundle cache classpath clean info init lock outdated package publish remove run test tree why update`(另有别名 `upgrade`、`dist`)。
 
 **结论:在「动词数量」这条轴上,mjm 不需要再学谁。** 值得记的是 mjm 已经比同级工具更干净的
 三处,以及唯一真正缺的那个动词(见 §5 A2)。
@@ -220,10 +220,10 @@ uv 的 `.python-version` 本质是「工具链版本进仓库」;mjm 的 `[java]
   其余命令人读即可。**不是**给所有命令加
 - **动 manifest**:否
 
-### A7 ★ 工作区(已在 V2 排期,此处只确认模板)
+### A7 ★ 工作区 — **已实施**(0.2.9/0.2.10)
 
 `go.work`(不提交的本地覆盖文件)优于 cargo 的 `[workspace]` 清单继承:前者只是本机组合,
-后者要求把 monorepo 关系固化进仓库。mjm 的 V2 计划(`mjm.ws.toml`,gitignore 不提交)已经是后者,
+后者要求把 monorepo 关系固化进仓库。mjm 的实现(`mjm.ws.toml`,gitignore 不提交)按前者,
 保持。
 
 ---
@@ -254,7 +254,7 @@ uv 的 `.python-version` 本质是「工具链版本进仓库」;mjm 的 `[java]
 | A4 缓存目录带格式版本号 | ⏸ 暂缓 | 等真要改 store 布局时再做,现在记着 |
 | A5 `lock --check` | ✅ 已实施 | 0.2.5 |
 | A6 `tree/outdated --json` | ✅ 已实施 | 0.2.5 |
-| A7 工作区 | ⏸ V2 | 模板已定:`go.work` 式的 `mjm.ws.toml`,不提交 |
+| A7 工作区 | ✅ 已实施 | 0.2.9 收口 classpath 装配,0.2.10 落地 `mjm.ws.toml`/`init --ws`、替换与根目录编排;仍是 `go.work` 式本地文件,不提交 |
 
 ### 实施后再看:哪里比预期好,哪里比预期差
 
