@@ -4,22 +4,13 @@ import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.mjm.pom.PomSource;
 import com.jujin.mjm.project.DescriptorSource;
 import com.jujin.mjm.project.ProjectReader;
-import com.jujin.mjm.resolve.ArtifactLocations;
 import com.jujin.mjm.resolve.DigestSource;
 import com.jujin.freeway.commons.json.JsonUtils;
 import com.jujin.mjm.store.ArtifactStore;
 
-import javax.xml.stream.XMLInputFactory;
-import javax.xml.stream.XMLStreamReader;
 import java.io.IOException;
-import java.io.StringReader;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -29,7 +20,7 @@ import java.util.Map;
  *
  * <ul>
  *   <li>a Central coordinate ({@code group:artifact}) lists every version
- *       from the repository's {@code maven-metadata.xml}</li>
+ *       the repository publishes ({@link MetadataVersions})</li>
  *   <li>a bare name searches the Central index ({@code mjm add jackson}) —
  *       the fuzzy search Q1 scheduled for M5</li>
  * </ul>
@@ -39,7 +30,6 @@ public final class AddCommand implements Command {
     private final LockService lockService;
     private final ArtifactStore store;
     private final Path projectDir;
-    private final HttpClient http = HttpClient.newBuilder().build();
 
     @Inject
     public AddCommand(LockService lockService, ArtifactStore store, Path projectDir) {
@@ -83,7 +73,7 @@ public final class AddCommand implements Command {
         }
 
         if (value == null) {
-            return discover(key, mjToml);
+            return discover(key);
         }
 
         com.jujin.mjm.project.Requirement requirement;
@@ -117,18 +107,18 @@ public final class AddCommand implements Command {
     /**
      * One of the two "no value" answers: list versions, or search the index.
      * Both are network calls by nature — the version list is the repository's
-     * {@code maven-metadata.xml}, the search is the Central index. An explicit
-     * version resolves from the store, which is why the command as a whole
-     * still accepts {@code --offline}: only this form refuses it.
+     * metadata, the search is the Central index. An explicit version resolves
+     * from the store, which is why the command as a whole still accepts
+     * {@code --offline}: only this form refuses it.
      */
-    private int discover(String key, String mjToml) {
+    private int discover(String key) {
         if (ArtifactStore.isOffline()) {
             System.err.println("mjm: add without a version asks the repository for its "
                     + "version list — pass an explicit version, or drop --offline");
             return 2;
         }
         if (key.contains(":")) {
-            List<String> versions = versions(mjToml, key);
+            List<String> versions = MetadataVersions.central(key);
             if (versions.isEmpty()) {
                 System.err.println("mjm: no versions found for " + key);
                 return 1;
@@ -143,46 +133,11 @@ public final class AddCommand implements Command {
         return search(key);
     }
 
-    /** maven-metadata.xml's version list, straight from the repository. */
-    private List<String> versions(String mjToml, String coordinate) {
-        String base = ArtifactLocations.centralBase();
-        // an existing named repository could override; V1 lists from Central
-        String group = coordinate.substring(0, coordinate.indexOf(':'));
-        String artifactId = coordinate.substring(coordinate.indexOf(':') + 1);
-        String url = base + group.replace('.', '/') + "/" + artifactId + "/maven-metadata.xml";
-        String xml = fetch(url);
-        List<String> versions = new ArrayList<>();
-        try {
-            XMLInputFactory factory = XMLInputFactory.newFactory();
-            factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
-            factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
-            XMLStreamReader reader = factory.createXMLStreamReader(new StringReader(xml));
-            boolean inVersion = false;
-            while (reader.hasNext()) {
-                int event = reader.next();
-                if (event == XMLStreamReader.START_ELEMENT) {
-                    inVersion = "version".equals(reader.getLocalName());
-                } else if (event == XMLStreamReader.CHARACTERS && inVersion) {
-                    String text = reader.getText().trim();
-                    if (!text.isEmpty()) {
-                        versions.add(text);
-                    }
-                } else if (event == XMLStreamReader.END_ELEMENT) {
-                    inVersion = false;
-                }
-            }
-            reader.close();
-        } catch (Exception e) {
-            throw new IllegalStateException("cannot read maven-metadata.xml from " + url, e);
-        }
-        return versions;
-    }
-
     /** Central's index search: bare name in, group:artifact + latest version out. */
     private int search(String name) {
         String host = System.getProperty("mjm.search.host", "https://search.maven.org");
         String url = host + "/solrsearch/select?q=a:" + name + "&rows=20&wt=json";
-        String body = fetch(url);
+        String body = MetadataVersions.text(url);
         Object response = JsonUtils.parseObject(body).toMap().get("response");
         if (!(response instanceof Map<?, ?> responseMap)
                 || !(responseMap.get("docs") instanceof List<?> docs)) {
@@ -198,30 +153,6 @@ public final class AddCommand implements Command {
         }
         System.out.println("add one: mjm add \"<group:artifact>\" <version>");
         return 1;
-    }
-
-    private String fetch(String url) {
-        if (url.startsWith("file://")) {
-            try {
-                return Files.readString(Path.of(URI.create(url)));
-            } catch (IOException e) {
-                throw new IllegalStateException("cannot read " + url, e);
-            }
-        }
-        try {
-            HttpResponse<String> response = http.send(
-                    HttpRequest.newBuilder(URI.create(url)).GET().build(),
-                    HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 200) {
-                throw new IllegalStateException(url + " answered " + response.statusCode());
-            }
-            return response.body();
-        } catch (IOException e) {
-            throw new IllegalStateException("fetch failed: " + url, e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("fetch interrupted: " + url, e);
-        }
     }
 
     /**

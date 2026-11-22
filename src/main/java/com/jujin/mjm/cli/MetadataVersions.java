@@ -22,7 +22,9 @@ import java.util.List;
  *
  * <p>Shared by {@code mjm add} (choosing a version to declare) and
  * {@code mjm outdated} (comparing what is pinned against what exists), so both
- * answer "which versions are there" the same way.
+ * answer "which versions are there" the same way — including the HTTP/file
+ * fetch itself ({@link #text}), so the repository's wire format is read by one
+ * piece of code.
  */
 final class MetadataVersions {
 
@@ -51,7 +53,7 @@ final class MetadataVersions {
     static List<String> from(String base, String group, String artifactId) {
         String root = ArtifactLocations.baseUrl(base);
         String url = root + group.replace('.', '/') + "/" + artifactId + "/maven-metadata.xml";
-        return parse(fetch(url), url);
+        return parse(text(url), url);
     }
 
     /** The version list in a metadata document; public for tests. */
@@ -83,7 +85,8 @@ final class MetadataVersions {
         }
     }
 
-    private static String fetch(String url) {
+    /** One GET (or {@code file:} read) — metadata here, the Central index in {@code mjm add}. */
+    static String text(String url) {
         if (url.startsWith("file://")) {
             try {
                 return Files.readString(Path.of(URI.create(url)));
