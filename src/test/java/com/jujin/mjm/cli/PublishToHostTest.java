@@ -5,7 +5,11 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.PrintStream;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -13,13 +17,12 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code mjm publish https://host/base} — the URL-first path: the triple is
- * written in Maven's layout (the one {@code [repos]} already reads) and PUT to
- * the host. No platform account, no registry; any server accepting PUT works.
+ * A Maven-layout target is refused: mjm writes no POM, so neither mjm nor
+ * Maven could read the triple back. Nothing is uploaded, nothing is rewritten.
  */
 class PublishToHostTest {
 
@@ -37,20 +40,16 @@ class PublishToHostTest {
     }
 
     @Test
-    void theTripleLandsInMavenLayoutOverPut() throws Exception {
+    void anHttpsMavenHostIsRefusedBeforeAnyPut() throws Exception {
         Map<String, byte[]> received = new ConcurrentHashMap<>();
         HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         server.createContext("/", exchange -> {
-            if (!"PUT".equals(exchange.getRequestMethod())) {
-                exchange.sendResponseHeaders(405, -1);
-                return;
-            }
             received.put(exchange.getRequestURI().getPath(),
                     exchange.getRequestBody().readAllBytes());
             exchange.sendResponseHeaders(201, -1);
         });
         server.start();
-        String base = "http://localhost:" + server.getAddress().getPort() + "/repo/";
+        String base = "https://localhost:" + server.getAddress().getPort() + "/repo/";
 
         try {
             project();
@@ -58,31 +57,23 @@ class PublishToHostTest {
             assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
             assertEquals(0, new PackageCommand(store, dir).execute(List.of()));
 
-            int exit = new PublishCommand(dir).execute(List.of(base));
-            assertEquals(0, exit, "the upload succeeded");
+            Result result = publish(base);
 
-            // Maven layout: group/path/artifact/version/artifact-version.ext
-            assertTrue(received.containsKey(
-                            "/repo/com/acme/widget/1.2.0/widget-1.2.0.jar"),
-                    "the jar is at its Maven coordinates: " + received.keySet());
-            assertTrue(received.containsKey(
-                            "/repo/com/acme/widget/1.2.0/widget-1.2.0.mjm.toml"),
-                    "the descriptor rides beside it: " + received.keySet());
-            assertTrue(received.containsKey(
-                            "/repo/com/acme/widget/1.2.0/widget-1.2.0.sha256"),
-                    "and the checksum: " + received.keySet());
-
-            String descriptor = new String(received.get(
-                    "/repo/com/acme/widget/1.2.0/widget-1.2.0.mjm.toml"));
-            assertTrue(descriptor.contains("group = \"com.acme\""),
-                    "the descriptor names the group a consumer addresses: " + descriptor);
+            assertEquals(1, result.exit());
+            assertTrue(result.err().contains("Maven-layout target"), result.err());
+            assertTrue(result.err().contains("mjm:local:"), result.err());
+            assertTrue(received.isEmpty(), "zero requests: " + received.keySet());
+            assertFalse(Files.exists(dir.resolve("target/dist/widget-1.2.0.mjm.toml")),
+                    "the descriptor was not rewritten");
+            assertFalse(Files.exists(dir.resolve("target/dist/widget-1.2.0.sha256")),
+                    "no half-published triple");
         } finally {
             server.stop(0);
         }
     }
 
     @Test
-    void withoutAGroupAMavenLayoutCannotBeBuilt() throws Exception {
+    void aLoopbackHttpMavenHostIsRefusedToo() throws Exception {
         Map<String, byte[]> received = new ConcurrentHashMap<>();
         HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         server.createContext("/", exchange -> {
@@ -93,51 +84,69 @@ class PublishToHostTest {
         String base = "http://localhost:" + server.getAddress().getPort() + "/repo/";
 
         try {
-            Files.createDirectories(dir.resolve("src/main/java/demo"));
-            Files.writeString(dir.resolve("mjm.toml"), """
-                [project]
-                name = "widget"
-                version = "1.2.0"
-                """);
-            Files.writeString(dir.resolve("src/main/java/demo/App.java"),
-                    "package demo; public final class App {}");
-            Files.writeString(dir.resolve("mjm.lock"), "");
-
+            project();
             ArtifactStore store = new ArtifactStore(dir.resolve("store"));
             assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
             assertEquals(0, new PackageCommand(store, dir).execute(List.of()));
 
-            assertEquals(1, new PublishCommand(dir).execute(List.of(base)),
-                    "no group means no path to write to");
-            assertTrue(received.isEmpty(), "nothing was uploaded");
+            Result result = publish(base);
+
+            assertEquals(1, result.exit());
+            assertTrue(result.err().contains("Maven-layout target"), result.err());
+            assertTrue(received.isEmpty(), "loopback does not make the layout readable");
         } finally {
             server.stop(0);
         }
     }
 
     @Test
-    void aRejectingServerIsReportedWithTheProtocolHint() throws Exception {
-        HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        server.createContext("/", exchange -> {
-            exchange.sendResponseHeaders(405, -1);  // a static server: PUT not allowed
-        });
-        server.start();
-        String base = "http://localhost:" + server.getAddress().getPort() + "/repo/";
+    void aLocalMavenDirectoryIsRefusedWithTheSameMessage() throws Exception {
+        project();
+        ArtifactStore store = new ArtifactStore(dir.resolve("store"));
+        assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
+        assertEquals(0, new PackageCommand(store, dir).execute(List.of()));
 
-        try {
-            project();
-            ArtifactStore store = new ArtifactStore(dir.resolve("store"));
-            assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
-            assertEquals(0, new PackageCommand(store, dir).execute(List.of()));
+        Result result = publish("local:../maven-repo");
 
-            assertEquals(1, new PublishCommand(dir).execute(List.of(base)),
-                    "a host that refuses PUT fails the publish");
-        } finally {
-            server.stop(0);
-        }
+        assertEquals(1, result.exit());
+        assertTrue(result.err().contains("Maven-layout target"), result.err());
+        assertFalse(Files.exists(dir.getParent().resolve("maven-repo")), "nothing was written");
     }
 
-    private void project() throws Exception {
+    @Test
+    void aNonLoopbackPlainHttpMjmRepositoryIsRejected() throws Exception {
+        project();
+        ArtifactStore store = new ArtifactStore(dir.resolve("store"));
+        assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
+        assertEquals(0, new PackageCommand(store, dir).execute(List.of()));
+
+        Result result = publish("mjm:http://192.168.1.1/");
+
+        assertEquals(1, result.exit());
+        assertTrue(result.err().contains("mjm:local:"), result.err());
+    }
+
+    // ------------------------------------------------------------------
+
+    private Result publish(String target) {
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        int exit;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
+            exit = new PublishCommand(dir).execute(List.of(target));
+        } finally {
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+        }
+        return new Result(exit, out.toString(StandardCharsets.UTF_8),
+                err.toString(StandardCharsets.UTF_8));
+    }
+
+    private void project() throws IOException {
         Files.createDirectories(dir.resolve("src/main/java/demo"));
         Files.writeString(dir.resolve("mjm.toml"), """
             [project]
@@ -153,4 +162,6 @@ class PublishToHostTest {
                         new com.jujin.mjm.resolve.ResolvedGraph(List.of(), List.of(), Map.of()),
                         url -> "e".repeat(64)));
     }
+
+    private record Result(int exit, String out, String err) {}
 }

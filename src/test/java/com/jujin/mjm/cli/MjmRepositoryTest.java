@@ -137,7 +137,7 @@ class MjmRepositoryTest {
                 "/repo/demo/0.1.0/demo-0.1.0.sha256"), puts);
 
         exit = new PublishCommand(project).execute(List.of(base + "/maven/"));
-        assertEquals(1, exit, "the Maven layout still requires [project].group");
+        assertEquals(1, exit, "a Maven-layout target is refused: mjm writes no POM");
     }
 
     @Test

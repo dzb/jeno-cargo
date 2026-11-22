@@ -35,13 +35,18 @@ import java.util.Map;
  *   mjm publish                    → target/dist/ + upload hint
  *   mjm publish gh:owner/repo     → target/dist/ + GitHub native upload
  *   mjm publish mjm:https://host/ → target/dist/ + mjm layout PUT (no group needed)
- *   mjm publish https://host/     → target/dist/ + Maven layout PUT (needs [project].group)
+ *   mjm publish mjm:local:<dir>   → target/dist/ + the same layout on disk
  * </pre>
  *
+ * <p>A Maven-layout target ({@code https://host/}, {@code local:<dir>}) is
+ * refused: mjm writes no POM, so neither mjm nor Maven could read back the
+ * triple. Reading Maven repositories stays supported; only publishing to one
+ * is not.
+ *
  * <p>Authentication: {@code MJM_GITHUB_TOKEN} for gh: targets, and
- * {@code MJM_PUBLISH_TOKEN} (if the host wants one) for plain HTTP hosts.
- * Without a token, the files are generated but not uploaded — the checklist is
- * printed instead.
+ * {@code MJM_PUBLISH_TOKEN} for mjm-layout hosts that want one. Without a
+ * token, the files are generated but not uploaded — the checklist is printed
+ * instead.
  */
 public final class PublishCommand implements Command {
 
@@ -69,7 +74,16 @@ public final class PublishCommand implements Command {
 
     @Override
     public String summary() {
-        return "write the release triple and upload it: gh:, mjm:https://host/, or an http(s) host";
+        return "write the release triple and upload it: gh:, mjm:https://host/, mjm:local:<dir>";
+    }
+
+    @Override
+    public String help() {
+        return """
+               targets mjm can read back: gh:<owner>/<repo>, mjm:https://host/,
+               mjm:local:<dir>; no target only prepares target/dist/.
+               a Maven-layout target (https://host/, local:<dir>) is refused:
+               mjm writes no POM, so neither mjm nor Maven could consume it.""";
     }
     @Override
     public String usage() {
@@ -118,20 +132,28 @@ public final class PublishCommand implements Command {
         }
 
         String target = args.isEmpty() ? null : args.getFirst();
-        // A dependency in the repository we are publishing to is a sibling: the
-        // descriptor can say "gadget, 0.9.0" and the consumer's resolver reads it
-        // back as another artifact in that same repository. Anything bound to a
-        // different repository stays a rule, and rules do not travel.
+        // Only targets mjm itself can read back. Maven layouts are refused
+        // before anything is written: mjm emits no POM, so neither mjm nor
+        // Maven could consume what it just uploaded.
         Repository publishTarget = null;
-        if (target != null && !target.startsWith("gh:")
-                && !target.startsWith("https://") && !target.startsWith("http://")) {
+        if (target != null && !target.startsWith("gh:")) {
             try {
                 publishTarget = Repository.parse(target);
             } catch (IllegalArgumentException e) {
                 System.err.println("mjm: " + e.getMessage());
                 return 1;
             }
+            if (publishTarget.layout() == Repository.Layout.MAVEN) {
+                System.err.println("mjm: cannot publish to a Maven-layout target — mjm writes "
+                        + "no POM, so neither mjm nor Maven can read it back; use "
+                        + "gh:<owner>/<repo> or mjm:https://host/ (or mjm:local:<dir>)");
+                return 1;
+            }
         }
+        // A dependency in the repository we are publishing to is a sibling: the
+        // descriptor can say "gadget, 0.9.0" and the consumer's resolver reads it
+        // back as another artifact in that same repository. Anything bound to a
+        // different repository stays a rule, and rules do not travel.
         String publishBase = publishTarget != null && publishTarget.isMjmLayout()
                 ? ArtifactLocations.canonicalLocation(publishTarget) : null;
         java.util.Set<String> siblings = new java.util.HashSet<>();
@@ -201,32 +223,20 @@ public final class PublishCommand implements Command {
         System.out.println("  " + dist.resolve(shaName));
 
         if (args.isEmpty()) {
-            System.out.println("upload the three files wherever a URL can reach — a GitHub "
-                    + "release, an mjm: repository, an OSS bucket, any static server. "
-                    + "then tell a teammate:");
+            System.out.println("upload the three files to a GitHub release or an mjm: "
+                    + "repository, then tell a teammate:");
             System.out.println("  mjm add \"" + name + "\" gh:<owner>/" + name + "@v" + version);
+            System.out.println("  (or publish mjm:https://host/ to host it yourself)");
             return 0;
         }
 
-        // target given — the layout decides how it is written
+        // target given — only the mjm layout is allowed by this point
         if (publishTarget != null) {
-            return switch (publishTarget.layout()) {
-                case MJM -> publishTarget.isLocal()
-                        ? publishToLocalMjmRepository(publishTarget, project, dist,
-                                jarName, descriptorName, shaName)
-                        : uploadToMjmRepository(publishTarget, project, dist,
-                                jarName, descriptorName, shaName);
-                case MAVEN -> publishTarget.isLocal()
-                        ? localMavenNotSupported(publishTarget)
-                        : uploadToHost(target, project, dist, jarName, descriptorName, shaName);
-            };
-        }
-        if (target != null && (target.startsWith("https://") || target.startsWith("http://"))) {
-            return uploadToHost(target, project, dist, jarName, descriptorName, shaName);
-        }
-        if (target != null && !target.startsWith("gh:")) {
-            System.err.println("mjm: unknown publish target '" + target + "'");
-            return 1;
+            return publishTarget.isLocal()
+                    ? publishToLocalMjmRepository(publishTarget, project, dist,
+                            jarName, descriptorName, shaName)
+                    : uploadToMjmRepository(publishTarget, project, dist,
+                            jarName, descriptorName, shaName);
         }
 
         String token = githubToken();
@@ -242,7 +252,7 @@ public final class PublishCommand implements Command {
     }
 
     // ------------------------------------------------------------------
-    // http(s) host — Maven layout, HTTP PUT
+    // mjm-layout uploads — HTTP PUT or a local directory
     // ------------------------------------------------------------------
 
     /**
@@ -260,48 +270,6 @@ public final class PublishCommand implements Command {
      *
      * <p>Requires {@code [project].group}: the layout is group-based, and
      * without one there is no path to write to.
-     */
-    private int uploadToHost(String base, MjProject project, Path dist,
-                             String jarName, String descriptorName, String shaName) {
-        if (project.group() == null) {
-            System.err.println("mjm: publishing to " + base + " needs [project].group — "
-                    + "a Maven layout is group-based (group/path/artifact/version/)");
-            return 1;
-        }
-        String root = base.endsWith("/") ? base : base + "/";
-        String directory = project.group().replace('.', '/') + "/" + project.name()
-                + "/" + project.version() + "/";
-
-        List<Path> files = List.of(
-                dist.resolve(jarName),
-                dist.resolve(descriptorName),
-                dist.resolve(shaName));
-        for (Path file : files) {
-            String url = root + directory + file.getFileName();
-            try {
-                put(url, Files.readAllBytes(file));
-            } catch (IOException | InterruptedException e) {
-                System.err.println("mjm: PUT " + url + " failed — " + e.getMessage());
-                System.err.println("  the host must accept HTTP PUT (WebDAV); a plain static "
-                        + "server rejects it");
-                return 1;
-            }
-            System.out.println("  PUT " + url);
-        }
-
-        System.out.println("published to " + base + " — consume it with:");
-        System.out.println("  [repos]");
-        System.out.println("  mine = \"" + root + "\"");
-        System.out.println("  [deps.mine]");
-        System.out.println("  \"" + project.group() + ":" + project.name() + "\" = \""
-                + project.version() + "\"");
-        return 0;
-    }
-
-    /**
-     * Publishes to an {@code mjm:} repository — two levels, no group:
-     * {@code <base>/<name>/<version>/<name>-<version>.{jar,mjm.toml,sha256}}.
-     * No {@code [project].group} is needed: that is the point of the layout.
      */
     private int uploadToMjmRepository(Repository repository, MjProject project, Path dist,
                                       String jarName, String descriptorName, String shaName) {
@@ -333,19 +301,6 @@ public final class PublishCommand implements Command {
         return 0;
     }
 
-    private int localMavenNotSupported(Repository repository) {
-        System.err.println("mjm: cannot publish to " + repository.declaration()
-                + " — a local: repository is a Maven layout read as-is; publish writes the "
-                + "mjm layout (mjm:local:<dir>) or an http(s) host");
-        return 1;
-    }
-
-    /**
-     * {@code mjm publish mjm:local:<dir>} — copies the same three files into the
-     * mjm layout on disk, creating the directory. No network, no account: this
-     * is how a repository inside a checkout gets filled without hand-writing a
-     * {@code jar} command and a Maven pom beside it.
-     */
     private int publishToLocalMjmRepository(Repository repository, MjProject project, Path dist,
                                             String jarName, String descriptorName,
                                             String shaName) {

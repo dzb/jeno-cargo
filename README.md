@@ -148,26 +148,24 @@ mylib-1.2.0.sha256
 | GitHub Releases | `gh:owner/repo@v1.2.3` | `mjm publish gh:owner/repo` |
 | ~~Gitee Releases~~ | 已移除:附件匿名下载需令牌,违反零配置;用裸 URL 或自建主机 | — |
 | **your own host** — mjm layout | `[repos.mine]` `type = "mjm"`, `url = "https://my.host/"` + `"lib" = "mine:1.2.3"` | `mjm publish mjm:https://my.host/` — two levels, no `group` needed |
-| **your own host** — Maven layout (the default type) | `[repos.corp]` `url = "https://nexus.corp/"` + `"com.corp:lib" = "corp:1.2.3"` | `mjm publish https://my.host/repo/` — needs `[project].group` |
+| **your own host** — Maven layout (the default type) | `[repos.corp]` `url = "https://nexus.corp/"` + `"com.corp:lib" = "corp:1.2.3"` | readable by mjm, but **not a publish target**: mjm writes no POM. Publish the layout with your own tooling, or use the mjm layout |
 | a local directory | `[repos.vend]` `type = "mjm"`, `url = "vendor"` (or the legacy `local:/path` string) | `mjm publish mjm:local:vendor` (writes the triple in place) |
-| any static server | a bare `https://…/x.jar` leaf | upload the jar your way |
+| any static server | a bare `https://…/x.jar` leaf | upload the jar your way (a leaf carries no descriptor, so it is not a `publish` target) |
 
 The `mjm:` layout is the shortest one: `mjm publish mjm:https://my.host/` writes
 `<name>/<version>/<name>-<version>.{jar,mjm.toml,sha256}` and needs no `[project].group`
-on either side. The Maven path is still there for existing hosts:
-`mjm publish https://my.host/repo/` writes
-`group/path/artifact/version/artifact-version.{jar,mjm.toml,sha256}` — the same
-layout `[repos]` already reads — and PUTs each file. A dependency names its
-repository in the value (`corp:1.2.3`); the older `[deps.corp]` table form is
-legacy but still read. `gh` is a reserved name — the `gh:` prefix wins, so a repository
-cannot take it. Any server accepting HTTP
-PUT works (nginx with dav_module, Apache mod_dav, most object-storage
-gateways). `MJM_PUBLISH_TOKEN` adds a bearer token when the host wants one.
+on either side. A Maven-layout target is **refused**: mjm generates no POM, so
+neither mjm nor Maven could read the triple back. Maven repositories remain
+readable (`[repos] type = "maven"`); publishing into one needs a POM generator,
+which mjm does not have. A dependency names its repository in the value
+(`corp:1.2.3`); the older `[deps.corp]` table form is legacy but still read.
+`gh` is a reserved name — the `gh:` prefix wins, so a repository cannot take it.
+`MJM_PUBLISH_TOKEN` adds a bearer token when the mjm-layout host wants one.
 
-mjm speaks exactly one upload protocol on purpose. It cannot know every host's
-API, and an adapter per backend is how a build tool turns into a deployment
-platform. GitHub gets native upload because its release API is stable and public; everything else takes the three files and whatever transfer
-tool you already trust.
+Publishing accepts only targets mjm can read back — a GitHub release, an mjm
+layout over HTTPS, or an mjm layout on disk. GitHub gets native upload because
+its release API is stable and public; everything else is the three files over a
+plain PUT, and nothing else is promised.
 
 The descriptor travels with the jar, so a published library is a **full
 citizen**: its dependencies participate in the consumer's closure and depth
@@ -260,7 +258,7 @@ the next invocation.
 | `cache dir \| size \| prune \| clean` | inspect or reclaim the user-level store, sources and lock files (`dir` shows the three roots, `size` their occupancy, `prune` removes only provably useless files, `clean` deletes store and sources) |
 | `outdated [--json]` | pinned dependencies with newer versions available; `--json` gives `upToDate`/`updates`/`notChecked`/`failures` |
 | `audit [--json] [--dev]` | known vulnerabilities for the locked closure (OSV). Maven-coordinate artifacts are checked; `gh:`/`url`/`local:`/`mjm:`/named repositories are listed as `notChecked` with the reason — never as clean. Vulnerabilities or failed queries exit 1; `--json` gives `vulnerabilities`/`notChecked`/`failures` |
-| `publish [target]` | the release triple; `gh:owner/repo`, `mjm:https://host/` (two levels, no group), `mjm:local:<dir>` (the same two-level layout written into a directory, no network), or any `http(s)://` host (Maven layout over PUT, needs group) |
+| `publish [target]` | the release triple; `gh:owner/repo`, `mjm:https://host/` (two levels, no group), `mjm:local:<dir>` (the same layout written into a directory, no network), or no target (prepare `target/dist/` only). A Maven-layout target (`https://host/`, `local:<dir>`) is refused — mjm writes no POM, so it could not read the result back |
 | `update` / `upgrade` | self-upgrade from GitHub Releases |
 | `-o`, `--offline` (flag) | refuse all network access — store hits only. Not for `update`/`publish`/`outdated`/`audit`, which are network by nature. It is mjm's only before a `run` target; after the target (or after `--`) it is the program's |
 | `--` (terminator) | end mjm's options: everything after it is a positional argument. A strict command rejects it (`build -- --offline` is a usage error); `run` hands it to the program |

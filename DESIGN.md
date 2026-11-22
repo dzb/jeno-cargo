@@ -290,7 +290,7 @@ Maven 布局主机(`https://host/`,legacy,需要 `[project].group`)。
 
 - **GitHub**:release 附件匿名可下载,消费方零配置
 - **Gitee**:2026-11-22 随 `gitee:` 物种移除——附件匿名下载需 Bearer 令牌,违背零配置。需要它时用裸 URL 叶子或自建主机
-- **自建主机是一等目标**:`mjm publish https://my.host/repo/` 按 Maven 布局(`group/path/artifact/version/`)PUT 三件套——与 `[repos]` 读取的布局完全一致,局域网 http 同样适用。上传协议只有一个(PUT/WebDAV),不为每个后端写适配器
+- **自建主机是一等目标,但只发 mjm 布局**:`mjm publish mjm:https://my.host/` 按两层布局 PUT 三件套;Maven 布局(`https://host/`、`local:<dir>`)**不是发布目标**——mjm 不生成 POM,发出去两边都读不回来。Maven 仓库仍可读(`[repos] type = "maven"`),只是不往它发
 - **仓内自举是一等目标**:`mjm publish mjm:local:<dir>` 直接把 mjm 布局三件套写进仓库内的目录(`name/version/`,建目录、原子写、不联网);`[repos] x = "mjm:local:<dir>"` 读它。不再需要手写 Maven pom 与 `jar --create` 来喂 `local:` 目录
 - 迁库只改一行 `[repos]`:从 GitHub 到自建服务器、从公司仓库到镜像,不需要账号迁移或重新发布
 - `mjm publish`(V1 ✅):生成 dist/ 三件套 + 上传清单
@@ -356,7 +356,7 @@ push tag v*  →  验证 + 发行
 | `mjm test` | ✅ | fork JVM runner:`@MjmTest` + JUnit Platform;classpath 含 MAIN + dev;`[test]` include/exclude 过滤源;每次开跑前清空 `target/test-results/`,跑完每个测试类一个 surefire 形状的 `TEST-<类名>.xml`(无 timestamp、可逐字节 diff) |
 | `mjm package` | ✅ | 纯 jar;`--uber` 合并闭包(排除 dev)并输出 `target/dist/<name>-<ver>-uber.jar`——与普通 jar 不同名,互不覆盖 |
 | `mjm bundle` | ✅ | 发行目录 + setup.sh + tar.gz,输出 `target/dist/`(应用自用;库不需要) |
-| `mjm publish` | ✅ | 三件套(`target/dist/`);`gh:` 原生上传;**任意 http(s) 主机 → Maven 布局 + HTTP PUT**;`mjm:https://…` 两层布局 PUT;`mjm:local:<dir>` 本地两层布局原子写入(不联网);`[repos]` 以 `type = "maven"\|"mjm"` 显式声明布局(字符串写法为 legacy);描述符只含 MAIN 依赖 |
+| `mjm publish` | ✅ | 三件套(`target/dist/`);`gh:` 原生上传;`mjm:https://…` 两层布局 PUT;`mjm:local:<dir>` 本地两层布局原子写入(不联网);无 target 只准备三件套。**Maven 布局目标拒绝**(mjm 不写 POM,发了也读不回来);`[repos] type = "maven"\|"mjm"` 的读取不变;描述符只含 MAIN 依赖 |
 | `mjm update` / `mjm upgrade` | ✅ | 自升级(alias 同一实现) |
 | ~~`mjm release`~~ | **已删除** | 生命周期属于项目自己的 CI;mjm 只提供单步机制 |
 | `mjm init [--pom] [--ws] [--force]` | ✅ | 骨架;`--pom` 从 pom.xml 迁移(逐条报告不可表达的事实);`--ws` 写 `mjm.ws.toml`(本地工作区,见 `docs/workspace-design.md`)。**工作区根目录拒绝 `init`/`--pom`**(即使 `--force`),否则会把根变成模块;`--ws` 仍可用 |
