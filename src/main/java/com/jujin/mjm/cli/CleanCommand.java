@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * {@code mjm clean} — remove this project's build output.
@@ -84,6 +86,31 @@ public final class CleanCommand implements Command {
     }
 
     private int removeOutputs(boolean target, boolean dist) {
+        List<Path> requested = new ArrayList<>();
+        if (target) {
+            requested.add(projectDir.resolve("target"));
+        }
+        if (dist) {
+            requested.add(projectDir.resolve("dist"));
+        }
+
+        // Look before deleting: a mount anywhere in either requested tree
+        // refuses the whole run. Deleting one tree and only then finding a
+        // mount in the other would leave the user with half a clean.
+        List<Path> mounts = new ArrayList<>();
+        for (Path tree : requested) {
+            if (!Files.exists(tree, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(tree)) {
+                continue;  // nothing to scan; a link is removed itself
+            }
+            mounts.addAll(mountDetector.apply(tree));
+        }
+        if (!mounts.isEmpty()) {
+            System.err.println("mjm: refusing to remove " + describe(requested)
+                    + " — these paths are mount points: " + describe(mounts)
+                    + "; unmount them first, or remove the contents by hand");
+            return 1;
+        }
+
         boolean removedTarget = false;
         boolean removedSomething = false;
         if (target) {
@@ -147,18 +174,6 @@ public final class CleanCommand implements Command {
                 System.out.println("removed " + label);
                 return true;
             }
-            List<Path> mounts = Mounts.inside(directory);
-            if (mounts == null) {
-                // Not Linux (no mountinfo): only a different file store is
-                // visible from here. This misses bind mounts of the same
-                // filesystem — an incomplete guard, documented rather than
-                // pretended.
-                if (isMountPoint(directory)) {
-                    throw mountRefusal(directory, directory);
-                }
-            } else if (!mounts.isEmpty()) {
-                throw mountRefusal(directory, mounts.getFirst());
-            }
             DistOutput.clear(directory);
             System.out.println("removed " + label);
             return true;
@@ -168,29 +183,72 @@ public final class CleanCommand implements Command {
         }
     }
 
-    /**
-     * Refuses a tree that contains a mount point: walking into it would delete
-     * the mounted filesystem's contents, which is never what "clean my build"
-     * means.
-     */
-    private static IllegalStateException mountRefusal(Path directory, Path mount) {
-        return new IllegalStateException("refusing to remove " + directory + " — " + mount
-                + " is a mount point; unmount it first (umount " + mount
-                + "), or remove the contents by hand");
+    /** How a tree's mounts are found; replaced in tests, never at runtime. */
+    private static java.util.function.Function<Path, List<Path>> mountDetector =
+            CleanCommand::mountsIn;
+
+    /** Tests only: pretend some trees contain mounts. */
+    static void useMountDetector(java.util.function.Function<Path, List<Path>> detector) {
+        mountDetector = detector;
+    }
+
+    /** Back to the kernel's own table (or the file-store fallback). */
+    static void useKernelMountDetector() {
+        mountDetector = CleanCommand::mountsIn;
+    }
+
+    /** Mount points at or inside a tree. */
+    private static List<Path> mountsIn(Path directory) {
+        List<Path> fromKernel = Mounts.inside(directory);
+        if (fromKernel != null) {
+            return fromKernel;
+        }
+        // No mountinfo (not Linux): compare each directory's file store with its
+        // parent's, walking the whole tree. This catches a nested mount of a
+        // different filesystem; it cannot catch a bind mount of the same one —
+        // that form is described only by mountinfo, which this branch by
+        // definition does not have. An incomplete guard, stated as such.
+        return nestedFileStores(directory, parent ->
+                fileStoreOf(directory, parent));
     }
 
     /**
-     * The non-Linux fallback: a directory whose file store differs from its
-     * parent's is a mount point. This only sees a different filesystem — a bind
-     * mount of the same one needs {@link Mounts}.
+     * Every directory under {@code root} whose store differs from its parent's.
+     * {@code storeOf} is injectable so the fallback's walk is testable without
+     * creating real mounts.
      */
-    static boolean isMountPoint(Path directory) {
-        try {
-            Path parent = directory.toAbsolutePath().normalize().getParent();
-            return parent != null
-                    && !Files.getFileStore(directory).equals(Files.getFileStore(parent));
+    static List<Path> nestedFileStores(Path root, java.util.function.Function<Path, Object> storeOf) {
+        List<Path> mounts = new ArrayList<>();
+        try (Stream<Path> walk = Files.walk(root)) {
+            for (Path directory : walk.filter(Files::isDirectory).sorted().toList()) {
+                Path parent = directory.getParent();
+                if (parent == null || Files.isSymbolicLink(directory)) {
+                    continue;
+                }
+                Object here = storeOf.apply(directory);
+                Object up = storeOf.apply(parent);
+                if (here != null && up != null && !here.equals(up)) {
+                    mounts.add(directory);
+                }
+            }
         } catch (IOException e) {
-            return false;  // cannot tell: treat as an ordinary directory
+            // cannot walk: deletion itself will fail with a readable message
         }
+        return mounts;
+    }
+
+    /** The real fallback store lookup: each path's {@link java.nio.file.FileStore}. */
+    private static Object fileStoreOf(Path ignored, Path path) {
+        try {
+            return Files.getFileStore(path);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** {@code target/, dist/} — for messages. */
+    private static String describe(List<Path> paths) {
+        return paths.stream().map(Path::toString)
+                .collect(java.util.stream.Collectors.joining(", "));
     }
 }

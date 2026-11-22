@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -29,6 +30,17 @@ class CleanOutdatedTest {
 
     @TempDir
     Path dir;
+
+    @org.junit.jupiter.api.BeforeEach
+    void isolateProjectLocks() {
+        ProjectLock.useRoot(dir.resolve(".locks"));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreGuards() {
+        CleanCommand.useKernelMountDetector();
+        ProjectLock.useUserRoot();
+    }
 
     // ------------------------------------------------------------------
     // clean
@@ -111,13 +123,60 @@ class CleanOutdatedTest {
     }
 
     @Test
-    void aMountPointWouldBeRefused() {
-        assertFalse(CleanCommand.isMountPoint(dir), "a temp dir is an ordinary directory");
-        // /proc is a mounted filesystem on Linux; the check must see the
-        // different file store rather than walking in and deleting it.
-        Path proc = Path.of("/proc");
-        assertTrue(Files.isDirectory(proc));
-        assertTrue(CleanCommand.isMountPoint(proc), "/proc is a mount point");
+    void aMountInEitherRequestedTreeRefusesTheWholeRun() throws Exception {
+        Files.createDirectories(dir.resolve("target/classes"));
+        Files.createDirectories(dir.resolve("dist"));
+        Files.writeString(dir.resolve("target/classes/A.class"), "x");
+        CleanCommand.useMountDetector(tree ->
+                tree.getFileName().toString().equals("dist") ? List.of(tree) : List.of());
+
+        ByteArrayOutputStream errors = new ByteArrayOutputStream();
+        PrintStream original = System.err;
+        int exit;
+        try {
+            System.setErr(new PrintStream(errors, true, StandardCharsets.UTF_8));
+            exit = new CleanCommand(dir).execute(List.of("--target", "--dist"));
+        } finally {
+            System.setErr(original);
+        }
+
+        String message = errors.toString(StandardCharsets.UTF_8);
+        assertEquals(1, exit);
+        assertTrue(message.contains("dist"), "the refusal names the tree with the mount: " + message);
+        assertTrue(Files.exists(dir.resolve("target/classes/A.class")),
+                "nothing is removed when the other requested tree contains a mount");
+    }
+
+    @Test
+    void aMountInATreeNobodyAskedForDoesNotBlock() throws Exception {
+        Files.createDirectories(dir.resolve("target/classes"));
+        Files.createDirectories(dir.resolve("dist"));
+        // target/ is a mount, but only --dist was requested
+        CleanCommand.useMountDetector(tree ->
+                tree.getFileName().toString().equals("target") ? List.of(tree) : List.of());
+
+        assertEquals(0, new CleanCommand(dir).execute(List.of("--dist")));
+
+        assertFalse(Files.exists(dir.resolve("dist")), "the requested tree is removed");
+        assertTrue(Files.isDirectory(dir.resolve("target/classes")),
+                "an unrequested tree is not inspected, so a mount there blocks nothing");
+    }
+
+    @Test
+    void theFallbackFindsANestedFileStore() throws Exception {
+        Path root = Files.createDirectories(dir.resolve("target"));
+        Files.createDirectories(root.resolve("classes"));
+        Files.createDirectories(root.resolve("cache"));
+        Map<String, Object> stores = Map.of(
+                "target", "dev1",
+                "target/classes", "dev1",
+                "target/cache", "tmpfs");
+
+        List<Path> mounts = CleanCommand.nestedFileStores(root,
+                path -> stores.getOrDefault(dir.relativize(path).toString(), "dev1"));
+
+        assertEquals(List.of(root.resolve("cache")), mounts,
+                "a nested directory on another store is a mount; siblings on the same one are not");
     }
 
     @Test

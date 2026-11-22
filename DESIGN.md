@@ -339,7 +339,7 @@ git tags。GITHUB_TOKEN 的推送不触发新 run(平台防环),bump commit 无�
 | `mjm init [--pom] [--force]` | ✅ | 骨架,或从 pom.xml 迁移(逐条报告不可表达的事实) |
 | `mjm remove <id>` | ✅ | 删除一行声明并重锁 |
 | `mjm info <id> [--source]` | ✅ | 身份/来源/依赖/源码地址;`--source` 取源码树 |
-| `mjm clean [--target] [--dist]` | ✅ | **默认只清 `target/`**(无参或 `--target`);`--dist` 才清 `dist/`(交付物,可能含其他版本的产物,所以是显式要求);两个都给就都清;**永不触碰 store** |
+| `mjm clean [--target] [--dist]` | ✅ | **默认只清 `target/`**(无参或 `--target`);`--dist` 才清 `dist/`(交付物,可能含其他版本的产物,所以是显式要求);两个都给就都清;**两个目标先全部探测,任一(含其内部嵌套)是挂载点则整次拒绝、一个字节不删**;**永不触碰 store** |
 | `mjm outdated` | ✅ | 已钉版本 vs 仓库可用版本;只查 Central 与命名 https 仓库,`gh:`/`gitee:`/`url`/`local:` 列为"未检查";预发布默认不报(除非当前就是预发布);跨 major 单独一节 |
 | `--offline` | ✅ | 禁止一切网络访问;store 有则用,缺则报错。`update`/`publish`/`outdated` 不适用 |
 | daemon 常驻 | **M6** | 已确认需要:常驻 JVM 热命令,mvnd 已验证可快 2–4 倍 |
@@ -433,7 +433,7 @@ Gradle 9 / Maven 4 后,尚未覆盖的场景按下表排期。
 |---|---|---|---|
 | 0 | **`mjm source <id>`**(替代 sources jar)+ `mjm publish` 交接指令 | Go tag-archive、pkg.go.dev 可寻址源码;npm 的 `npm pack` 分享 | ✅ 已完成(2026-11-21) |
 | 1 | **`[dev-deps]` 依赖分组** | Cargo dev-dependencies、uv PEP 735 dependency-groups | ✅ 已完成(2026-11-21):独立顶层节;解析进同一张锁图,`scope = "dev"`;不进编译可见性/run/package/dist/发布描述符,只进 `mjm test`;MAIN 优先 |
-| 2 | `mjm init --pom` / `mjm remove` / `mjm clean` | mvn clean、npm init/uninstall、Maven 迁移 | ✅ 全部完成:init(含 `--pom` 迁移)、remove、clean(2026-11-22,`[--target\|--dist]`,永不碰 store) |
+| 2 | `mjm init --pom` / `mjm remove` / `mjm clean` | mvn clean、npm init/uninstall、Maven 迁移 | ✅ 全部完成:init(含 `--pom` 迁移)、remove、clean(2026-11-22,`[--target] [--dist]`,永不碰 store) |
 | 3 | ~~发布三件套补 `-sources` jar~~ → **`mjm info <id> [--source]`** | Go/Cargo 从不分离源码与产物;sources jar 是 Java 二进制分发的补丁,不是能力 | ✅ 已完成(2026-11-21):源码**随 tag 走**——gh:/gitee: 取 tag archive,Central 回退读发布者的 sources jar,URL 叶子明确拒绝。发布侧不产出 sources jar |
 | 4 | JUnit XML 测试报告 | mvn surefire 默认产物 | 未做(fork JVM 里产出 `target/test-results/` 即可接 GitHub checks UI) |
 | 5 | `mjm outdated` | mvn versions:display-dependency-updates、npm outdated | ✅ 已完成(2026-11-22):`maven-metadata.xml` 列版本;预发布按 qualifier token 判定(不靠 `-` 子串);local:/gh:/gitee:/url 明确列为未检查 |
