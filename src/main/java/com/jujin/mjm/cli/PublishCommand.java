@@ -200,7 +200,7 @@ public final class PublishCommand implements Command {
             return 1;
         }
 
-        String token = System.getenv("MJM_GITHUB_TOKEN");
+        String token = githubToken();
         if (token == null || token.isBlank()) {
             System.err.println("mjm: MJM_GITHUB_TOKEN environment variable is not set — "
                     + "set it to your GitHub personal access token, or run without the "
@@ -344,7 +344,7 @@ public final class PublishCommand implements Command {
         try {
             releaseId = createRelease(host, origin, owner, repo, tag, token);
         } catch (IOException | InterruptedException e) {
-            System.err.println("mjm: cannot create the release: " + e.getMessage());
+            System.err.println("mjm: " + e.getMessage());
             return 1;
         }
 
@@ -369,7 +369,7 @@ public final class PublishCommand implements Command {
     private String createRelease(String host, String origin, String owner, String repo,
                                  String tag, String token)
             throws IOException, InterruptedException {
-        String url = "https://api.github.com/repos/"
+        String url = apiBase() + "/repos/"
                 + origin.substring(origin.indexOf(':') + 1) + "/releases";
         String body = "{\"tag_name\":\"" + tag + "\",\"name\":\"" + tag
                 + "\",\"body\":\"released with mjm publish\"}";
@@ -394,18 +394,24 @@ public final class PublishCommand implements Command {
                         + " — attaching to it");
                 return existing;
             }
-            throw new IOException("release " + tag + " already exists on " + origin
-                    + " but could not be looked up — use a different version or "
-                    + "delete the existing release");
+            // 422 is not one thing: an empty repository, a protected tag, an
+            // invalid name and a release that already exists all land here.
+            // Without an existing release to attach to, GitHub's own message is
+            // the only honest explanation — never claim the release exists.
+            String detail = apiDetail(response.body());
+            throw new IOException("cannot create the release on " + origin
+                    + " (" + response.statusCode() + "): "
+                    + (detail.isBlank() ? "no release with tag " + tag + " exists and the "
+                            + "platform rejected the request" : detail));
         }
-        throw new IOException("release creation failed (" + response.statusCode() + "): "
-                + response.body().substring(0, Math.min(200, response.body().length())));
+        throw new IOException("cannot create the release on " + origin
+                + " (" + response.statusCode() + "): " + apiDetail(response.body()));
     }
 
     /** Looks up an existing release by tag; null when none is reachable. */
     private String findReleaseId(String owner, String repo, String tag, String token)
             throws IOException, InterruptedException {
-        String url = "https://api.github.com/repos/" + owner + "/" + repo
+        String url = apiBase() + "/repos/" + owner + "/" + repo
                 + "/releases/tags/" + tag;
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url)).GET()
                 .header("Authorization", "Bearer " + token);
@@ -433,12 +439,78 @@ public final class PublishCommand implements Command {
         }
     }
 
+
+    /**
+     * The GitHub API root. Overridable so the release paths can be exercised
+     * against a loopback server — tests must never touch the real API.
+     */
+    private static String apiBase() {
+        return System.getProperty("mjm.github.api", "https://api.github.com");
+    }
+
+    private static String uploadsBase() {
+        return System.getProperty("mjm.github.uploads", "https://uploads.github.com");
+    }
+
+    /** The token: the documented environment variable, or a property for tests/CI. */
+    private static String githubToken() {
+        String fromEnvironment = System.getenv("MJM_GITHUB_TOKEN");
+        return fromEnvironment != null && !fromEnvironment.isBlank()
+                ? fromEnvironment
+                : System.getProperty("mjm.github.token");
+    }
+
+    /**
+     * A rejected request's own words: GitHub's {@code message} plus every
+     * {@code errors[].message}, so "Validation Failed" alone never hides which
+     * validation failed. Truncated — an error line is a line, not a document.
+     */
+    private static String apiDetail(String body) {
+        String message = null;
+        List<String> details = new ArrayList<>();
+        try {
+            Map<String, Object> map = JsonUtils.parseObject(body).toMap();
+            if (map.get("message") != null) {
+                message = String.valueOf(map.get("message"));
+            }
+            if (map.get("errors") instanceof List<?> errors) {
+                for (Object error : errors) {
+                    Object text = error instanceof Map<?, ?> fields ? fields.get("message") : null;
+                    if (text != null && !String.valueOf(text).isBlank()) {
+                        details.add(String.valueOf(text));
+                    }
+                }
+            }
+        } catch (RuntimeException notJson) {
+            // fall through to the raw body
+        }
+        if (message == null && details.isEmpty()) {
+            return truncate(body);
+        }
+        StringBuilder out = new StringBuilder();
+        if (message != null) {
+            out.append(truncate(message));
+        }
+        for (String detail : details) {
+            if (!out.isEmpty()) {
+                out.append(" — ");
+            }
+            out.append(truncate(detail));
+        }
+        return out.toString();
+    }
+
+    private static String truncate(String text) {
+        String stripped = text == null ? "" : text.strip();
+        return stripped.length() <= 200 ? stripped : stripped.substring(0, 200) + "…";
+    }
+
     /** Uploads one file as a GitHub release asset. */
     private void uploadFile(String owner, String repo, String releaseId, Path file, String token)
             throws IOException, InterruptedException {
         byte[] bytes = Files.readAllBytes(file);
         String fileName = file.getFileName().toString();
-        String url = "https://uploads.github.com/repos/" + owner + "/" + repo
+        String url = uploadsBase() + "/repos/" + owner + "/" + repo
                 + "/releases/" + releaseId + "/assets?name=" + fileName;
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
                 .header("Authorization", "Bearer " + token)
