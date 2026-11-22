@@ -1,6 +1,7 @@
 package com.jujin.mjm.cli;
 
 import com.jujin.mjm.pom.PomSource;
+import com.jujin.mjm.resolve.ArtifactLocations;
 import com.jujin.mjm.project.DescriptorSource;
 import com.jujin.mjm.store.ArtifactStore;
 import com.jujin.mjm.store.LockFileReader;
@@ -45,6 +46,7 @@ class AddCommandTest {
             central.stop(0);
         }
         System.clearProperty("mjm.central.base");
+        System.clearProperty("mjm.github.host");
         resetOffline();
     }
 
@@ -172,6 +174,111 @@ class AddCommandTest {
             [deps.vendor]
             "com.example:lib-a" = "1.0.0"
             """.formatted(project.resolve("vendor").toAbsolutePath()));
+    }
+
+    @Test
+    void addWritesARepositoryValueShape(@TempDir Path projectStore) throws Exception {
+        Path project = Files.createDirectories(dir.resolve("value-shape"));
+        Files.createDirectories(project.resolve("vendor/com/example/lib-b/1.0.0"));
+        Files.writeString(project.resolve("vendor/com/example/lib-b/1.0.0/lib-b-1.0.0.pom"),
+                LIB_A_POM.replace("lib-a", "lib-b"));
+        Files.write(project.resolve("vendor/com/example/lib-b/1.0.0/lib-b-1.0.0.jar"),
+                "lib-b".getBytes());
+        Files.writeString(project.resolve("mjm.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [repos]
+            vendor = "local:vendor"
+            """);
+
+        ArtifactLocations.useProjectRoot(project);
+        ArtifactStore store = new ArtifactStore(projectStore);
+        int exit;
+        try {
+            exit = new AddCommand(new LockService(store, new StorePomSource(store),
+                    new StoreDescriptorSource(store)), store, project)
+                    .execute(List.of("com.example:lib-b", "vendor:1.0.0"));
+        } finally {
+            ArtifactLocations.useProjectRoot(Path.of("").toAbsolutePath());
+        }
+
+        assertEquals(0, exit);
+        assertTrue(Files.readString(project.resolve("mjm.toml"))
+                        .contains("\"com.example:lib-b\" = \"vendor:1.0.0\""),
+                "the value shape lands in [deps]");
+        assertTrue(Files.readString(project.resolve("mjm.lock"))
+                        .contains("source = \"local:vendor\""),
+                "and resolves through the named repository");
+    }
+
+    @Test
+    void addUnderstandsTheNativeShorthand(@TempDir Path projectStore) throws Exception {
+        String descriptor = """
+            [project]
+            name = "mylib"
+            version = "1.0.0"
+            """;
+        HttpServer github = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        github.createContext("/acme/mylib/releases/download/v1.0.0/mylib-1.0.0.mjm.toml",
+                exchange -> {
+                    byte[] body = descriptor.getBytes();
+                    exchange.sendResponseHeaders(200, body.length);
+                    exchange.getResponseBody().write(body);
+                    exchange.close();
+                });
+        github.createContext("/acme/mylib/releases/download/v1.0.0/mylib-1.0.0.jar",
+                exchange -> {
+                    byte[] body = "mylib-jar".getBytes();
+                    exchange.sendResponseHeaders(200, body.length);
+                    exchange.getResponseBody().write(body);
+                    exchange.close();
+                });
+        github.start();
+        String host = "http://localhost:" + github.getAddress().getPort();
+        System.setProperty("mjm.github.host", host);
+        try {
+            Path project = Files.createDirectories(dir.resolve("native"));
+            Files.writeString(project.resolve("mjm.toml"), """
+                [project]
+                name = "demo"
+                version = "0.1.0"
+                """);
+            ArtifactStore store = new ArtifactStore(projectStore);
+
+            int exit = new AddCommand(new LockService(store, new StorePomSource(store),
+                    new StoreDescriptorSource(store)), store, project)
+                    .execute(List.of("acme/mylib@v1.0.0"));
+
+            assertEquals(0, exit);
+            assertTrue(Files.readString(project.resolve("mjm.toml"))
+                            .contains("\"mylib\" = \"gh:acme/mylib@v1.0.0\""),
+                    "owner/repo@tag becomes the gh: value, keyed by the repo name");
+        } finally {
+            github.stop(0);
+            System.clearProperty("mjm.github.host");
+        }
+    }
+
+    @Test
+    void aNativeShorthandWithoutATagIsRefused() throws Exception {
+        Path project = Files.createDirectories(dir.resolve("no-tag"));
+        Files.writeString(project.resolve("mjm.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+            """);
+        byte[] before = Files.readAllBytes(project.resolve("mjm.toml"));
+        ArtifactStore store = new ArtifactStore(storeDir);
+
+        int exit = new AddCommand(new LockService(store, new StorePomSource(store),
+                new StoreDescriptorSource(store)), store, project)
+                .execute(List.of("acme/mylib"));
+
+        assertEquals(2, exit);
+        assertArrayEquals(before, Files.readAllBytes(project.resolve("mjm.toml")),
+                "nothing was written");
     }
 
     @Test

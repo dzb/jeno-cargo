@@ -67,6 +67,22 @@ class DescriptorReaderTest {
     }
 
     @Test
+    void aDescriptorCannotNameARepositoryInAValue() {
+        ProjectException error = assertThrows(ProjectException.class,
+            () -> DescriptorReader.parse("""
+                [project]
+                name = "mylib"
+                version = "1.2.0"
+
+                [deps]
+                "com.corp:lib" = "corp:2.1.0"
+                """, "mylib", "1.2.0"));
+
+        assertTrue(error.getMessage().contains("cannot declare repositories"),
+                error.getMessage());
+    }
+
+    @Test
     void descriptorsRejectUnknownKeysWithTheirPosition() {
         ProjectException error = assertThrows(ProjectException.class,
             () -> DescriptorReader.parse("""

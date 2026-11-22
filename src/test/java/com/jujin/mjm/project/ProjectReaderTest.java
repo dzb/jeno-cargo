@@ -88,6 +88,72 @@ class ProjectReaderTest {
     }
 
     @Test
+    void aValueCanNameItsRepository() {
+        MjProject project = ProjectReader.parse("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [repos]
+            corp = "https://nexus.corp.internal/repository/maven/"
+
+            [deps]
+            "com.corp:lib" = "corp:2.1.0"
+            "com.example:plain" = "1.2.3"
+            """);
+
+        Requirement named = project.requirements().get(0);
+        assertEquals(Species.CENTRAL, named.species());
+        assertEquals("corp", named.repository());
+        assertEquals("2.1.0", named.version());
+        assertEquals("com.corp:lib", named.id());
+
+        assertEquals(null, project.requirements().get(1).repository(),
+                "a bare version is still Central");
+    }
+
+    @Test
+    void aValueNamingAnUndeclaredRepositoryIsAnErrorListingTheDeclaredOnes() {
+        ProjectException error = assertThrows(ProjectException.class,
+            () -> ProjectReader.parse("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+
+                [repos]
+                corp = "https://nexus.corp.internal/repository/maven/"
+
+                [deps]
+                "com.other:lib" = "other:1.0.0"
+                """));
+
+        assertTrue(error.getMessage().contains("'other'"), error.getMessage());
+        assertTrue(error.getMessage().contains("declared: corp"),
+                "the message lists what is declared: " + error.getMessage());
+    }
+
+    @Test
+    void theTwoSpellingsOfOneDependencyCollide() {
+        ProjectException error = assertThrows(ProjectException.class,
+            () -> ProjectReader.parse("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+
+                [repos]
+                corp = "https://nexus.corp.internal/repository/maven/"
+
+                [deps]
+                "com.corp:lib" = "corp:2.1.0"
+
+                [deps.corp]
+                "com.corp:lib" = "2.1.0"
+                """));
+
+        assertTrue(error.getMessage().contains("declared twice"), error.getMessage());
+    }
+
+    @Test
     void quotedKeysAndSectionsStillCarryTheirPosition() {
         // both are legal TOML; the scanner must not read the '=' or ']' inside
         // the quotes as the separator and lose the coordinates

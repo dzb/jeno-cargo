@@ -73,9 +73,40 @@ public final class AddCommand implements Command {
         }
 
         if (value == null) {
+            if (key.contains("/") && !key.contains(":")) {
+                return addNativeShorthand(key, mjToml);
+            }
             return discover(key);
         }
+        return addDependency(key, value, mjToml);
+    }
 
+    /**
+     * {@code mjm add acme/mylib@v1.2.0} — the gh: shape without spelling gh:
+     * out. The artifact name is the repository name (DESIGN.md's convention for
+     * native releases). A native release has no version index, so the tag is
+     * mandatory; there is nothing to list and nothing to guess.
+     */
+    private int addNativeShorthand(String key, String mjToml) {
+        int at = key.indexOf('@');
+        if (at < 0) {
+            System.err.println("mjm: a native dependency has no version index — give the tag: "
+                    + "mjm add " + key + "@v1.2.0");
+            return 2;
+        }
+        String origin = key.substring(0, at);
+        String tag = key.substring(at + 1).strip();
+        int slash = origin.indexOf('/');
+        if (slash <= 0 || slash == origin.length() - 1 || origin.indexOf('/', slash + 1) >= 0) {
+            System.err.println("mjm: native shorthand is owner/repo@tag — got '" + key + "'");
+            return 2;
+        }
+        String repo = origin.substring(slash + 1);
+        return addDependency(repo, "gh:" + origin + "@" + tag, mjToml);
+    }
+
+    /** One declaration: validate, resolve (prepare), then write. */
+    private int addDependency(String key, String value, String mjToml) {
         com.jujin.mjm.project.Requirement requirement;
         try {
             requirement = ProjectReader.parseRequirement(key, value);  // shape validation, SPEC.md §2.1
@@ -120,7 +151,9 @@ public final class AddCommand implements Command {
         if (key.contains(":")) {
             List<String> versions = MetadataVersions.central(key);
             if (versions.isEmpty()) {
-                System.err.println("mjm: no versions found for " + key);
+                System.err.println("mjm: no versions found for " + key
+                        + " — if it belongs to a named repository, declare it as \""
+                        + key + "\" = \"<repo>:<version>\" in mjm.toml");
                 return 1;
             }
             System.out.println("versions of " + key + " (newest last):");

@@ -242,7 +242,8 @@ public final class ProjectReader {
             String processorId = coordinate.substring(0, second);
             String processorVersion = coordinate.substring(second + 1);
             processorRequirements.add(
-                    requirement(processorId, processorVersion, null, "build.processors"));
+                    requirement(processorId, processorVersion, null, "build.processors",
+                            Map.of(), false));
         }
 
         // [test].include / [test].exclude: typed and closed here, so TestCommand
@@ -266,7 +267,9 @@ public final class ProjectReader {
      * the same shapes and rules as the {@code [deps]} table, without a file.
      */
     public static Requirement parseRequirement(String key, String value) {
-        return requirement(key, value, null, "mjm add");
+        // add validates the shape here; whether the named repository is declared
+        // is checked when the edited manifest is parsed for real
+        return requirement(key, value, null, "mjm add", Map.of(), false);
     }
 
     // ------------------------------------------------------------------
@@ -298,11 +301,12 @@ public final class ProjectReader {
                 }
                 for (Map.Entry<String, Object> grouped : asStringKeyed(group).entrySet()) {
                     add(requirements, ids, requirement(grouped.getKey(), grouped.getValue(),
-                            key, where), where);
+                            key, where, repos, true), where);
                 }
                 continue;
             }
-            add(requirements, ids, requirement(key, entry.getValue(), null, where), where);
+            add(requirements, ids, requirement(key, entry.getValue(), null, where, repos, true),
+                    where);
         }
         return List.copyOf(requirements);
     }
@@ -316,7 +320,8 @@ public final class ProjectReader {
     }
 
     /** One {@code key = value} entry, classified by the value's shape. */
-    static Requirement requirement(String key, Object value, String repository, String where) {
+    static Requirement requirement(String key, Object value, String repository, String where,
+                                   Map<String, String> repos, boolean checkRepos) {
         if (key.isBlank() || key.contains(" ") || key.contains("\t")) {
             throw new ProjectException("[" + where + "] dependency name '" + key
                     + "' must not be blank or contain whitespace");
@@ -357,6 +362,41 @@ public final class ProjectReader {
                         + "' — a URL dependency must end in .jar");
             }
             return new Requirement(key, Species.URL, null, null, null, null, raw, null, null, null);
+        }
+
+        // "name:version" names a repository (SPEC.md §2.1, value shapes): the
+        // colon-prefix has to look like a repository name and carry a version.
+        // Anything else — "1.2.3", or a prefix that is not a repo name — stays a
+        // Central version below.
+        int namedColon = raw.indexOf(':');
+        if (namedColon > 0) {
+            String name = raw.substring(0, namedColon);
+            String version = raw.substring(namedColon + 1).strip();
+            if (NAME.matcher(name).matches() && !version.isEmpty()) {
+                if (repos == null) {
+                    throw new ProjectException("[" + where + "] '" + key + " = \"" + raw
+                            + "\"' — descriptors cannot declare repositories; rules live only "
+                            + "in the consumer's mjm.toml (SPEC.md §3.2)");
+                }
+                if (checkRepos && !repos.containsKey(name)) {
+                    throw new ProjectException("[" + where + "] '" + key + " = \"" + raw
+                            + "\"' names repository '" + name + "' which is not declared in "
+                            + "[repos] — declared: " + (repos.isEmpty() ? "(none)"
+                                    : String.join(", ", repos.keySet())));
+                }
+                if (version.contains(" ") || version.contains("\t")) {
+                    throw new ProjectException("[" + where + "] '" + key
+                            + "' — a version must not contain whitespace");
+                }
+                if (!COORDINATE.matcher(key).matches() || key.indexOf(':') != key.lastIndexOf(':')) {
+                    throw new ProjectException("[" + where + "] '" + key
+                            + "' — a repository dependency's key must be 'group:artifact'");
+                }
+                requireConcreteVersion(key, version, where);
+                int keyColon = key.indexOf(':');
+                return new Requirement(key, Species.CENTRAL, key.substring(0, keyColon),
+                        key.substring(keyColon + 1), version, name, null, null, null, null);
+            }
         }
 
         // A bare value is a Central version; the key must be group:artifact.
