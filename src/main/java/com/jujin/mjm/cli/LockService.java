@@ -12,8 +12,10 @@ import com.jujin.mjm.resolve.ResolvedGraph;
 import com.jujin.mjm.store.ArtifactStore;
 
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
 /**
  * The lock flow shared by {@code mjm lock} and {@code mjm add}: resolve the
@@ -72,9 +74,14 @@ public final class LockService {
         } catch (IOException ignored) {
             // no manifest yet (mjm init): nothing to restore
         }
-        write(manifest, prepared.mjmToml());
         try {
-            write(projectDir.resolve("mjm.lock"), prepared.lockText());
+            writeAtomically(manifest, prepared.mjmToml());
+        } catch (RuntimeException e) {
+            restore(manifest, previous);
+            throw e;
+        }
+        try {
+            writeAtomically(projectDir.resolve("mjm.lock"), prepared.lockText());
         } catch (RuntimeException e) {
             restore(manifest, previous);
             throw e;
@@ -95,12 +102,35 @@ public final class LockService {
         return prepared.graph();
     }
 
-    private static void write(Path file, String text) {
+    /**
+     * Writes beside the target and renames over it, so a reader sees the old
+     * file or the new one and never a half-written manifest. Falls back to a
+     * plain replace where atomic moves are unsupported (the same shape
+     * {@code ArtifactStore} uses for its store files).
+     */
+    private static void writeAtomically(Path target, String text) {
+        Path temp = null;
         try {
-            Files.writeString(file, text);
+            temp = Files.createTempFile(target.getParent(),
+                    target.getFileName().toString() + ".", ".tmp");
+            Files.writeString(temp, text);
+            try {
+                Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+            temp = null;
         } catch (IOException e) {
-            throw new IllegalStateException("cannot write " + file
+            throw new IllegalStateException("cannot write " + target
                     + " — check the directory is writable", e);
+        } finally {
+            if (temp != null) {
+                try {
+                    Files.deleteIfExists(temp);
+                } catch (IOException ignored) {
+                    // the temp file is already useless; a leftover is noise, not a fault
+                }
+            }
         }
     }
 
@@ -109,10 +139,10 @@ public final class LockService {
             return;
         }
         try {
-            Files.writeString(manifest, previous);
-        } catch (IOException e) {
+            writeAtomically(manifest, previous);
+        } catch (RuntimeException e) {
             throw new IllegalStateException("cannot restore " + manifest
-                    + " after a failed lock write — the declaration is now unbacked; "
+                    + " after a failed write — the declaration may be unbacked; "
                     + "restore it by hand", e);
         }
     }

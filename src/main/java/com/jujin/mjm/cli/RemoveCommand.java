@@ -58,6 +58,11 @@ public final class RemoveCommand implements Command {
         }
         String id = args.getFirst();
 
+        // same project lock as add/build/test/clean — see AddCommand
+        return ProjectLock.with(projectDir, () -> remove(id));
+    }
+
+    private int remove(String id) {
         Path file = projectDir.resolve("mjm.toml");
         String text;
         try {

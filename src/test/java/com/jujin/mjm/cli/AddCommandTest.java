@@ -18,11 +18,14 @@ import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -40,6 +43,11 @@ class AddCommandTest {
 
     private HttpServer central;
 
+    @org.junit.jupiter.api.BeforeEach
+    void isolateProjectLocks() {
+        ProjectLock.useRoot(dir.resolve(".locks"));
+    }
+
     @AfterEach
     void stopCentral() {
         if (central != null) {
@@ -47,6 +55,7 @@ class AddCommandTest {
         }
         System.clearProperty("mjm.central.base");
         System.clearProperty("mjm.github.host");
+        ProjectLock.useUserRoot();
         resetOffline();
     }
 
@@ -279,6 +288,127 @@ class AddCommandTest {
         assertEquals(2, exit);
         assertArrayEquals(before, Files.readAllBytes(project.resolve("mjm.toml")),
                 "nothing was written");
+    }
+
+    @Test
+    void aFailedLockWritePutsTheManifestBack(@TempDir Path projectStore) throws Exception {
+        Path project = Files.createDirectories(dir.resolve("rollback"));
+        vendorProject(project);
+        Files.createDirectories(project.resolve("vendor/com/example/lib-b/1.0.0"));
+        Files.writeString(project.resolve("vendor/com/example/lib-b/1.0.0/lib-b-1.0.0.pom"),
+                LIB_A_POM.replace("lib-a", "lib-b"));
+        Files.write(project.resolve("vendor/com/example/lib-b/1.0.0/lib-b-1.0.0.jar"),
+                "lib-b".getBytes());
+        ArtifactLocations.useProjectRoot(project);
+        ArtifactStore store = new ArtifactStore(projectStore);
+        LockService lockService = new LockService(store, new StorePomSource(store),
+                new StoreDescriptorSource(store));
+        byte[] before;
+        try {
+            lockService.refresh(project);
+            // make the lock destination unwritable as a file: a non-empty directory
+            Files.delete(project.resolve("mjm.lock"));
+            Files.createDirectories(project.resolve("mjm.lock"));
+            Files.writeString(project.resolve("mjm.lock/keep"), "x");
+            before = Files.readAllBytes(project.resolve("mjm.toml"));
+
+            int exit = new AddCommand(lockService, store, project)
+                    .execute(List.of("com.example:lib-b", "vendor:1.0.0"));
+
+            assertEquals(1, exit, "the lock cannot be written");
+        } finally {
+            ArtifactLocations.useProjectRoot(Path.of("").toAbsolutePath());
+        }
+
+        assertArrayEquals(before, Files.readAllBytes(project.resolve("mjm.toml")),
+                "a manifest written before the lock failed is restored byte for byte");
+        try (var files = Files.list(project)) {
+            assertFalse(files.anyMatch(path -> path.getFileName().toString().endsWith(".tmp")),
+                    "and no temporary file is left behind");
+        }
+    }
+
+    @Test
+    void anAddWaitsWhileTheProjectLockIsHeld(@TempDir Path projectStore) throws Exception {
+        Path project = Files.createDirectories(dir.resolve("waits"));
+        Files.writeString(project.resolve("mjm.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+            """);
+        ArtifactStore store = new ArtifactStore(projectStore);
+        LockService lockService = new LockService(store, new StorePomSource(store),
+                new StoreDescriptorSource(store));
+        System.setProperty("mjm.central.base", "http://127.0.0.1:9/");
+
+        CountDownLatch held = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Thread holder = new Thread(() -> ProjectLock.with(project, () -> {
+            held.countDown();
+            try {
+                release.await(10, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return 0;
+        }));
+        holder.start();
+        assertTrue(held.await(10, TimeUnit.SECONDS));
+
+        AtomicInteger exit = new AtomicInteger(-1);
+        Thread add = new Thread(() -> exit.set(new AddCommand(lockService, store, project)
+                .execute(List.of("com.example:lib-a", "1.0.0"))));
+        add.start();
+        Thread.sleep(300);
+        assertEquals(-1, exit.get(), "the add waits for the project lock instead of writing");
+
+        release.countDown();
+        add.join(10_000);
+        holder.join(10_000);
+        assertNotEquals(-1, exit.get(), "and proceeds once the lock is free");
+    }
+
+    @Test
+    void twoAddsInOneProjectDoNotLoseEachOther(@TempDir Path projectStore) throws Exception {
+        Path project = Files.createDirectories(dir.resolve("concurrent"));
+        for (String artifact : List.of("lib-a", "lib-b")) {
+            Path pom = project.resolve("vendor/com/example/" + artifact + "/1.0.0/"
+                    + artifact + "-1.0.0.pom");
+            Files.createDirectories(pom.getParent());
+            Files.writeString(pom, LIB_A_POM.replace("lib-a", artifact));
+            Files.write(pom.resolveSibling(artifact + "-1.0.0.jar"), artifact.getBytes());
+        }
+        Files.writeString(project.resolve("mjm.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [repos]
+            vendor = "local:vendor"
+            """);
+        ArtifactLocations.useProjectRoot(project);
+        ArtifactStore store = new ArtifactStore(projectStore);
+        LockService lockService = new LockService(store, new StorePomSource(store),
+                new StoreDescriptorSource(store));
+        try {
+            Thread first = new Thread(() -> new AddCommand(lockService, store, project)
+                    .execute(List.of("com.example:lib-a", "vendor:1.0.0")));
+            Thread second = new Thread(() -> new AddCommand(lockService, store, project)
+                    .execute(List.of("com.example:lib-b", "vendor:1.0.0")));
+            first.start();
+            second.start();
+            first.join(20_000);
+            second.join(20_000);
+        } finally {
+            ArtifactLocations.useProjectRoot(Path.of("").toAbsolutePath());
+        }
+
+        String manifest = Files.readString(project.resolve("mjm.toml"));
+        assertTrue(manifest.contains("\"com.example:lib-a\" = \"vendor:1.0.0\""), manifest);
+        assertTrue(manifest.contains("\"com.example:lib-b\" = \"vendor:1.0.0\""),
+                "the second add read the first one's manifest: " + manifest);
+        assertEquals(2, LockFileReader.read(Files.readString(project.resolve("mjm.lock"))).size(),
+                "both dependencies are locked");
     }
 
     @Test

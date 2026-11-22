@@ -63,6 +63,13 @@ public final class AddCommand implements Command {
         String key = args.get(0);
         String value = args.size() == 2 ? args.get(1) : null;
 
+        // add writes mjm.toml and mjm.lock; build/test/clean/lock take the same
+        // project lock, so a concurrent writer waits instead of interleaving.
+        // No nesting: the body calls prepare/commit directly, never refresh.
+        return ProjectLock.with(projectDir, () -> add(key, value));
+    }
+
+    private int add(String key, String value) {
         String mjToml;
         try {
             mjToml = Files.readString(projectDir.resolve("mjm.toml"));

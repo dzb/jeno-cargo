@@ -32,8 +32,12 @@ public final class LockCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
-        var graph = lockService.refresh(projectDir);
-        System.out.println("locked " + graph.artifacts().size() + " artifact(s) into mjm.lock");
-        return 0;
+        // lock writes both files, so it queues with add/remove/build/test/clean
+        return ProjectLock.with(projectDir, () -> {
+            var graph = lockService.refresh(projectDir);
+            System.out.println("locked " + graph.artifacts().size()
+                    + " artifact(s) into mjm.lock");
+            return 0;
+        });
     }
 }
