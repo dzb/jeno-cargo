@@ -56,6 +56,8 @@ string-array  = "[" ws basic-string *( "," ws basic-string ) [","] ws "]"
 
 **不适用的命令**：`update`、`publish` —— 它们的存在就是联网操作。传入 `--offline` 报用法错误（退出码 2），而不是假装接受。
 
+**`add` 的 discover 形态**：不带显式版本时（列举版本 = 读 `maven-metadata.xml`，或裸名走 Central 索引搜索）是联网操作，`--offline` 下报用法错误（退出码 2）——要离线就带上显式版本：`mjm add "<id>" <version>` 只读 store，`--offline` 下照常可用。
+
 **为什么可行**：store 有持久化的 URL → digest 索引（`store/index/<sha256(url)>.url`）。没有它，索引未命中会是常态（每个 pom 都被当作"没见过"），`--offline` 必然失败。
 
 ---

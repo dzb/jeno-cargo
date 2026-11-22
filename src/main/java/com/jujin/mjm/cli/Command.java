@@ -34,9 +34,14 @@ public interface Command {
 
     /**
      * Whether {@code --offline} is meaningful for this command. Defaults to
-     * true for commands that read the store; commands whose entire purpose is
-     * a network call (update, publish, the add search) override it to false —
-     * accepting the flag there would only promise something they cannot do.
+     * true: every command that only reads the store obeys the flag through
+     * {@code ArtifactStore.ensure}, with no per-command code. {@code update}
+     * and {@code publish} override it to false — their entire purpose is a
+     * network call, so accepting the flag would only promise something they
+     * cannot do. {@code add} keeps the default: an explicit version resolves
+     * from the store offline, and only its no-value "discover" form (the
+     * version list or the index search) reaches the network — that path checks
+     * {@code ArtifactStore.isOffline()} itself and exits 2.
      */
     default boolean supportsOffline() {
         return true;

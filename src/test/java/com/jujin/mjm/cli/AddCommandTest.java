@@ -5,6 +5,8 @@ import com.jujin.mjm.project.DescriptorSource;
 import com.jujin.mjm.store.ArtifactStore;
 import com.jujin.mjm.store.LockFileReader;
 import com.jujin.mjm.store.LockedArtifact;
+import com.jujin.mjm.store.StoreDescriptorSource;
+import com.jujin.mjm.store.StorePomSource;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -15,6 +17,7 @@ import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -40,6 +43,22 @@ class AddCommandTest {
             central.stop(0);
         }
         System.clearProperty("mjm.central.base");
+        resetOffline();
+    }
+
+    /**
+     * Offline is process-wide static state: leaving it set would poison every
+     * later test that expects the network (the same reset {@code OfflineModeTest}
+     * uses).
+     */
+    private static void resetOffline() {
+        try {
+            java.lang.reflect.Field field = ArtifactStore.class.getDeclaredField("offline");
+            field.setAccessible(true);
+            field.set(null, false);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("cannot reset the offline flag", e);
+        }
     }
 
     /** A loopback Central serving one pom; the property points mj at it. */
@@ -119,6 +138,63 @@ class AddCommandTest {
         assertEquals(1, exit);
         assertTrue(!Files.readString(dir.resolve("mjm.toml")).contains("mylib"),
                 "nothing was written");
+    }
+
+    @Test
+    void discoveringVersionsUnderOfflineFailsBeforeAnyRequest() throws Exception {
+        AtomicInteger requests = new AtomicInteger();
+        central = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        central.createContext("/", exchange -> {
+            requests.incrementAndGet();
+            exchange.sendResponseHeaders(200, 0);
+            exchange.close();
+        });
+        central.start();
+        System.setProperty("mjm.central.base",
+                "http://localhost:" + central.getAddress().getPort() + "/");
+
+        ArtifactStore.goOffline();
+        int exit = add().execute(List.of("com.example:lib-a"));
+
+        assertEquals(2, exit, "a version list is a network call — offline refuses it");
+        assertEquals(0, requests.get(), "offline means no request is attempted at all");
+    }
+
+    @Test
+    void anExplicitVersionStillResolvesOfflineFromTheStore() throws Exception {
+        serveCentralPom(LIB_A_POM);
+        ArtifactStore store = new ArtifactStore(storeDir);
+        LockService lockService = new LockService(store, new StorePomSource(store),
+                new StoreDescriptorSource(store));
+
+        // warm the store and the URL index online: one real resolution
+        Files.writeString(dir.resolve("mjm.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [deps]
+            "com.example:lib-a" = "1.0.0"
+            """);
+        lockService.refresh(dir);
+
+        // a second project on the same store: the explicit-version add must
+        // need no network at all
+        Path second = Files.createDirectories(dir.resolve("second"));
+        Files.writeString(second.resolve("mjm.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+            """);
+        ArtifactStore.goOffline();
+
+        int exit = new AddCommand(lockService, store, second)
+                .execute(List.of("com.example:lib-a", "1.0.0"));
+
+        assertEquals(0, exit, "an explicit version resolves from the store");
+        assertTrue(Files.readString(second.resolve("mjm.toml"))
+                        .contains("\"com.example:lib-a\" = \"1.0.0\""),
+                "the line landed in the second project's [deps]");
     }
 
     @Test

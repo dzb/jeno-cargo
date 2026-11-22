@@ -114,8 +114,19 @@ public final class AddCommand implements Command {
         return 0;
     }
 
-    /** One of the two "no value" answers: list versions, or search the index. */
+    /**
+     * One of the two "no value" answers: list versions, or search the index.
+     * Both are network calls by nature — the version list is the repository's
+     * {@code maven-metadata.xml}, the search is the Central index. An explicit
+     * version resolves from the store, which is why the command as a whole
+     * still accepts {@code --offline}: only this form refuses it.
+     */
     private int discover(String key, String mjToml) {
+        if (ArtifactStore.isOffline()) {
+            System.err.println("mjm: add without a version asks the repository for its "
+                    + "version list — pass an explicit version, or drop --offline");
+            return 2;
+        }
         if (key.contains(":")) {
             List<String> versions = versions(mjToml, key);
             if (versions.isEmpty()) {
