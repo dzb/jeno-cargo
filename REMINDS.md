@@ -11,12 +11,15 @@
 
 ```java
 private static boolean isTestOnly(String id) {
-    return id.startsWith("org.junit.") || id.startsWith("org.opentest4j:");
+    return id.startsWith("org.junit.") || id.startsWith("org.opentest4j:")
+            || id.startsWith("org.apiguardian:");
 }
 ```
 
-**现状**:dist 把闭包分成两堆——toolchain（`org.junit.*` / `org.opentest4j:`,
-装进 `lib/toolchain/`）和骨架（其余,合并进 uber-jar）。判据是**硬编码的包名前缀**。
+**现状**:dist 把闭包分成两堆——toolchain（`org.junit.*` / `org.opentest4j:` /
+`org.apiguardian:`,装进 `lib/toolchain/`）和骨架（其余,合并进 uber-jar）。判据是
+**硬编码的包名前缀**。（`apiguardian` 是 junit 自己 API 注解所在的 jar,2026-11-22
+补进 vendor 时一并加了这一条,否则它会被当成骨架合进 launcher 的 jar。）
 
 **为什么现在可接受**:mjm 自己的 `mjm.toml` 里 junit 就是全部测试依赖,规则精确命中,
 零误判。`mjm` 是当前唯一用 `mjm bundle` 的项目。
@@ -233,11 +236,21 @@ git commit ... && git push ... && git tag vX && git push --tags
 
 ---
 
-## 9. 自举构建的 87 条 javac 警告（known issue，2026-11-22 记录）
+## 9. 自举构建的 javac 警告（2026-11-22 记录，同日已解决）
 
 **位置**:`mjm build`（编译 `src/main/java`）的输出；来源是 vendor 里的 junit jar。
 
-**现状**:`mjm build` 每次刷 87 条
+**结局（2026-11-22）**:已解决，`mjm build` 现在是零警告。做法是给 `vendor/` 补上真正的
+`org.apiguardian:apiguardian-api:1.1.2`（jar + 无 parent 链的独立 pom），并在 5 个 junit 件的
+独立 pom 里声明它——它们本来就该有这条依赖，裁剪时漏了。同时 mjm 自己的 `mjm.toml` 也把
+它列成直接依赖：严格可见性只把直接声明放进 compile classpath，传递依赖是看不见的，所以
+"让警告消失"和"遵守自己的可见性规则"是同一个动作。
+
+顺手暴露并修掉的另一件事：`local:` 仓库的文件改了，`mjm lock` 却读不到——store 的
+URL→digest 索引把旧 pom 缓存住了。现在在线时 `file:` 的 URL 不再走索引（本地文件是工作副本，
+本来就会改），离线时仍然查索引（跨目录的 store 命中靠它，SPEC §1.5）。
+
+**原来的记录（保留作历史）**:`mjm build` 每次刷 87 条
 `警告: 未知的枚举常量 Status.MAINTAINED` / `Status.STABLE` / …，
 首条带原因:`找不到 org.apiguardian.api.API$Status 的类文件`。编译成功、产物无异常，
 只是输出噪音——`mjm test` 与 `mjm build` 的数字（87）因此不能当作"零警告"。

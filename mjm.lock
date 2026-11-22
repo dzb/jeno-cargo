@@ -16,12 +16,20 @@ sha256 = "cb0f6833386c6d5fb8da72d416f42ba8836b9426ea874b9898383049e79860ac"
 meta-sha256 = "2aa696a9830a949340d0408cc9f39f67a3ae40c869be65ad54f3781a26591ded"
 depth = 1
 [[artifacts]]
+id = "org.apiguardian:apiguardian-api"
+version = "1.1.2"
+source = "local:vendor"
+url = "file:vendor/org/apiguardian/apiguardian-api/1.1.2/apiguardian-api-1.1.2.jar"
+sha256 = "b509448ac506d607319f182537f0b35d71007582ec741832a1f111e5b5b70b38"
+meta-sha256 = "461438abfbd88e789d6e66ed5e4f763b303bb5678c9f2c930982c8153138b41c"
+depth = 1
+[[artifacts]]
 id = "org.junit.jupiter:junit-jupiter-api"
 version = "6.1.3"
 source = "local:vendor"
 url = "file:vendor/org/junit/jupiter/junit-jupiter-api/6.1.3/junit-jupiter-api-6.1.3.jar"
 sha256 = "555d6cf20fa1710884dd01b86cc5785397ba73e21ada2d4b784f5f1a14dcafc4"
-meta-sha256 = "710a77e4b2441c2bd4053dd959131fbbb6687d8805d82dc948a563d407e68734"
+meta-sha256 = "5b1b163079a4cdd4d32b9494a1aa914a9d6b0cb469e89f70a95739e828c37da4"
 depth = 1
 [[artifacts]]
 id = "org.junit.jupiter:junit-jupiter-engine"
@@ -29,7 +37,7 @@ version = "6.1.3"
 source = "local:vendor"
 url = "file:vendor/org/junit/jupiter/junit-jupiter-engine/6.1.3/junit-jupiter-engine-6.1.3.jar"
 sha256 = "414559e78bbfa3bdb2eab009ac3ab1e22369ac31117c270a0bd666da115c5c6c"
-meta-sha256 = "5152811cd4085f7a5636ad6c3ba9141a7a51eaeea65c0dd85e88e6d9dccc2385"
+meta-sha256 = "7696ef18cc7eab34dd4d7daf918880d2c408b33dcbff990e0ceb102b4cc3dfa4"
 depth = 1
 [[artifacts]]
 id = "org.junit.platform:junit-platform-commons"
@@ -37,7 +45,7 @@ version = "6.1.3"
 source = "local:vendor"
 url = "file:vendor/org/junit/platform/junit-platform-commons/6.1.3/junit-platform-commons-6.1.3.jar"
 sha256 = "a4774ae923c109544034aeae7c762cf017fbcdd1342403ba90e0921984b608c3"
-meta-sha256 = "f6283fc248d9db9af984c1cc48318d957657fcadaf1eb23652c4f64f5b7741bc"
+meta-sha256 = "aae7c690b5a3ba5e8733c39b71509a30899f6e5539990d8cf32c17119e11b17e"
 depth = 1
 [[artifacts]]
 id = "org.junit.platform:junit-platform-engine"
@@ -45,7 +53,7 @@ version = "6.1.3"
 source = "local:vendor"
 url = "file:vendor/org/junit/platform/junit-platform-engine/6.1.3/junit-platform-engine-6.1.3.jar"
 sha256 = "21ad7ad3a35beda16387979317be1833a72a71d812f9a66ee4b9a7bafb56334c"
-meta-sha256 = "f7e1fbf27a976c01afd707d4e3ca8958f376f943331dda112ceddafcba134787"
+meta-sha256 = "915626ca1758faeb1b7afeb7e8c231f4cd308920aab33be63b6097cc35e67062"
 depth = 1
 [[artifacts]]
 id = "org.junit.platform:junit-platform-launcher"
@@ -53,7 +61,7 @@ version = "6.1.3"
 source = "local:vendor"
 url = "file:vendor/org/junit/platform/junit-platform-launcher/6.1.3/junit-platform-launcher-6.1.3.jar"
 sha256 = "1dec64b1fc0b7c47a11302aa5b4d37d8160c041b396e27067709ce775601a7b6"
-meta-sha256 = "18212be8845a2dc8f7ccc6458d8690bbd4144fe61671632f2dfbefb168646be9"
+meta-sha256 = "4bf60ffd696885c0daf0e840e66ec7779954b52885746847fa5c67007a1b6528"
 depth = 1
 [[artifacts]]
 id = "org.opentest4j:opentest4j"

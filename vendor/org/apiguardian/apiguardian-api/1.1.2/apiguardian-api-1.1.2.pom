@@ -1,0 +1,7 @@
+<project>
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>org.apiguardian</groupId>
+  <artifactId>apiguardian-api</artifactId>
+  <version>1.1.2</version>
+  <packaging>jar</packaging>
+</project>

@@ -361,7 +361,11 @@ public final class BundleCommand implements Command {
 
     /** Jars that exist only to run tests — the lifecycle toolchain. */
     private static boolean isTestOnly(String id) {
-        return id.startsWith("org.junit.") || id.startsWith("org.opentest4j:");
+        // apiguardian rides with junit: it is the annotation jar junit's own API
+        // class files refer to, and it belongs in the toolchain, not merged into
+        // the launcher's jar
+        return id.startsWith("org.junit.") || id.startsWith("org.opentest4j:")
+                || id.startsWith("org.apiguardian:");
     }
 
     /**
