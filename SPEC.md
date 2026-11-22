@@ -318,6 +318,7 @@ scope = "dev"             # 可选:[dev-deps] 可达的工件。缺省 = main
 5. 按 id 字典序输出(稳定 diff)
 6. 一致性:lock 的依赖集合与 mjm.toml + 描述符闭包一致;不一致 → 拒绝 build/run,提示 `mjm lock`
 7. 命中策略:lock 有效 → 直接采用(sha256 权威,不重新解析);`mjm lock --refresh` 强制重解
+8. 兼容性:旧锁里 `source` 以 `gitee:` 开头的行,**读锁即报**可执行的迁移错误(gitee: 物种已移除),而不是留给下游命令各自报 URI 错误;`source` 以 `mjm:` 开头的行照常读
 
 ---
 
