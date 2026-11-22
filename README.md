@@ -254,7 +254,7 @@ the next invocation.
 | `publish [target]` | the release triple; `gh:`, `gitee:`, or any `http(s)://` host (Maven layout over PUT) |
 | `update` / `upgrade` | self-upgrade from GitHub Releases |
 | `--offline` (flag) | refuse all network access — store hits only. Not for `update`/`publish`, which are network by nature |
-| `mjm <command> --help` | that command's syntax and one-line description |
+| `mjm <command> --help` | that command's syntax and explanation (may run to several lines) |
 
 ## Design notes
 

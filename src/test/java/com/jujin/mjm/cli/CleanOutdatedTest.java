@@ -6,7 +6,10 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -352,6 +355,37 @@ class CleanOutdatedTest {
         } finally {
             server.stop(0);
             System.clearProperty("mjm.central.base");
+        }
+    }
+
+    @Test
+    void aServerThatNeverAnswersFailsInBoundedTime() throws Exception {
+        try (ServerSocket socket = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            Thread acceptor = new Thread(() -> {
+                try (Socket held = socket.accept()) {
+                    Thread.sleep(30_000);  // accept, then never write a byte
+                } catch (Exception ignored) {
+                    // the client gave up; nothing to clean here
+                }
+            });
+            acceptor.setDaemon(true);
+            acceptor.start();
+
+            System.setProperty("mjm.central.base",
+                    "http://127.0.0.1:" + socket.getLocalPort() + "/");
+            System.setProperty("mjm.http.request.timeout.ms", "700");
+            projectWithLock(centralRow("com.example:lib-a", "1.0.0"));
+
+            long start = System.nanoTime();
+            String out = runOutdated(1);
+            long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+            assertTrue(elapsedMs < 10_000,
+                    "a silent server must not hang the command; took " + elapsedMs + "ms");
+            assertTrue(out.contains("could not check"), out);
+        } finally {
+            System.clearProperty("mjm.central.base");
+            System.clearProperty("mjm.http.request.timeout.ms");
         }
     }
 

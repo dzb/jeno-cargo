@@ -28,9 +28,26 @@ import java.util.List;
  */
 final class MetadataVersions {
 
+    /**
+     * A repository that accepts the connection and then never answers would
+     * otherwise hang the command forever. Ten seconds is enough for DNS and a
+     * TCP handshake over any link that is going to work; thirty is generous for
+     * a slow mirror to produce headers, and short enough that a user does not
+     * sit staring. The request timeout is read per call so a test can prove the
+     * bound in under a second instead of waiting out the real one.
+     */
+    private static final java.time.Duration CONNECT_TIMEOUT =
+            java.time.Duration.ofSeconds(10);
+
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL)
+            .connectTimeout(CONNECT_TIMEOUT)
             .build();
+
+    private static java.time.Duration requestTimeout() {
+        return java.time.Duration.ofMillis(
+                Long.getLong("mjm.http.request.timeout.ms", 30_000L));
+    }
 
     private MetadataVersions() {}
 
@@ -96,7 +113,9 @@ final class MetadataVersions {
         }
         try {
             HttpResponse<String> response = HTTP.send(
-                    HttpRequest.newBuilder(URI.create(url)).GET().build(),
+                    HttpRequest.newBuilder(URI.create(url))
+                            .timeout(requestTimeout())
+                            .GET().build(),
                     HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() != 200) {
                 throw new IllegalStateException(url + " answered " + response.statusCode());

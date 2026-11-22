@@ -436,7 +436,7 @@ Gradle 9 / Maven 4 后,尚未覆盖的场景按下表排期。
 | 2 | `mjm init --pom` / `mjm remove` / `mjm clean` | mvn clean、npm init/uninstall、Maven 迁移 | ✅ 全部完成:init(含 `--pom` 迁移)、remove、clean(2026-11-22,`[--target\|--dist]`,永不碰 store) |
 | 3 | ~~发布三件套补 `-sources` jar~~ → **`mjm info <id> [--source]`** | Go/Cargo 从不分离源码与产物;sources jar 是 Java 二进制分发的补丁,不是能力 | ✅ 已完成(2026-11-21):源码**随 tag 走**——gh:/gitee: 取 tag archive,Central 回退读发布者的 sources jar,URL 叶子明确拒绝。发布侧不产出 sources jar |
 | 4 | JUnit XML 测试报告 | mvn surefire 默认产物 | 未做(fork JVM 里产出 `target/test-results/` 即可接 GitHub checks UI) |
-| 5 | `mjm outdated` | mvn versions:display-dependency-updates、npm outdated | ✅ 已完成(2026-11-22):`maven-metadata.xml` 列版本;预发布按 qualifier 判定(不靠 `-`);local:/gh:/url 明确列为未检查 |
+| 5 | `mjm outdated` | mvn versions:display-dependency-updates、npm outdated | ✅ 已完成(2026-11-22):`maven-metadata.xml` 列版本;预发布按 qualifier token 判定(不靠 `-` 子串);local:/gh:/gitee:/url 明确列为未检查 |
 
 ### P1 — 现代实践
 
