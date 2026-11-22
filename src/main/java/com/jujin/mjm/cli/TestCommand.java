@@ -32,6 +32,8 @@ import java.util.stream.Stream;
  */
 public final class TestCommand implements Command {
 
+    private static final String MAIN_SOURCES = "src/main/java";
+    private static final String MAIN_OUTPUT = "target/classes";
     private static final String TEST_SOURCES = "src/test/java";
     private static final String TEST_OUTPUT = "target/test-classes";
 
@@ -73,12 +75,35 @@ public final class TestCommand implements Command {
             System.out.println("no tests under " + projectDir.resolve(TEST_SOURCES));
             return 0;
         }
+        // Tests compile against the project's own classes. Without them javac
+        // reports a symbol error deep inside a test file, which reads as "your
+        // test is wrong" instead of "build first" — the other commands that use
+        // target/classes (package/bundle/publish/run) already say the latter.
+        // A pure-test project has no main sources and needs no target/classes.
+        if (hasMainSources() && !Files.exists(projectDir.resolve(MAIN_OUTPUT))) {
+            System.err.println("mjm: " + MAIN_OUTPUT + " is missing — run mjm build first");
+            return 1;
+        }
 
         // The output tree is rewritten in place (deleted, then compiled into):
         // a second command touching target/ — another test run, a build, a
         // clean — would pull classes out from under the fork, and the lazily
         // loaded javac companions (enum switch maps) die first.
         return ProjectLock.with(projectDir, () -> runTests(testSources));
+    }
+
+    /** Whether {@code src/main/java} actually holds Java sources to compile. */
+    private boolean hasMainSources() {
+        Path root = projectDir.resolve(MAIN_SOURCES);
+        if (!Files.isDirectory(root)) {
+            return false;
+        }
+        try (Stream<Path> walk = Files.walk(root)) {
+            return walk.anyMatch(path -> Files.isRegularFile(path)
+                    && path.toString().endsWith(".java"));
+        } catch (IOException e) {
+            return false;  // unreadable tree: let the compile fail with its own message
+        }
     }
 
     /** Compile and fork; the caller holds the project's lock. */

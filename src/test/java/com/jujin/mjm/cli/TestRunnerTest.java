@@ -6,7 +6,10 @@ import com.jujin.mjm.store.ArtifactStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -15,6 +18,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -108,6 +112,7 @@ class TestRunnerTest {
 
             import org.junit.jupiter.api.Test;
             import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -138,6 +143,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
             import org.junit.jupiter.api.Test;
             import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -162,6 +168,110 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         lock();
         assertEquals(0, new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of()),
                 "a project without src/test/java has nothing to run");
+    }
+
+    @Test
+    void missingMainClassesSaysBuildFirstInsteadOfAJavacError(@TempDir Path storeDir)
+            throws Exception {
+        project();
+        Files.createDirectories(dir.resolve("src/main/java/demo"));
+        Files.writeString(dir.resolve("src/main/java/demo/Main.java"), """
+            package demo;
+
+            public class Main {
+            }
+            """);
+        Files.writeString(dir.resolve("src/test/java/demo/MainTest.java"), """
+            package demo;
+
+            import com.jujin.mjm.test.MjmTest;
+
+            public class MainTest {
+                @MjmTest
+                void usesMain() {
+                    new Main();
+                }
+            }
+            """);
+        lock();
+
+        ByteArrayOutputStream errors = new ByteArrayOutputStream();
+        PrintStream original = System.err;
+        int exit;
+        try {
+            System.setErr(new PrintStream(errors, true, StandardCharsets.UTF_8));
+            exit = new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of());
+        } finally {
+            System.setErr(original);
+        }
+
+        String message = errors.toString(StandardCharsets.UTF_8);
+        assertEquals(1, exit);
+        assertTrue(message.contains("mjm: target/classes is missing — run mjm build first"),
+                "the next action, like package/bundle/publish/run give: " + message);
+        assertFalse(message.contains("符号") || message.contains("symbol"),
+                "no javac symbol error instead of the instruction: " + message);
+    }
+
+    @Test
+    void aPureTestProjectNeedsNoMainClasses(@TempDir Path storeDir) throws Exception {
+        project();  // src/test/java only — nothing to build
+        Files.writeString(dir.resolve("src/test/java/demo/Tests.java"), """
+            package demo;
+
+            import com.jujin.mjm.test.MjmTest;
+
+            public class Tests {
+                @MjmTest
+                void ok() {
+                }
+            }
+            """);
+        lock();
+
+        int exit;
+        try (var central = VendoredToolchain.start()) {
+            exit = new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of());
+        }
+
+        assertEquals(0, exit, "without main sources, target/classes is not required");
+    }
+
+    @Test
+    void aBuiltProjectRunsItsTests(@TempDir Path storeDir) throws Exception {
+        project();
+        Files.createDirectories(dir.resolve("src/main/java/demo"));
+        Files.writeString(dir.resolve("src/main/java/demo/Main.java"), """
+            package demo;
+
+            public class Main {
+                public static int answer() {
+                    return 42;
+                }
+            }
+            """);
+        Files.writeString(dir.resolve("src/test/java/demo/Tests.java"), """
+            package demo;
+
+            import com.jujin.mjm.test.MjmAssert;
+            import com.jujin.mjm.test.MjmTest;
+
+            public class Tests {
+                @MjmTest
+                void usesMain() {
+                    MjmAssert.equals(42, Main.answer());
+                }
+            }
+            """);
+        lock();
+
+        ArtifactStore store = new ArtifactStore(storeDir);
+        assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
+        int exit;
+        try (var central = VendoredToolchain.start()) {
+            exit = new TestCommand(store, dir).execute(List.of());
+        }
+        assertEquals(0, exit, "a built project tests green");
     }
 
     @Test
