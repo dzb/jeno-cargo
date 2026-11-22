@@ -288,31 +288,38 @@ mylib-1.2.0.sha256
 
 ### 7.5 mjm 自身的发行管线(自举闭环)
 
-mjm 也是自己的狗粮:上一个 release 构建下一个 release。**升级地址(唯一事实来源)**:
+mjm 也是自己的狗粮:**代码在测的那棵树,就是构建发行物的那棵树**。**升级地址(唯一事实来源)**:
 `https://api.github.com/repos/dzb/mjm-cargo/releases/latest` —— `mjm update` 查询它,
 `setup.sh`(动态解析 latest,永不用改)与 CI 共用同一约定。
 
 **发行物**:GitHub Release `v{version}`,附件 `mjm-bin-{version}.tar.gz`(`mjm bundle` 产物,
-`-bin` 与库 jar 三件套命名区分;由 `mjm bundle` 产出)。版本号两处声明、CI 强制一致:`mjm.toml [project].version`
-(产物命名)+ `Mj.VERSION`(`--version`/`mjm update` 比对)。
+`-bin` 与库 jar 三件套命名区分)。**版本号只有一处声明**:`mjm.toml [project].version`;
+`mjm build` 把它写成 `META-INF/mjm/version.properties`,`--version` 与 `mjm update` 都读那份资源
+(目录、jar、安装后的 dist 三种布局都能读到)。`Mj.VERSION` 不是第二个声明,而是那份资源的读取方。
 
-**流水线**(`.github/workflows/ci.yml`,提交即发版):
+**流水线**(`.github/workflows/ci.yml`;两种触发,两种职责):
 
 ```
-push master  →  GitHub Actions
-  1. 装 mjm:curl setup.sh | bash     ← 装的是"上一个" release
-  2. 版本账本:git tags v0.1.* 的最大 patch + 1;无新提交(>0 判定)则空跑
-  3. sed 单一写点:bump mjm.toml + Mj.VERSION,写后断言
-  4. mjm lock → build → test → dist  ← 上一个 release 构建新的(自举链 v(n) → v(n+1))
-  5. push bump commit → gh release create v0.1.(n+1) 附件一次给出,无竞态窗口
+push master  →  只验证,不发版
+  1. javac 直接编 src/main/java → target/classes(不装上一个 release)
+  2. 用刚编出来的 mjm 跑 lock → build → test   ← 狗粮常磨
+
+push tag v*  →  验证 + 发行
+  3. 一致性门:tag 名 == mjm.toml 版本 == 刚构建的二进制 --version
+  4. mjm bundle(用刚构建的 mjm,不是装着的那个)
+  5. gh release create v{n} 附件 mjm-bin-{version}.tar.gz
 ```
 
-**版本模型:0.1.x** —— major.minor 人工维护(mjm.toml),patch 只由 CI 递增;账本是
-git tags。GITHUB_TOKEN 的推送不触发新 run(平台防环),bump commit 无循环。
+**为什么不装上一个 release 来构建**:上一个 release 与新树同时改的时候(改名、锁格式、命令面),
+用它构建会让这些改动晚一拍生效——v0.1.4 的发行物还带着旧的九 jar 布局就是这个原因。javac 引导把
+"代码在测的那棵"和"构建发行物的那棵"合成一棵。
+
+**版本模型:0.1.x** —— 版本号由人决定,写进 `mjm.toml` 一处;发版动作是打 tag,不是每次 push。
+账本是 git tags。
 
 **本地链条**:逐步执行 `mjm lock` → `mjm build` → `mjm test` → `mjm bundle`,再由 CI/人执行 `gh release create`。mjm 不提供 `release` 命令——那一步的编排属于项目自己的 CI,不属于构建工具的职责面。
 - 自举链断裂的逃生舱(旧 mjm 读不了新 mjm.toml 等):本机 Maven 引导
-  (`mvn -DskipTests package` → `java -cp target/classes:…` 跑 Mj)→ `mjm bundle` → `gh release upload` 手工补发
+  (`mvn -DskipTests package` → `java -cp target/classes:…` 跑 `Mjm`)→ `mjm bundle` → `gh release upload` 手工补发
 - 引导链有根:v0.1.0 由 Maven 本地引导(已完成),此后链条不断
 - Gitee 仓只镜像代码,release 仅 GitHub(决策:公开发布用 GitHub)
 
