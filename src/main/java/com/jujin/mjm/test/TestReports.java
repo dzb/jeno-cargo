@@ -15,13 +15,16 @@ import java.util.Map;
  * Writes surefire-shaped XML: one {@code TEST-<class>.xml} per test class, so
  * GitHub's test reporter and the usual CI consumers read it without a plugin.
  *
- * <p>No {@code timestamp} attribute and no wall-clock values: the same suite
- * run twice produces byte-identical files, which is what makes them diffable.
+ * <p>No {@code timestamp} attribute — two runs differ only in the {@code time}
+ * values, which are the real durations CI dashboards read. Everything else is
+ * stable (classes and methods sorted), so a diff shows what changed and how
+ * long it took.
  */
 final class TestReports {
 
-    /** One executed (or skipped) test case. */
-    record Case(String className, String name, Throwable failure, boolean skipped) {}
+    /** One executed (or skipped) test case, with its wall time in nanoseconds. */
+    record Case(String className, String name, long durationNanos, Throwable failure,
+                boolean skipped) {}
 
     private TestReports() {}
 
@@ -45,7 +48,9 @@ final class TestReports {
         int tests = cases.size();
         int failures = 0;
         int skipped = 0;
+        long suiteNanos = 0;
         for (Case testCase : cases) {
+            suiteNanos += testCase.durationNanos();
             if (testCase.skipped()) {
                 skipped++;
             } else if (testCase.failure() != null) {
@@ -58,11 +63,11 @@ final class TestReports {
                 .append("\" tests=\"").append(tests)
                 .append("\" failures=\"").append(failures)
                 .append("\" errors=\"0\" skipped=\"").append(skipped)
-                .append("\" time=\"0.000\">\n");
+                .append("\" time=\"").append(seconds(suiteNanos)).append("\">\n");
         for (Case testCase : cases) {
             out.append("  <testcase name=\"").append(Xml.attribute(testCase.name()))
                     .append("\" classname=\"").append(Xml.attribute(className))
-                    .append("\" time=\"0.000\"");
+                    .append("\" time=\"").append(seconds(testCase.durationNanos())).append("\"");
             if (testCase.skipped()) {
                 out.append(">\n    <skipped/>\n  </testcase>\n");
             } else if (testCase.failure() != null) {
@@ -78,6 +83,11 @@ final class TestReports {
         }
         out.append("</testsuite>\n");
         return out.toString();
+    }
+
+    /** Seconds with three decimals, the JUnit convention. */
+    private static String seconds(long nanos) {
+        return String.format(java.util.Locale.ROOT, "%.3f", nanos / 1_000_000_000.0);
     }
 
     /** The full stack, the way a person would print it — CI reads this part. */

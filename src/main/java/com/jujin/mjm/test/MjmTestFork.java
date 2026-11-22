@@ -80,6 +80,7 @@ public final class MjmTestFork {
         for (Class<?> testClass : mjTests) {
             for (Method test : annotated(testClass, MjmTest.class)) {
                 String name = testClass.getName() + "." + test.getName();
+                long started = System.nanoTime();
                 try {
                     test.setAccessible(true);
                     var ctor = testClass.getDeclaredConstructor();
@@ -96,14 +97,14 @@ public final class MjmTestFork {
                     }
                     passed++;
                     cases.add(new TestReports.Case(testClass.getName(), test.getName(),
-                            null, false));
+                            System.nanoTime() - started, null, false));
                     System.out.println("  ok  " + name);
                 } catch (Throwable failure) {
                     failed++;
                     Throwable cause = failure.getCause() != null ? failure.getCause() : failure;
                     // a failing @MjmBeforeEach belongs to this case, not the suite
                     cases.add(new TestReports.Case(testClass.getName(), test.getName(),
-                            cause, false));
+                            System.nanoTime() - started, cause, false));
                     System.out.println("  FAIL " + name + ": " + cause);
                 }
             }
@@ -150,9 +151,17 @@ public final class MjmTestFork {
      */
     private static final class XmlListener implements TestExecutionListener {
         private final List<TestReports.Case> cases;
+        private final java.util.Map<String, Long> started = new java.util.HashMap<>();
 
         XmlListener(List<TestReports.Case> cases) {
             this.cases = cases;
+        }
+
+        @Override
+        public void executionStarted(TestIdentifier identifier) {
+            if (identifier.isTest()) {
+                started.put(identifier.getUniqueId(), System.nanoTime());
+            }
         }
 
         @Override
@@ -161,13 +170,15 @@ public final class MjmTestFork {
                 return;
             }
             String className = className(identifier);
+            long duration = durationOf(identifier);
             switch (result.getStatus()) {
                 case SUCCESSFUL -> cases.add(new TestReports.Case(className,
-                        identifier.getDisplayName(), null, false));
+                        identifier.getDisplayName(), duration, null, false));
                 case FAILED -> cases.add(new TestReports.Case(className,
-                        identifier.getDisplayName(), result.getThrowable().orElse(null), false));
+                        identifier.getDisplayName(), duration,
+                        result.getThrowable().orElse(null), false));
                 case ABORTED -> cases.add(new TestReports.Case(className,
-                        identifier.getDisplayName(), null, true));
+                        identifier.getDisplayName(), duration, null, true));
             }
         }
 
@@ -175,8 +186,13 @@ public final class MjmTestFork {
         public void executionSkipped(TestIdentifier identifier, String reason) {
             if (identifier.isTest()) {
                 cases.add(new TestReports.Case(className(identifier),
-                        identifier.getDisplayName(), null, true));
+                        identifier.getDisplayName(), durationOf(identifier), null, true));
             }
+        }
+
+        private long durationOf(TestIdentifier identifier) {
+            Long start = started.remove(identifier.getUniqueId());
+            return start == null ? 0L : System.nanoTime() - start;
         }
 
         private static String className(TestIdentifier identifier) {

@@ -102,7 +102,7 @@ class TestReportsTest {
     }
 
     @Test
-    void twoRunsProduceIdenticalXml(@TempDir Path storeDir) throws Exception {
+    void twoRunsAreStructurallyIdenticalExceptForTime(@TempDir Path storeDir) throws Exception {
         project();
         Files.writeString(dir.resolve("src/test/java/demo/Tests.java"), """
             package demo;
@@ -119,20 +119,36 @@ class TestReportsTest {
             """);
         lock();
         ArtifactStore store = new ArtifactStore(storeDir);
-        Path report = dir.resolve("target/test-results/TEST-demo.Tests.xml");
-        byte[] first;
-        byte[] second;
+        Path reports = dir.resolve("target/test-results");
+        Document first;
+        Document second;
+        String raw;
         try (var central = VendoredToolchain.start()) {
             assertEquals(0, new TestCommand(store, dir).execute(List.of()));
-            first = Files.readAllBytes(report);
+            first = parse(reports.resolve("TEST-demo.Tests.xml"));
+            raw = Files.readString(reports.resolve("TEST-demo.Tests.xml"));
             assertEquals(0, new TestCommand(store, dir).execute(List.of()));
-            second = Files.readAllBytes(report);
+            second = parse(reports.resolve("TEST-demo.Tests.xml"));
         }
 
-        assertArrayEquals(first, second, "no timestamps, no wall-clock values");
-        String xml = new String(first, java.nio.charset.StandardCharsets.UTF_8);
-        assertTrue(!xml.contains("timestamp="), xml);
-        assertTrue(!xml.contains("<?xml-stylesheet"), xml);
+        assertTrue(!raw.contains("timestamp="), "no timestamp attribute: " + raw);
+        assertEquals(first.getDocumentElement().getAttribute("tests"),
+                second.getDocumentElement().getAttribute("tests"));
+        var firstCases = first.getElementsByTagName("testcase");
+        var secondCases = second.getElementsByTagName("testcase");
+        assertEquals(firstCases.getLength(), secondCases.getLength());
+        for (int i = 0; i < firstCases.getLength(); i++) {
+            Element a = (Element) firstCases.item(i);
+            Element b = (Element) secondCases.item(i);
+            assertEquals(a.getAttribute("name"), b.getAttribute("name"),
+                    "apart from time, the two runs must be identical");
+            assertEquals(a.getAttribute("classname"), b.getAttribute("classname"));
+        }
+        // the only attribute allowed to differ is the real duration
+        String firstNormalized = raw.replaceAll("time=\"[0-9.]+\"", "time");
+        assertEquals(firstNormalized, Files.readString(reports.resolve("TEST-demo.Tests.xml"))
+                        .replaceAll("time=\"[0-9.]+\"", "time"),
+                "apart from time, the two runs must be identical");
     }
 
     @Test
