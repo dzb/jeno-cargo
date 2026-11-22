@@ -98,13 +98,15 @@ key = 坐标,value 形态决定物种:
 | `"gh:owner/repo@tag"` | mjm 原生 | tag 为可选 `v` 前缀 + semver;展开规则见 §2.2 |
 | `"https://…/x.jar"` | 裸 URL(叶子) | 必须 https、以 `.jar` 结尾 |
 
-**`mjm:` 仓库**(`[repos] mine = "mjm:https://repo.example/"`):mjm 自己的两层布局,发布物三件套
+**`mjm:` 仓库**(`[repos] mine = "mjm:https://repo.example/"` 或 `"mjm:local:../vendor"`):mjm 自己的两层布局,发布物三件套
 平铺在 `<base>/<name>/<version>/` 下(`<name>` = 发布方 `[project].name`),**不需要 `[project].group`**。
+传输可以是 HTTPS(`mjm:https://…`)或本地目录(`mjm:local:<dir>`,`~` 展开、相对路径相对项目根,
+`mjm publish mjm:local:<dir>` 直接写入)。
 依赖写成 `"<name>" = "mine:<semver>"`(或 legacy `[deps.mine] "<name>" = "<semver>"`);元数据取自同目录的
 `.mjm.toml` 描述符,`[project].name` 必须与 key 一致(由 `DescriptorReader` 校验)。描述符里的裸名+裸版本
 指向同一仓库的兄弟工件(描述符只写事实,不写仓库规则)——**这条兄弟规则仅适用于从 `mjm:` 仓库取到的
-描述符**;从 `gh:` 取到的描述符里写裸名不会变成同仓库,仍按 Central 坐标报错。`mjm:` 只支持 `https://`(loopback `http://` 仅供
-测试);store 索引与 `--offline` 行为不变。
+描述符**;从 `gh:` 取到的描述符里写裸名不会变成同仓库,仍按 Central 坐标报错。`mjm:https://` 与
+`mjm:local:` 都支持(loopback `http://` 仅供测试);store 索引与 `--offline` 行为不变。
 
 **歧义规则**(无例外):
 
@@ -150,7 +152,15 @@ key = 坐标,value 形态决定物种:
 | 字段 | 规则 |
 |---|---|
 | key | 仓库名,`^[a-z][a-z0-9-]*$` |
-| value | base:**https URL**,或 **`local:` 目录**——本地 Maven 布局目录(`~` 展开为 home,相对路径相对项目根),自举与离线通道 |
+| value | **位置 × 布局**,只有四种组合(见下表):`https://…`、`local:<dir>`、`mjm:https://…`、`mjm:local:<dir>`。`local:` 展开 `~`,相对路径相对项目根 |
+
+| 布局 \ 传输 | HTTPS | 本地目录 |
+|---|---|---|
+| **Maven** | `https://host/…` | `local:<dir>` |
+| **mjm 两层** | `mjm:https://host/…` | `mjm:local:<dir>` |
+
+布局是声明的属性,不是 URL 的属性:同一个 `local:` 目录可以是 Maven 布局(Maven pom)或 mjm 布局
+(描述符),由前缀决定,解析后作为两个独立事实传递。
 
 查找顺序:**互不回退**——`[deps.{repo}]` 只查对应仓库,`[deps]` 只查 Central。
 `local:` 仓库的字节同样经过 store 的 sha256 钉定,与远程仓库同等可审计。
@@ -298,7 +308,7 @@ version = 21              # 可选;语义同 §2.1 [java]
 id = "com.example:foo"    # central: "group:artifact";mjm 原生: repo 名
 version = "1.2.3"
 source = "central"        # "central" / "gh:owner/repo" / "url"
-                          # / 命名仓库的 base 原文(如 "local:vendor"、"mjm:https://repo.example/")
+                          # / 命名仓库的声明原文(如 "local:vendor"、"mjm:https://repo.example/"、"mjm:local:../vendor")
 url = "https://…"         # 实际下载 URL。local: 仓库写为相对项目根的 file: 形式
                           # (如 file:vendor/com/…/x.jar),读取时按项目根展开;
                           # 路径落在项目根之外(如 local:/opt/repo)仍写绝对 file:///…;

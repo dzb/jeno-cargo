@@ -260,7 +260,7 @@ the next invocation.
 | `cache dir \| size \| prune \| clean` | inspect or reclaim the user-level store, sources and lock files (`dir` shows the three roots, `size` their occupancy, `prune` removes only provably useless files, `clean` deletes store and sources) |
 | `outdated [--json]` | pinned dependencies with newer versions available; `--json` gives `upToDate`/`updates`/`notChecked`/`failures` |
 | `audit [--json] [--dev]` | known vulnerabilities for the locked closure (OSV). Maven-coordinate artifacts are checked; `gh:`/`url`/`local:`/`mjm:`/named repositories are listed as `notChecked` with the reason — never as clean. Vulnerabilities or failed queries exit 1; `--json` gives `vulnerabilities`/`notChecked`/`failures` |
-| `publish [target]` | the release triple; `gh:owner/repo`, `mjm:https://host/` (two levels, no group), or any `http(s)://` host (Maven layout over PUT, needs group) |
+| `publish [target]` | the release triple; `gh:owner/repo`, `mjm:https://host/` (two levels, no group), `mjm:local:<dir>` (the same two-level layout written into a directory, no network), or any `http(s)://` host (Maven layout over PUT, needs group) |
 | `update` / `upgrade` | self-upgrade from GitHub Releases |
 | `-o`, `--offline` (flag) | refuse all network access — store hits only. Not for `update`/`publish`/`outdated`/`audit`, which are network by nature |
 | `mjm <command> --help` | that command's syntax and explanation (may run to several lines) |
