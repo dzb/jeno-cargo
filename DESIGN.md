@@ -47,7 +47,7 @@ mjm 的灵魂是"**严格依赖图管理器**",三件套:
 配套原则:
 
 - **零依赖自举**:mjm 的依赖闭包 = JDK + Freeway(仅此两者)。Freeway 本身零第三方依赖,所以 mjm 整体"有 JDK 就能跑"
-- **发布去中心化**:发布 = 上传文件到任意可达 URL(GitHub/Gitee Releases、内网 Nexus、任意静态服务器)
+- **发布去中心化**:发布 = 上传文件到任意可达 URL(GitHub Releases、内网 Nexus、任意静态服务器)
 - **XML 是 Central 的方言,mjm 会听但不会说**:用户可见的世界里 XML 不存在
 
 设计上的对称: mjm 用 Freeway 的 Module 机制约束自己的模块边界,
@@ -66,8 +66,8 @@ mjm 又用严格可见性约束用户项目的依赖边界——**这个工具�
 | D5 | 深度预算 max-depth,默认硬错误 | 爆预算的错误信息 = 一次"依赖评审时刻",逼向零依赖/小依赖库(与 D-Freeway 哲学闭环) |
 | D6 | 严格可见性 = pnpm 精髓 | pnpm 的价值不是"扁平"而是"隔离":compile classpath 只有直接声明依赖,传递依赖只进 runtime classpath |
 | D7 | 内容寻址存储 ~/.mjm/store,classpath 直指 store 文件 | 学 pnpm/Coursier:全机一份,免拷贝(Java 没有 node_modules 目录约束,反而更轻) |
-| D8 | lockfile 一等公民,sha256 双钉(artifact + 元数据) | GitHub/Gitee release asset 可变,URL 不构成完整性承诺;代码与元数据分别钉死(go.sum 同时哈希 zip 与 go.mod 的先例) |
-| D9 | 发布去中心化,GitHub/Gitee Releases 为一等后端 | Maven 发布链(Nexus/Sonatype/GPG)劝退个人开发者;GitHub/Gitee 人人都有。owner/repo 即命名空间,无需 group |
+| D8 | lockfile 一等公民,sha256 双钉(artifact + 元数据) | release asset 可变,URL 不构成完整性承诺;代码与元数据分别钉死(go.sum 同时哈希 zip 与 go.mod 的先例) |
+| D9 | 发布去中心化,GitHub Releases 为一等后端 | Maven 发布链(Nexus/Sonatype/GPG)劝退个人开发者;GitHub 人人都有。owner/repo 即命名空间,无需 group |
 | D10 | 内置零依赖测试 runner | node:test 先例:注解 + 反射几百行,不引 JUnit,与零依赖自洽 |
 | D11 | 架构 = JDK + Freeway(FreewayApp/SubModule/IoC/EventBus/HttpModule/ScopedCache/Defer) | Maven 用 Plexus 组装自己的先例;硬 dogfood,顺手成为 Freeway 能力的验收工程 |
 | D12 | 严格解码,拒绝式解析 | TOML 子集之外/pom 特性子集之外 → 带行号/路径的明确报错,不做猜测式解析 |
@@ -92,7 +92,7 @@ version = 21                            # 目标 JDK major(整数,SPEC §2.1)
 
 [deps]                                  # 依赖:值的形态决定物种
 "com.example:foo" = "1.2.3"             # 形态A:纯版本 → Maven Central
-"mylib" = "gh:user/repo@v1.2.0"         # 形态B:gh:/gitee: shorthand → mjm 原生发布
+"mylib" = "gh:user/repo@v1.2.0"         # 形态B:gh: shorthand → GitHub release
 "legacy" = "https://cdn.example.com/legacy-0.9.jar"   # 形态C:URL → 裸 jar,叶子
 
 [repos]                                 # 附加 Maven 布局仓库(可选)
@@ -117,16 +117,17 @@ dev = "mjm run app.Main"
 |---|---|---|---|
 | `"1.2.3"` | Central | pom.xml(线路格式) | 有 |
 | `"corp:1.2.3"` | 命名仓库 | pom.xml(线路格式) | 有 |
-| `"gh:owner/repo@tag"` / `"gitee:owner/repo@tag"` | mjm 原生 | jar 旁的 `.mjm.toml` 描述符 | 有 |
+| `"gh:owner/repo@tag"` | mjm 原生 | jar 旁的 `.mjm.toml` 描述符 | 有 |
 | `"https://.../x.jar"` | 裸 URL | 无 | 无(叶子) |
 
 - mjm 原生约定:artifact 名 = repo 名,版本 = tag;展开为
   `https://github.com/{owner}/{repo}/releases/download/{tag}/{artifact}-{version}.jar`
-  (Gitee 同模式: `https://gitee.com/{owner}/{repo}/releases/download/...`)
+
 - `"corp:1.2.3"` 与 `[deps.corp]` 是同一种语义:只在 `corp` 查找、互不回退;值里的仓库名必须已在
   `[repos]` 声明(否则报错并列出可用仓库名),冒号前不像仓库名的值仍是 central 版本
-- 前缀优先:`gh:` / `gitee:` / `https://` 永远先匹配(保留前缀);`gh` 与 `gitee` 也就不能被
-  `[repos]` 占用(声明即报错)。`local` / `http` / `https` / `file` 不是保留名
+- 前缀优先:`gh:` / `https://` 永远先匹配(保留前缀);`gh` 也就不能被 `[repos]` 占用(声明即报错)。
+  `local` / `http` / `https` / `file` 不是保留名
+- `gitee:` 物种已移除(2026-11-22):附件匿名下载需令牌;替代是裸 URL 叶子或自建主机的 `[repos]`
 - `[deps.{repo}]` 分区写法保留可读,但已是 legacy(`mjm add` 只产生值形态)
 - 版本一律精确钉定,**不支持 version ranges**
 - V2 增强(GOPROXY 先例):`[repos]` 支持回退链与私库排除(排期见 §12"Go 吸收"行,语法届时补进 SPEC)
@@ -277,14 +278,15 @@ mylib-1.2.0.sha256
 有描述符 = 完整公民(可传递解析);无描述符的裸 jar = 叶子。
 描述符支持 `[retract]` 作者端撤回(SPEC §3.4)——与 `[overrides]`(消费端,Q2)凑成一对:坏版本死得快、死得可见。
 
-### 7.3 GitHub/Gitee 后端
+### 7.3 GitHub 后端(以及为什么不再是 Gitee)
 
-- **公开发布推荐 GitHub**(release 附件匿名可下载,消费方零配置);Gitee 作为私有/内网场景的补充(附件需 Bearer 令牌,Q8 实测确认)
+- **GitHub**:release 附件匿名可下载,消费方零配置
+- **Gitee**:2026-11-22 随 `gitee:` 物种移除——附件匿名下载需 Bearer 令牌,违背零配置。需要它时用裸 URL 叶子或自建主机
 - **自建主机是一等目标**:`mjm publish https://my.host/repo/` 按 Maven 布局(`group/path/artifact/version/`)PUT 三件套——与 `[repos]` 读取的布局完全一致,局域网 http 同样适用。上传协议只有一个(PUT/WebDAV),不为每个后端写适配器
 - 迁库只改一行 `[repos]`:从 GitHub 到自建服务器、从公司仓库到镜像,不需要账号迁移或重新发布
 - `mjm publish`(V1 ✅):生成 dist/ 三件套 + 上传清单
 - `mjm publish gh:owner/repo`(V1.1 代码就绪):原生上传,token 从 `MJM_GITHUB_TOKEN` 环境变量读
-- `mjm publish gitee:owner/repo`(V1.1 代码就绪):原生上传,token 从 `MJM_GITEE_TOKEN` 环境变量读;**消费端下载也需令牌**(Q8 实测)
+- ~~`mjm publish gitee:owner/repo`~~:随 `gitee:` 物种一起移除(2026-11-22);附件需令牌,违反零配置
 - 发布端零配置:不需要 Nexus、不需要账号体系,有仓库就能发
 
 ### 7.4 安全底线
@@ -346,14 +348,14 @@ push tag v*  →  验证 + 发行
 | `mjm test` | ✅ | fork JVM runner:`@MjmTest` + JUnit Platform;classpath 含 MAIN + dev;`[test]` include/exclude 过滤源 |
 | `mjm package` | ✅ | 纯 jar;`--uber` 合并闭包(排除 dev)并输出 `dist/<name>-<ver>-uber.jar`——与普通 jar 不同名,互不覆盖 |
 | `mjm bundle` | ✅ | 发行目录 + setup.sh + tar.gz,输出 `dist/`(应用自用;库不需要) |
-| `mjm publish` | ✅ | 三件套(dist/);`gh:`/`gitee:` 原生上传;**任意 http(s) 主机 → Maven 布局 + HTTP PUT**;描述符只含 MAIN 依赖 |
+| `mjm publish` | ✅ | 三件套(dist/);`gh:` 原生上传;**任意 http(s) 主机 → Maven 布局 + HTTP PUT**;描述符只含 MAIN 依赖 |
 | `mjm update` / `mjm upgrade` | ✅ | 自升级(alias 同一实现) |
 | ~~`mjm release`~~ | **已删除** | 生命周期属于项目自己的 CI;mjm 只提供单步机制 |
 | `mjm init [--pom] [--force]` | ✅ | 骨架,或从 pom.xml 迁移(逐条报告不可表达的事实) |
 | `mjm remove <id>` | ✅ | 删除一行声明并重锁 |
 | `mjm info <id> [--source]` | ✅ | 身份/来源/依赖/源码地址;`--source` 取源码树 |
 | `mjm clean [--target] [--dist]` | ✅ | **默认整棵删 `target/`**(无参或 `--target`;Maven 惯例——包括你自己放进 `target/` 的东西;里面只有可重建的 `classes`/`test-classes`,依赖缓存在 `~/.mjm/store` 不在此);`--dist` 才清 `dist/`(交付物,可能含其他版本的产物,所以是显式要求);两个都给就都清;**两个目标先全部探测,任一(含其内部嵌套)是挂载点则整次拒绝、一个字节不删**;**永不触碰 store** |
-| `mjm outdated` | ✅ | 已钉版本 vs 仓库可用版本;只查 Central 与命名 https 仓库,`gh:`/`gitee:`/`url`/`local:` 列为"未检查";预发布默认不报(除非当前就是预发布);跨 major 单独一节 |
+| `mjm outdated` | ✅ | 已钉版本 vs 仓库可用版本;只查 Central 与命名 https 仓库,`gh:`/`url`/`local:` 列为"未检查";预发布默认不报(除非当前就是预发布);跨 major 单独一节 |
 | `--offline` | ✅ | 禁止一切网络访问;store 有则用,缺则报错。`update`/`publish`/`outdated` 不适用 |
 | daemon 常驻 | **M6** | 已确认需要:常驻 JVM 热命令,mvnd 已验证可快 2–4 倍 |
 | workspaces/monorepo | V2 | 设计模板 = go.work 模式:`mjm.work.toml` 本地覆盖文件,gitignore 不提交 |
@@ -370,14 +372,14 @@ push tag v*  →  验证 + 发行
 |---|---|
 | CLI 入口、命令注册 | FreewayApp + SubModule(一个命令一个子模块) |
 | 组件装配、实现替换 | IoC 容器 |
-| 下载(Central/GitHub/Gitee) | HttpModule + Defer 并发 |
+| 下载(Central/GitHub) | HttpModule + Defer 并发 |
 | 生命周期广播(resolving → downloading → linking → done) | EventBus(进度显示 + 未来 hook 接缝) |
 | `~/.mjm` store、解析缓存 | ScopedCache |
 | resolver / pom 解码 / store / lockfile / publish | 各自独立 Module,依赖显式声明(ModuleEx 约束) |
 
 IoC 接缝(未来扩展点,不引入插件机制):
 
-- `PublishBackend`: Gh / Gitee / Manual
+- `PublishBackend`: Gh / Http / Manual
 - `MetadataSource`: PomMetadataSource / MjDescriptorMetadataSource
 - `DownloadClient`
 
@@ -404,7 +406,7 @@ IoC 接缝(未来扩展点,不引入插件机制):
 - **M1b** ✅ 完成(2026-11-21):mjm 骨架(groupId `com.jujin8.mjm`,JDK 25,依赖 freeway-commons)+ pom 解码器(`Poms`/`PomXml`/模型,23 测试)——parent 链递归、属性插值 fixpoint(`${revision}` 支持)、DM/BOM 合并、依赖过滤(compile/runtime、非 optional)、子集拒绝(ranges/snapshots/打包类型/坐标不一致/循环父链/DOCTYPE)全部落地
 - **M2** ✅ 完成(2026-11-21):解析器全量落地——mjm.toml 封闭 schema(`ProjectReader`,值形态定物种、坐标/https/深度预算规则全校验)、描述符(`DescriptorReader`,facts-only、name/version 一致性、retract 禁自撤)、语义感知 MVS(同 major 取最大、跨 major 硬冲突、overrides 先行、retract 剔除)、exclusions 按路径生效(同库不同排除集各自展开子树)、深度预算(最长路径 + 依赖环 = 硬错误)、`LockFile` 序列化(双钉,digest 走 `DigestSource` 接缝,M3 下载层填充)——63 测试全绿
 - **M3** ✅ 完成(2026-11-21):store(`ArtifactStore`——JDK HttpClient 下载、内容寻址 `<sha256>.<ext>`、URL 级文件锁防并发、555 只读、file:// 即本地直取)+ lockfile 回读(`LockFileReader`,封闭 schema、sha64 校验、重复 id 拒绝)+ CLI(`MjModule`/`CommandRunner`/`lock`/`build`/`run`,Freeway IoC 装配、命令为 deferred contributions、ToolProvider 进程内 javac)——**验收达成:mjm 用自己的 mjm.lock 编译并运行了自己**(vendor 自举,36 源文件,80 测试全绿)
-- **M4** ✅ 完成(2026-11-21):`mjm publish` V1(生成 dist/ 三件套——jar、描述符、sha256——repo-bound 依赖拒绝发布,目标清单打印 gh:/gitee: 的精确 release URL)+ host 覆盖(`-Dmjm.github.host` / `-Dmjm.gitee.host`,内网镜像与测试通道,URL 形状不变)+ **gh: 消费链端到端测试**(模拟 GitHub release layout 的 loopback 服务器:描述符→jar→传递描述符→store→lock 双钉);Gitee 真机 URL 实测(Q8)仍待用户手工验证一次;publish 原生上传顺延至 V1.1(需真实凭证验证)
+- **M4** ✅ 完成(2026-11-21):`mjm publish` V1(生成 dist/ 三件套——jar、描述符、sha256——repo-bound 依赖拒绝发布,目标清单打印 gh:/gitee: 的精确 release URL)'+ host 覆盖(`-Dmjm.github.host`,内网镜像与测试通道,URL 形状不变)+ **gh: 消费链端到端测试**(模拟 GitHub release layout 的 loopback 服务器:描述符→jar→传递描述符→store→lock 双钉);publish 原生上传顺延至 V1.1(需真实凭证验证)
 - **M5** ✅ 完成(2026-11-21):内置测试 runner(node:test 形态)+ `mjm tree`(深度可视化)+ `mjm why`(全部引入路径)+ `mjm add`(写入 + 重锁 + 版本列表 + 索引搜索)+ `mjm publish` V1 + **JUnit Platform 双 runner**(@MjmTest 内置 + Jupiter Launcher,现存项目测试不废弃)+ `[build]` 编译参数(`-parameters` 等旗标注入 javac)+ `[scripts]` 接入 `mjm run`(脚本名优先于主类名);Central/GitHub/Gitee host 可覆盖;DigestSource 简化——97 测试全绿
 - **M5+** ✅ 完成(2026-11-21):**`mjm package`** —— 内置 uber-jar(零插件哲学延伸):闭包 + 项目 classes 合并为 `target/{name}-{version}.jar`;合并规则 = services 行级并集(ServiceLoader 存活)、签名文件与 module-info 剔除、重复资源首胜;MANIFEST 由 mjm 生成(Main-Class + `mjm-Dependencies` 构建信息,`go version -m` 先例);**自举演示:mjm 给自己打出单文件可执行 jar 并 `java -jar` 运行**(556KB,含全部依赖)
 - **M6** daemon(常驻 JVM,热命令;已确认需要,待排期)
@@ -430,7 +432,7 @@ IoC 接缝(未来扩展点,不引入插件机制):
 
 | # | 问题 | 说明 |
 |---|------|------|
-| Q8 | Gitee 附件 URL 实测 | ✅ **已解决(2026-11-21,真机实测)**:URL 纯路径无动态成分 ✓、模式与 GitHub 同款 ✓、但**匿名下载 403**——Gitee 附件需要 Bearer 令牌(302 重定向→签名 CDN URL→200,sha256 校验通过)。结论:`gitee:` 物种的下载步骤携带 `MJM_GITEE_TOKEN` 认证请求即可,URL 约定不变,确定性由 lockfile 兜底;首次 fetch 后 store 缓存,后续构建离线可用 |
+| Q8 | Gitee 附件 URL 实测 | ✅ **已结论(2026-11-22)**:真机实测发现匿名下载 403(需 Bearer 令牌),于是 `gitee:` 物种**已移除**——携带令牌违背零配置原则。需要 Gitee 构件时用裸 URL 叶子或自建主机 `[repos]` |
 | Q9 | 自举期 freeway 依赖来源 | ✅ 已解决(2026-11-21):**`local:` 仓库类型**(本地 Maven 布局目录,`~` 展开与相对路径均支持)+ **vendor 自举**——mjm 的 `vendor/` 目录放 freeway-commons/freeway-ioc/slf4j-api 的 jar 与"独立声明 pom"(无 parent 链,版本重钉去 snapshot 后缀),字节与其他仓库同等 sha256 钉定。snapshot 全局仍然禁止,无需例外 |
 
 ---
@@ -447,9 +449,9 @@ Gradle 9 / Maven 4 后,尚未覆盖的场景按下表排期。
 | 0 | **`mjm source <id>`**(替代 sources jar)+ `mjm publish` 交接指令 | Go tag-archive、pkg.go.dev 可寻址源码;npm 的 `npm pack` 分享 | ✅ 已完成(2026-11-21) |
 | 1 | **`[dev-deps]` 依赖分组** | Cargo dev-dependencies、uv PEP 735 dependency-groups | ✅ 已完成(2026-11-21):独立顶层节;解析进同一张锁图,`scope = "dev"`;不进编译可见性/run/package/dist/发布描述符,只进 `mjm test`;MAIN 优先 |
 | 2 | `mjm init --pom` / `mjm remove` / `mjm clean` | mvn clean、npm init/uninstall、Maven 迁移 | ✅ 全部完成:init(含 `--pom` 迁移)、remove、clean(2026-11-22,`[--target] [--dist]`,永不碰 store) |
-| 3 | ~~发布三件套补 `-sources` jar~~ → **`mjm info <id> [--source]`** | Go/Cargo 从不分离源码与产物;sources jar 是 Java 二进制分发的补丁,不是能力 | ✅ 已完成(2026-11-21):源码**随 tag 走**——gh:/gitee: 取 tag archive,Central 回退读发布者的 sources jar,URL 叶子明确拒绝。发布侧不产出 sources jar |
+| 3 | ~~发布三件套补 `-sources` jar~~ → **`mjm info <id> [--source]`** | Go/Cargo 从不分离源码与产物;sources jar 是 Java 二进制分发的补丁,不是能力 | ✅ 已完成(2026-11-21):源码**随 tag 走**——gh: 取 tag archive,Central 回退读发布者的 sources jar,URL 叶子明确拒绝。发布侧不产出 sources jar |
 | 4 | JUnit XML 测试报告 | mvn surefire 默认产物 | 未做(fork JVM 里产出 `target/test-results/` 即可接 GitHub checks UI) |
-| 5 | `mjm outdated` | mvn versions:display-dependency-updates、npm outdated | ✅ 已完成(2026-11-22):`maven-metadata.xml` 列版本;预发布按 qualifier token 判定(不靠 `-` 子串);local:/gh:/gitee:/url 明确列为未检查 |
+| 5 | `mjm outdated` | mvn versions:display-dependency-updates、npm outdated | ✅ 已完成(2026-11-22):`maven-metadata.xml` 列版本;预发布按 qualifier token 判定(不靠 `-` 子串);local:/gh:/url 明确列为未检查 |
 
 ### P1 — 现代实践
 
@@ -465,7 +467,7 @@ Gradle 9 / Maven 4 后,尚未覆盖的场景按下表排期。
 
 - 增量编译/构建缓存(Gradle build cache、cargo incremental)——javac 无增量;M6 daemon 后再议
 - 测试并行(Gradle maxParallelForks)——fork JVM 目前串行
-- `git:` 任意仓库物种——gh:/gitee: 已覆盖主场景
+- `git:` 任意仓库物种——gh: 与自建主机 `[repos]` 已覆盖主场景
 - 注解处理器——`[build].parameters` 传 `-processorpath` 即可,文档化即可
 - JPMS module-path——小众,记录不动
 

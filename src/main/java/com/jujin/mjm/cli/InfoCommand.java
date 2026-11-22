@@ -183,7 +183,7 @@ public final class InfoCommand implements Command {
     private int fetchSource(LockedArtifact artifact) {
         Path target = sourcesDir().resolve(artifact.id().replace(':', '_')
                 + "@" + artifact.version());
-        if (artifact.source().startsWith("gh:") || artifact.source().startsWith("gitee:")) {
+        if (artifact.source().startsWith("gh:")) {
             return fetchNativeTree(artifact, target);
         }
         if (artifact.source().equals("url")) {

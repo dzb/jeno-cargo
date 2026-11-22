@@ -20,11 +20,10 @@ import java.util.List;
  * you: it reports what exists above what you pinned, and you choose. Nothing
  * is written; {@code mjm lock} is what applies a change.
  *
- * <p>Only Central artifacts can be checked. A {@code gh:}/{@code gitee:}
- * release carries no version index — the tag is the version — and a bare URL
- * leaf has no metadata at all. Those are listed as skipped rather than
- * silently omitted, because "no update found" and "cannot know" are different
- * answers.
+ * <p>Only Central artifacts can be checked. A {@code gh:} release carries no
+ * version index — the tag is the version — and a bare URL leaf has no metadata
+ * at all. Those are listed as skipped rather than silently omitted, because
+ * "no update found" and "cannot know" are different answers.
  *
  * <p>The comparison uses the same ordering the resolver uses
  * ({@link Versions}), so "newer" here means the same thing it means in MVS.
@@ -88,7 +87,7 @@ public final class OutdatedCommand implements Command {
 
         for (LockedArtifact artifact : locked) {
             String source = artifact.source();
-            if (source.startsWith("gh:") || source.startsWith("gitee:")) {
+            if (source.startsWith("gh:")) {
                 unchecked.add(artifact.id() + " (mj-native: the tag is the version)");
                 continue;
             }

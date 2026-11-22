@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class NamingTest {
 
     private static final List<String> ALLOWED = List.of(
-            "mj-native",    // the species name for gh:/gitee: releases — a term, not the CLI
+            "mj-native",    // the species name for gh: releases — a term, not the CLI
             "mj-manifest-", // temp file prefix for the jar manifest
             "----mj");      // multipart boundary prefix in the upload request
 

@@ -32,12 +32,13 @@ import java.util.Map;
  * <pre>
  *   mjm publish                    → dist/ + upload hint
  *   mjm publish gh:owner/repo     → dist/ + GitHub native upload
- *   mjm publish gitee:owner/repo  → dist/ + Gitee native upload
+ *   mjm publish https://host/     → dist/ + Maven layout PUT (needs [project].group)
  * </pre>
  *
- * <p>Authentication: {@code MJM_GITHUB_TOKEN} / {@code MJM_GITEE_TOKEN} env
- * vars. Without a token, the files are generated but not uploaded — the
- * checklist is printed instead.
+ * <p>Authentication: {@code MJM_GITHUB_TOKEN} for gh: targets, and
+ * {@code MJM_PUBLISH_TOKEN} (if the host wants one) for plain HTTP hosts.
+ * Without a token, the files are generated but not uploaded — the checklist is
+ * printed instead.
  */
 public final class PublishCommand implements Command {
 
@@ -65,7 +66,7 @@ public final class PublishCommand implements Command {
 
     @Override
     public String summary() {
-        return "write the release triple and upload it: gh:, gitee:, or an http(s) host";
+        return "write the release triple and upload it: gh:, or an http(s) host";
     }
     @Override
     public String usage() {
@@ -107,7 +108,7 @@ public final class PublishCommand implements Command {
         for (var requirement : project.requirements()) {
             if (requirement.species() == Species.CENTRAL && requirement.repository() != null) {
                 System.err.println("mjm: '" + requirement.id() + "' is bound to repository '"
-                        + requirement.repository() + "' — descriptors carry Central, gh:, gitee: "
+                        + requirement.repository() + "' — descriptors carry Central, gh: "
                         + "and URL dependencies only; publish that dependency to the same host "
                         + "as this library, or drop it");
                 return 1;
@@ -165,19 +166,17 @@ public final class PublishCommand implements Command {
         if (target.startsWith("https://") || target.startsWith("http://")) {
             return uploadToHost(target, project, dist, jarName, descriptorName, shaName);
         }
-        if (!target.startsWith("gh:") && !target.startsWith("gitee:")) {
+        if (!target.startsWith("gh:")) {
             System.err.println("mjm: unknown publish target '" + target
-                    + "' — use gh:owner/repo, gitee:owner/repo, or an http(s) base URL");
+                    + "' — use gh:owner/repo or an http(s) base URL");
             return 1;
         }
 
-        String tokenEnv = target.startsWith("gh:") ? "MJM_GITHUB_TOKEN" : "MJM_GITEE_TOKEN";
-        String token = System.getenv(tokenEnv);
+        String token = System.getenv("MJM_GITHUB_TOKEN");
         if (token == null || token.isBlank()) {
-            System.err.println("mjm: " + tokenEnv + " environment variable is not set — "
-                    + "set it to your " + (target.startsWith("gh:") ? "GitHub" : "Gitee")
-                    + " personal access token, or run without the target to get the "
-                    + "upload checklist");
+            System.err.println("mjm: MJM_GITHUB_TOKEN environment variable is not set — "
+                    + "set it to your GitHub personal access token, or run without the "
+                    + "target to get the upload checklist");
             return 1;
         }
 
@@ -268,9 +267,7 @@ public final class PublishCommand implements Command {
     private int upload(String target, String token, MjProject project,
                        Path dist, String jarName, String descriptorName, String shaName) {
         String origin = target;
-        String host = target.startsWith("gh:")
-                ? ArtifactLocations.githubHost()
-                : ArtifactLocations.giteeHost();
+        String host = ArtifactLocations.githubHost();
         String owner = origin.substring(origin.indexOf(':') + 1, origin.indexOf('/'));
         String repo = origin.substring(origin.indexOf('/') + 1);
         String version = project.version();
@@ -291,7 +288,7 @@ public final class PublishCommand implements Command {
 
         for (Path file : files) {
             try {
-                uploadFile(host, origin, owner, repo, releaseId, file, token);
+                uploadFile(owner, repo, releaseId, file, token);
             } catch (IOException | InterruptedException e) {
                 System.err.println("mjm: upload failed for " + file.getFileName() + ": "
                         + e.getMessage());
@@ -302,10 +299,7 @@ public final class PublishCommand implements Command {
         System.out.println("uploaded; share it with:");
         System.out.println("  mjm add \"" + project.name() + "\" " + target + "@" + tag);
 
-        String page = target.startsWith("gh:")
-                ? ArtifactLocations.githubHost()
-                : ArtifactLocations.giteeHost();
-        System.out.println("  " + page + "/" + owner + "/" + repo + "/releases/tag/" + tag);
+        System.out.println("  " + host + "/" + owner + "/" + repo + "/releases/tag/" + tag);
         return 0;
     }
 
@@ -313,27 +307,15 @@ public final class PublishCommand implements Command {
     private String createRelease(String host, String origin, String owner, String repo,
                                  String tag, String token)
             throws IOException, InterruptedException {
-        boolean isGh = origin.startsWith("gh:");
-        String apiBase = isGh ? "https://api.github.com" : host + "/api/v5";
-        String url = apiBase + "/repos/" + origin.substring(origin.indexOf(':') + 1)
-                + "/releases";
-
-        String body;
-        if (isGh) {
-            body = "{\"tag_name\":\"" + tag + "\",\"name\":\"" + tag
-                    + "\",\"body\":\"released with mjm publish\"}";
-        } else {
-            body = "{\"tag_name\":\"" + tag + "\",\"name\":\"" + tag
-                    + "\",\"body\":\"released with mjm publish\",\"access_token\":\"" + token
-                    + "\",\"target_commitish\":\"master\"}";
-        }
+        String url = "https://api.github.com/repos/"
+                + origin.substring(origin.indexOf(':') + 1) + "/releases";
+        String body = "{\"tag_name\":\"" + tag + "\",\"name\":\"" + tag
+                + "\",\"body\":\"released with mjm publish\"}";
 
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body));
-        if (isGh) {
-            builder.header("Authorization", "Bearer " + token);
-        }
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .header("Authorization", "Bearer " + token);
 
         HttpResponse<String> response = http.send(builder.build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -344,7 +326,7 @@ public final class PublishCommand implements Command {
         // release might already exist — attach to it (one repo, many modules
         // of the same version share one release)
         if (response.statusCode() == 422 || response.statusCode() == 409) {
-            String existing = findReleaseId(isGh, host, owner, repo, tag, token);
+            String existing = findReleaseId(owner, repo, tag, token);
             if (existing != null) {
                 System.out.println("release " + tag + " already exists on " + origin
                         + " — attaching to it");
@@ -359,15 +341,12 @@ public final class PublishCommand implements Command {
     }
 
     /** Looks up an existing release by tag; null when none is reachable. */
-    private String findReleaseId(boolean isGh, String host, String owner, String repo,
-                                 String tag, String token)
+    private String findReleaseId(String owner, String repo, String tag, String token)
             throws IOException, InterruptedException {
-        String url = (isGh ? "https://api.github.com" : host + "/api/v5")
-                + "/repos/" + owner + "/" + repo + "/releases/tags/" + tag;
-        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url)).GET();
-        if (isGh) {
-            builder.header("Authorization", "Bearer " + token);
-        }
+        String url = "https://api.github.com/repos/" + owner + "/" + repo
+                + "/releases/tags/" + tag;
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url)).GET()
+                .header("Authorization", "Bearer " + token);
         HttpResponse<String> response = http.send(builder.build(),
                 HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() != 200) {
@@ -392,80 +371,28 @@ public final class PublishCommand implements Command {
         }
     }
 
-    /** Uploads one file as a release attachment. */
-    private void uploadFile(String host, String origin, String owner, String repo,
-                            String releaseId, Path file, String token)
+    /** Uploads one file as a GitHub release asset. */
+    private void uploadFile(String owner, String repo, String releaseId, Path file, String token)
             throws IOException, InterruptedException {
-        boolean isGh = origin.startsWith("gh:");
         byte[] bytes = Files.readAllBytes(file);
         String fileName = file.getFileName().toString();
-
-        if (isGh) {
-            String url = "https://uploads.github.com/repos/" + owner + "/" + repo
-                    + "/releases/" + releaseId + "/assets?name=" + fileName;
-            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                    .header("Authorization", "Bearer " + token)
-                    .header("Content-Type", "application/octet-stream")
-                    .POST(HttpRequest.BodyPublishers.ofByteArray(bytes))
-                    .build();
-            HttpResponse<String> response = http.send(request,
-                    HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 201) {
-                throw new IOException("upload of " + fileName + " returned "
-                        + response.statusCode() + ": "
-                        + response.body().substring(0, Math.min(200, response.body().length())));
-            }
-        } else {
-            // Gitee uses multipart form upload
-            String url = host + "/api/v5/repos/" + owner + "/" + repo + "/releases/"
-                    + releaseId + "/attach_files";
-            String boundary = "----mj" + System.currentTimeMillis();
-            var body = new ByteArrayOutputStream();
-            writeMultipartField(body, boundary, "access_token", token);
-            writeFilePart(body, boundary, "file", fileName, bytes);
-            body.write(("--" + boundary + "--\r\n").getBytes());
-
-            HttpRequest request = HttpRequest.newBuilder(URI.create(url + "?access_token="
-                    + token))
-                    .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-                    .POST(HttpRequest.BodyPublishers.ofByteArray(body.toByteArray()))
-                    .build();
-            HttpResponse<String> response = http.send(request,
-                    HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 201 && response.statusCode() != 200) {
-                throw new IOException("upload of " + fileName + " returned "
-                        + response.statusCode() + ": "
-                        + response.body().substring(0, Math.min(200, response.body().length())));
-            }
+        String url = "https://uploads.github.com/repos/" + owner + "/" + repo
+                + "/releases/" + releaseId + "/assets?name=" + fileName;
+        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/octet-stream")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(bytes))
+                .build();
+        HttpResponse<String> response = http.send(request,
+                HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() != 201) {
+            throw new IOException("upload of " + fileName + " returned "
+                    + response.statusCode() + ": "
+                    + response.body().substring(0, Math.min(200, response.body().length())));
         }
         System.out.println("  uploaded " + fileName);
     }
 
-    private void writeMultipartField(ByteArrayOutputStream out, String boundary,
-                                     String name, String value) throws IOException {
-        out.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
-        out.write(("Content-Disposition: form-data; name=\"" + name + "\"\r\n\r\n")
-                .getBytes(StandardCharsets.UTF_8));
-        out.write(value.getBytes(StandardCharsets.UTF_8));
-        out.write("\r\n".getBytes(StandardCharsets.UTF_8));
-    }
-
-    private void writeFilePart(ByteArrayOutputStream out, String boundary,
-                               String fieldName, String fileName, byte[] bytes)
-            throws IOException {
-        out.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
-        out.write(("Content-Disposition: form-data; name=\"" + fieldName
-                + "\"; filename=\"" + fileName + "\"\r\n").getBytes(StandardCharsets.UTF_8));
-        out.write("Content-Type: application/octet-stream\r\n\r\n".getBytes(StandardCharsets.UTF_8));
-        out.write(bytes);
-        out.write("\r\n".getBytes(StandardCharsets.UTF_8));
-    }
-
-    // ------------------------------------------------------------------
-    // descriptor
-    // ------------------------------------------------------------------
-
-    /** The descriptor is the project's own dependency facts, verbatim. */
     private static String descriptor(MjProject project) {
         StringBuilder out = new StringBuilder();
         out.append("[project]\n");
@@ -506,7 +433,7 @@ public final class PublishCommand implements Command {
     private static String requirementValue(Requirement requirement) {
         return switch (requirement.species()) {
             case CENTRAL -> requirement.version();
-            case GH, GITEE -> requirement.origin() + "@" + requirement.tag();
+            case GH -> requirement.origin() + "@" + requirement.tag();
             case URL -> requirement.url();
         };
     }

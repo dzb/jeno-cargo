@@ -45,16 +45,12 @@ public final class ArtifactLocations {
     }
 
     /**
-     * The mj-native hosts, overridable by system property for tests and
-     * in-house mirrors: {@code -Dmjm.github.host=…} / {@code -Dmjm.gitee.host=…}.
-     * The URL shapes stay frozen — only the host swaps.
+     * The GitHub host, overridable by system property for tests and in-house
+     * mirrors: {@code -Dmjm.github.host=…}. The URL shapes stay frozen — only
+     * the host swaps.
      */
     public static String githubHost() {
         return System.getProperty("mjm.github.host", "https://github.com");
-    }
-
-    public static String giteeHost() {
-        return System.getProperty("mjm.gitee.host", "https://gitee.com");
     }
 
     private ArtifactLocations() {}

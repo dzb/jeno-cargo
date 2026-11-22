@@ -35,67 +35,6 @@ class NativeConsumptionTest {
     Path dir;
 
     @Test
-    void aGiteeDescriptorAlsoHonoursItsHostOverride() throws Exception {
-        String descriptor = """
-            [project]
-            name = "widget"
-            version = "1.0.0"
-            """;
-
-        HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        Map<String, byte[]> routes = new LinkedHashMap<>();
-        routes.put("/acme/widget/releases/download/v1.0.0/widget-1.0.0.mjm.toml",
-                descriptor.getBytes());
-        routes.put("/acme/widget/releases/download/v1.0.0/widget-1.0.0.jar",
-                "widget-jar".getBytes());
-        server.createContext("/", exchange -> {
-            byte[] body = routes.get(exchange.getRequestURI().getPath());
-            if (body == null) {
-                exchange.sendResponseHeaders(404, -1);
-                return;
-            }
-            exchange.sendResponseHeaders(200, body.length);
-            try (var out = exchange.getResponseBody()) {
-                out.write(body);
-            }
-        });
-        server.start();
-        String overridden = "http://localhost:" + server.getAddress().getPort();
-        System.setProperty("mjm.gitee.host", overridden);
-        try {
-            MjProject project = ProjectReader.parse("""
-                [project]
-                name = "demo"
-                version = "0.1.0"
-
-                [deps]
-                widget = "gitee:acme/widget@v1.0.0"
-                """);
-
-            ResolvedGraph graph = Resolver.resolve(project,
-                    (g, a, v, base) -> {
-                        throw new AssertionError("a pure gitee: chain must not touch Central");
-                    },
-                    url -> {
-                        if (!url.startsWith(overridden)) {
-                            throw new AssertionError("the descriptor URL must use the overridden "
-                                    + "gitee host " + overridden + ", got: " + url);
-                        }
-                        return new String(routes.getOrDefault(
-                                java.net.URI.create(url).getPath(), new byte[0]));
-                    });
-
-            assertEquals(1, graph.artifacts().size());
-            assertTrue(graph.artifacts().getFirst().jarUrl().startsWith(overridden),
-                    "the jar URL follows the same override, got: "
-                            + graph.artifacts().getFirst().jarUrl());
-        } finally {
-            server.stop(0);
-            System.clearProperty("mjm.gitee.host");
-        }
-    }
-
-    @Test
     void ghChainResolvesThroughTheStoreAndLocks() throws Exception {
         byte[] mylibJar = "mylib-jar-bytes".getBytes();
         byte[] mylib2Jar = "mylib2-jar-bytes".getBytes();

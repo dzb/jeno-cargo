@@ -244,14 +244,12 @@ public final class Resolver {
                                 .toList();
                         yield new Metadata(edges, Map.of());
                     }
-                    case GH, GITEE -> {
+                    case GH -> {
                         // the same entry point jarUrl/metadataUrl use: a mirror
-                        // set through -Dmjm.{github,gitee}.host must cover the
-                        // descriptor fetch too, or it is not a mirror
-                        String host = template.species() == Species.GH
-                                ? ArtifactLocations.githubHost()
-                                : ArtifactLocations.giteeHost();
-                        String url = ArtifactLocations.releaseFile(host, template.owner(),
+                        // set through -Dmjm.github.host must cover the descriptor
+                        // fetch too, or it is not a mirror
+                        String url = ArtifactLocations.releaseFile(
+                                ArtifactLocations.githubHost(), template.owner(),
                                 template.repo(), template.tag(), version, "mjm.toml");
                         String text = descriptorSource.descriptor(url);
                         if (text == null || text.isBlank()) {
@@ -397,8 +395,7 @@ public final class Resolver {
         }
 
         private void requireShape(String id, String version, Species species) {
-            if ((species == Species.GH || species == Species.GITEE)
-                    && !Versions.isNativeSemver(version)) {
+            if (species == Species.GH && !Versions.isNativeSemver(version)) {
                 throw new ResolveException("[overrides]." + id + " = \"" + version
                         + "\" — an mj-native override must be semver (1.2.3, 1.2.3-rc1)");
             }
@@ -474,7 +471,7 @@ public final class Resolver {
                     case CENTRAL -> template.repository() == null
                             ? "central"
                             : project.repos().get(template.repository());
-                    case GH, GITEE -> originById.get(id);
+                    case GH -> originById.get(id);
                     case URL -> "url";
                 };
                 artifacts.add(new ResolvedGraph.ResolvedArtifact(id, version, species, source,
@@ -519,8 +516,6 @@ public final class Resolver {
                         template.artifactId(), version, template.classifier(), "jar");
                 case GH -> ArtifactLocations.releaseFile(ArtifactLocations.githubHost(),
                         template.owner(), template.repo(), template.tag(), version, "jar");
-                case GITEE -> ArtifactLocations.releaseFile(ArtifactLocations.giteeHost(),
-                        template.owner(), template.repo(), template.tag(), version, "jar");
                 case URL -> template.url();
             };
         }
@@ -531,8 +526,6 @@ public final class Resolver {
                 case CENTRAL -> ArtifactLocations.mavenFile(base, template.group(),
                         template.artifactId(), version, "pom");
                 case GH -> ArtifactLocations.releaseFile(ArtifactLocations.githubHost(),
-                        template.owner(), template.repo(), template.tag(), version, "mjm.toml");
-                case GITEE -> ArtifactLocations.releaseFile(ArtifactLocations.giteeHost(),
                         template.owner(), template.repo(), template.tag(), version, "mjm.toml");
                 case URL -> null;  // a bare leaf has no metadata
             };

@@ -94,18 +94,22 @@ key = 坐标,value 形态决定物种:
 |---|---|---|
 | `"1.2.3"` | central | 版本字符串非空、无空白;**禁止 version ranges**(`[1.0,2.0)`)。带 classifier 的依赖沿 pom 传递时,classifier 是身份的一部分(`group:artifact:classifier`),URL 为 `artifact-version-classifier.jar` |
 | `"corp:1.2.3"` | 命名仓库 | 只查 `corp` 这个仓库,**不回退**;`corp` 必须在 `[repos]` 里声明(否则报错并列出可用仓库名);版本规则与 central 相同(非空、无空白、禁 ranges/snapshot) |
-| `"gh:owner/repo@tag"` / `"gitee:owner/repo@tag"` | mjm 原生 | tag 为可选 `v` 前缀 + semver;展开规则见 §2.2 |
+| `"gh:owner/repo@tag"` | mjm 原生 | tag 为可选 `v` 前缀 + semver;展开规则见 §2.2 |
 | `"https://…/x.jar"` | 裸 URL(叶子) | 必须 https、以 `.jar` 结尾 |
 
 **歧义规则**(无例外):
 
-1. `gh:` / `gitee:` / `https://` 前缀**先**匹配——它们是保留前缀,代表 mjm 自己的物种。
+1. `gh:` / `https://` 前缀**先**匹配——它们是保留前缀,代表 mjm 自己的物种。
 2. 其余值,若冒号前是**已声明**的仓库名(且冒号后非空),按「命名仓库」解析;声明了却没写对名字、
    或名字未声明 → 报错并列出可用仓库名(不默默当成 central 版本)。不匹配仓库名形式的(例如
    `1.2.3`)仍是 central 版本。
 
-`gh` 与 `gitee` 是保留的仓库名:`[repos] gh = …` 直接报错(它会和物种前缀撞车),换一个名字。
+`gh` 是保留的仓库名:`[repos] gh = …` 直接报错(它会和物种前缀撞车),换一个名字。
 `local` / `http` / `https` / `file` 不保留。
+
+> **`gitee:` 已移除(2026-11-22)**:Gitee 的 release 附件即使匿名下载也要令牌,违反“零配置”原则。
+> 替代写法:直接写 release jar 的 `https://…jar` 叶子,或发布到自己的主机并在 `[repos]` 声明后用
+> 值形态引用。遇到 `gitee:` 会报错并给出这两种写法。
 
 - `[deps.{repo}]` 分区写法为 **legacy**:仍可读、语义与值形态完全相同,但 `mjm add` 不再产生它
 - 同一坐标同时出现在 `[deps]`、任何 `[deps.{repo}]`,或两种写法混用 → 报错(身份撞车)
@@ -198,12 +202,12 @@ key = 坐标,value 形态决定物种:
 gh:{owner}/{repo}@{tag}
   → https://github.com/{owner}/{repo}/releases/download/{tag}/{repo}-{version}.jar
   → 及同名 .mjm.toml 与 .sha256
-
-gitee:{owner}/{repo}@{tag}
-  → https://gitee.com/{owner}/{repo}/releases/download/{tag}/{repo}-{version}.jar
 ```
 
-`{version}` = tag 去 `v` 前缀。URL 模式待 Q8 实测确认(Gitee 侧)。
+`{version}` = tag 去 `v` 前缀。
+
+> `gitee:` 曾在 2026-11-21 按同样的形状实装,2026-11-22 移除:附件匿名下载返回 403(需 Bearer
+> 令牌),与“声明即用”相悖。需要 Gitee 上的构件时,写裸 URL 叶子或在自建主机上用 `[repos]`。
 
 ### 2.3 深度预算(语义,细节见 DESIGN.md §4.2)
 
@@ -244,7 +248,7 @@ license = "Apache-2.0"    # 可选;SPDX 标识符
 [java]
 version = 21              # 可选;语义同 §2.1 [java]
 
-[deps]                    # 可选;物种仅限 central / gh: / gitee: / URL
+[deps]                    # 可选;物种仅限 central / gh: / URL
 "com.example:foo" = "1.2.3"
 ```
 
@@ -283,7 +287,7 @@ version = 21              # 可选;语义同 §2.1 [java]
 [[artifacts]]
 id = "com.example:foo"    # central: "group:artifact";mjm 原生: repo 名
 version = "1.2.3"
-source = "central"        # "central" / "gh:owner/repo" / "gitee:owner/repo" / "url"
+source = "central"        # "central" / "gh:owner/repo" / "url"
                           # / 命名仓库的 base 原文(如 "local:vendor")
 url = "https://…"         # 实际下载 URL。local: 仓库写为相对项目根的 file: 形式
                           # (如 file:vendor/com/…/x.jar),读取时按项目根展开;
@@ -318,6 +322,5 @@ scope = "dev"             # 可选:[dev-deps] 可达的工件。缺省 = main
 
 ## 6. 本 spec 未决项
 
-- Gitee URL 展开的实测确认(Q8,M4 前)
 - `[repos]` 回退链语法与 `mjm.work.toml` 本地覆盖(V2 workspaces 设计时补入)
 - `mjm jdk` toolchain 管理(V2,方向已定:Temurin → `~/.mjm/jdks`)

@@ -146,7 +146,7 @@ mylib-1.2.0.sha256
 | Where | Consumed as | How it is published |
 |---|---|---|
 | GitHub Releases | `gh:owner/repo@v1.2.3` | `mjm publish gh:owner/repo` |
-| Gitee Releases | `gitee:owner/repo@v1.2.3` | `mjm publish gitee:owner/repo` |
+| ~~Gitee Releases~~ | 已移除:附件匿名下载需令牌,违反零配置;用裸 URL 或自建主机 | — |
 | **your own host** (any http/https, LAN included) | `[repos] corp = …` + `"com.corp:lib" = "corp:1.2.3"` | `mjm publish https://my.host/repo/` — Maven layout, HTTP PUT |
 | a local directory | `local:/path` | `cp dist/* …` (mjm reads it; nothing to upload) |
 | any static server | a bare `https://…/x.jar` leaf | upload the jar your way |
@@ -155,15 +155,14 @@ The http(s) path is the general one: `mjm publish https://my.host/repo/` writes
 `group/path/artifact/version/artifact-version.{jar,mjm.toml,sha256}` — the same
 layout `[repos]` already reads — and PUTs each file. A dependency names its
 repository in the value (`corp:1.2.3`); the older `[deps.corp]` table form is
-legacy but still read. `gh` and `gitee` are reserved names — the `gh:`/`gitee:`
-prefixes win, so a repository cannot take those names. Any server accepting HTTP
+legacy but still read. `gh` is a reserved name — the `gh:` prefix wins, so a repository
+cannot take it. Any server accepting HTTP
 PUT works (nginx with dav_module, Apache mod_dav, most object-storage
 gateways). `MJM_PUBLISH_TOKEN` adds a bearer token when the host wants one.
 
 mjm speaks exactly one upload protocol on purpose. It cannot know every host's
 API, and an adapter per backend is how a build tool turns into a deployment
-platform. GitHub and Gitee get native upload because their release APIs are
-stable and public; everything else takes the three files and whatever transfer
+platform. GitHub gets native upload because its release API is stable and public; everything else takes the three files and whatever transfer
 tool you already trust.
 
 The descriptor travels with the jar, so a published library is a **full

@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
  *
  * <p>Value shapes decide the species (see {@link Requirement}): a bare
  * version is Central (the key must be {@code group:artifact}), a
- * {@code gh:}/{@code gitee:} shorthand is an mj-native release (semver tag,
+ * {@code gh:} shorthand is a GitHub release (semver tag,
  * {@code v} optional), a {@code https://…jar} URL is a bare leaf. The same
  * extraction serves descriptor files via {@link DescriptorReader}.
  */
@@ -28,7 +28,7 @@ public final class ProjectReader {
 
     private static final Pattern NAME = Pattern.compile("[a-z][a-z0-9-]*");
     private static final Pattern COORDINATE = Pattern.compile("[^:\\s]+:[^:\\s]+");
-    private static final Pattern NATIVE_VALUE = Pattern.compile("(gh|gitee):([^/\\s]+)/([^@\\s]+)@(.+)");
+    private static final Pattern NATIVE_VALUE = Pattern.compile("gh:([^/\\s]+)/([^@\\s]+)@(.+)");
     private static final Pattern TAG = Pattern.compile("[vV]?(\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.]+)?)");
     private static final Pattern OWNER = Pattern.compile("[A-Za-z0-9_.-]+");
 
@@ -128,14 +128,13 @@ public final class ProjectReader {
                     throw new ProjectException("[repos]." + entry.getKey()
                             + " must match [a-z][a-z0-9-]*");
                 }
-                // gh:/gitee: are species prefixes, matched before any repository
-                // lookup. Letting [repos] take those names would make
-                // "gh:owner/repo@v1" silently mean a repository named gh — a
-                // dependency that can never resolve as itself.
-                if (entry.getKey().equals("gh") || entry.getKey().equals("gitee")) {
+                // gh: is a species prefix, matched before any repository lookup.
+                // Letting [repos] take that name would make "gh:owner/repo@v1"
+                // silently mean a repository named gh — a dependency that can
+                // never resolve as itself.
+                if (entry.getKey().equals("gh")) {
                     throw new ProjectException(at(file, source.key("repos", entry.getKey()))
-                            + "[repos]." + entry.getKey() + " is reserved for the "
-                            + entry.getKey() + ": species — pick another name");
+                            + "[repos].gh is reserved for the gh: species — pick another name");
                 }
                 String baseUrl = requireString(reposSection, "repos", entry.getKey());
                 boolean remote = baseUrl.startsWith("https://");
@@ -337,20 +336,26 @@ public final class ProjectReader {
         }
         if (!(value instanceof String raw) || raw.isBlank()) {
             throw new ProjectException("[" + where + "] '" + key
-                    + "' must be a quoted string (a version, gh:/gitee: shorthand, or jar URL)");
+                    + "' must be a quoted string (a version, gh: shorthand, or jar URL)");
         }
 
-        if (raw.startsWith("gh:") || raw.startsWith("gitee:")) {
+        if (raw.startsWith("gitee:")) {
+            throw new ProjectException("[" + where + "] '" + key + " = \"" + raw
+                    + "\"' — the gitee: species was removed (Gitee release assets need a "
+                    + "token even to read). Use the release jar URL directly "
+                    + "(\"https://gitee.com/<owner>/<repo>/releases/download/<tag>/<artifact>.jar\"), "
+                    + "or publish to your own host and declare it in [repos]");
+        }
+
+        if (raw.startsWith("gh:")) {
             Matcher matcher = NATIVE_VALUE.matcher(raw);
             if (!matcher.matches()) {
                 throw new ProjectException("[" + where + "] '" + key + " = \"" + raw
-                        + "\"' must be in the form "
-                        + raw.substring(0, raw.indexOf(':')) + ":owner/repo@tag");
+                        + "\"' must be in the form gh:owner/repo@tag");
             }
-            String host = matcher.group(1);
-            String owner = matcher.group(2);
-            String repo = matcher.group(3);
-            String tag = matcher.group(4);
+            String owner = matcher.group(1);
+            String repo = matcher.group(2);
+            String tag = matcher.group(3);
             Matcher tagMatcher = TAG.matcher(tag);
             if (!tagMatcher.matches()) {
                 throw new ProjectException("[" + where + "] '" + key + "' uses tag '" + tag
@@ -360,8 +365,7 @@ public final class ProjectReader {
                 throw new ProjectException("[" + where + "] '" + key
                         + "' — owner and repo must match " + OWNER.pattern());
             }
-            Species species = host.equals("gh") ? Species.GH : Species.GITEE;
-            return new Requirement(key, species, null, null, tagMatcher.group(1),
+            return new Requirement(key, Species.GH, null, null, tagMatcher.group(1),
                     null, null, owner, repo, tag);
         }
 

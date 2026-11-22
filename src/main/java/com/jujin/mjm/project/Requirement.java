@@ -8,8 +8,8 @@ package com.jujin.mjm.project;
  *   <li>{@link Species#CENTRAL}: {@code group} + {@code artifactId} +
  *       {@code version}, looked up in {@code repository} (the named repo, or
  *       Maven Central when null)</li>
- *   <li>{@link Species#GH} / {@link Species#GITEE}: {@code owner} + {@code repo}
- *       + {@code tag} + {@code version} (the tag without its {@code v})</li>
+ *   <li>{@link Species#GH}: {@code owner} + {@code repo} + {@code tag} +
+ *       {@code version} (the tag without its {@code v})</li>
  *   <li>{@link Species#URL}: {@code url} only — a bare leaf, no metadata</li>
  * </ul>
  *
@@ -42,12 +42,8 @@ public record Requirement(
         this(id, species, group, artifactId, version, repository, url, owner, repo, tag, null);
     }
 
-    /** The mj-native origin, {@code gh:owner/repo} or {@code gitee:owner/repo}. */
+    /** The GitHub origin, {@code gh:owner/repo}. */
     public String origin() {
-        return switch (species) {
-            case GH -> "gh:" + owner + "/" + repo;
-            case GITEE -> "gitee:" + owner + "/" + repo;
-            default -> null;
-        };
+        return species == Species.GH ? "gh:" + owner + "/" + repo : null;
     }
 }

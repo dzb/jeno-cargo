@@ -131,17 +131,24 @@ class ProjectReaderTest {
         assertTrue(gh.getMessage().contains("mjm.toml:6:1"),
                 "the position is named like every other schema error: " + gh.getMessage());
 
+    }
+
+    @Test
+    void theRemovedGiteeSpeciesExplainsItsTwoReplacements() {
         ProjectException gitee = assertThrows(ProjectException.class,
             () -> ProjectReader.parse("""
                 [project]
                 name = "demo"
                 version = "0.1.0"
 
-                [repos]
-                gitee = "https://mirror.example.com/gitee/"
+                [deps]
+                other = "gitee:acme/other@1.2.3-rc1"
                 """));
-        assertTrue(gitee.getMessage().contains("reserved for the gitee: species"),
-                gitee.getMessage());
+
+        String message = gitee.getMessage();
+        assertTrue(message.contains("gitee: species was removed"), message);
+        assertTrue(message.contains("releases/download"), "names the release jar URL: " + message);
+        assertTrue(message.contains("[repos]"), "and the published-host route: " + message);
     }
 
     @Test
@@ -362,7 +369,7 @@ class ProjectReaderTest {
             [deps]
             "com.example:lib-a" = "1.0.0"
             mylib = "gh:acme/mylib@v1.2.0"
-            other = "gitee:acme/other@1.2.3-rc1"
+            other = "gh:acme/other@1.2.3-rc1"
             vendored = "https://cdn.example.com/vendored-0.9.jar"
 
             [deps.corp]
@@ -383,9 +390,9 @@ class ProjectReaderTest {
         assertEquals("v1.2.0", gh.tag());
         assertEquals("1.2.0", gh.version(), "the version drops the tag's v");
 
-        Requirement gitee = project.requirements().get(2);
-        assertEquals(Species.GITEE, gitee.species());
-        assertEquals("1.2.3-rc1", gitee.version(), "a prerelease tag keeps its suffix");
+        Requirement ghPrerelease = project.requirements().get(2);
+        assertEquals(Species.GH, ghPrerelease.species());
+        assertEquals("1.2.3-rc1", ghPrerelease.version(), "a prerelease tag keeps its suffix");
 
         Requirement url = project.requirements().get(3);
         assertEquals(Species.URL, url.species());

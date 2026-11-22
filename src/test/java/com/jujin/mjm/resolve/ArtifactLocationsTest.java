@@ -74,8 +74,8 @@ class ArtifactLocationsTest {
         assertEquals("https://github.com/acme/mylib/releases/download/v1.2.0/mylib-1.2.0.jar",
                 ArtifactLocations.releaseFile("https://github.com", "acme", "mylib",
                         "v1.2.0", "1.2.0", "jar"));
-        assertEquals("https://gitee.com/acme/mylib/releases/download/v1.2.0/mylib-1.2.0.mjm.toml",
-                ArtifactLocations.releaseFile("https://gitee.com", "acme", "mylib",
+        assertEquals("https://github.com/acme/mylib/releases/download/v1.2.0/mylib-1.2.0.mjm.toml",
+                ArtifactLocations.releaseFile("https://github.com", "acme", "mylib",
                         "v1.2.0", "1.2.0", "mjm.toml"), "the descriptor travels next to the jar");
     }
 
