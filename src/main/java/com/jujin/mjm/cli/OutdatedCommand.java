@@ -112,6 +112,10 @@ public final class OutdatedCommand implements Command {
                 continue;
             }
 
+            if (available.isEmpty()) {
+                failures.add(artifact.id() + " — no versions listed");
+                continue;
+            }
             checked++;
             String pinned = artifact.version();
             // A pre-release is not an "update" for someone on a stable version:
@@ -134,10 +138,11 @@ public final class OutdatedCommand implements Command {
 
     private void report(List<String> updates, List<String> majorJumps,
                         List<String> unchecked, List<String> failures, int checked) {
-        // "up to date" is a claim about a comparison that happened. With nothing
-        // checked (every source is gh:/url/local:) or a failed lookup, the honest
-        // answer is the "not checked" / "could not check" section below.
-        if (checked > 0 && updates.isEmpty() && majorJumps.isEmpty() && failures.isEmpty()) {
+        // "up to date" is a claim about the whole closure: it needs a comparison
+        // for every row. Nothing checked (all gh:/url/local:), a skipped source,
+        // or a failed lookup each make the honest answer the section below.
+        if (checked > 0 && unchecked.isEmpty() && failures.isEmpty()
+                && updates.isEmpty() && majorJumps.isEmpty()) {
             System.out.println("everything is up to date");
         }
         if (!updates.isEmpty()) {
@@ -174,22 +179,24 @@ public final class OutdatedCommand implements Command {
     }
 
     /**
-     * Pre-release qualifiers. A dash alone is not the marker: {@code 30.0-jre}
-     * and {@code 2.0.0.Final} are stable releases that happen to carry a
-     * suffix, and treating them as pre-releases would hide real updates.
+     * Pre-release qualifiers are matched as a whole token, never as a substring:
+     * the qualifier after the first dash must be one of these markers plus an
+     * optional separator and an ordinal ({@code rc1}, {@code m2}, {@code rc-1}).
+     * Substring matching made {@code 1.0.0-main} look like an {@code m} release
+     * and hid the stable update; a dash alone is not the marker either, so
+     * {@code 30.0-jre} and {@code 2.0.0.Final} stay stable.
      */
-    private static final List<String> PRERELEASE_MARKERS = List.of(
-            "-alpha", "-beta", "-rc", "-m", "-milestone", "-preview", "-early", "-ea");
+    private static final java.util.regex.Pattern PRERELEASE = java.util.regex.Pattern.compile(
+            "(alpha|beta|rc|m|milestone|preview|early|ea)([-.]?[0-9]+)?");
 
     /** Whether a pinned version is itself a pre-release ({@code 2.0.0-rc1}). */
     static boolean allowsPrerelease(String version) {
-        String lower = version.toLowerCase(java.util.Locale.ROOT);
-        for (String marker : PRERELEASE_MARKERS) {
-            if (lower.contains(marker)) {
-                return true;
-            }
+        int dash = version.indexOf('-');
+        if (dash < 0 || dash == version.length() - 1) {
+            return false;
         }
-        return false;
+        String qualifier = version.substring(dash + 1).toLowerCase(java.util.Locale.ROOT);
+        return PRERELEASE.matcher(qualifier).matches();
     }
 
     /** Whether a candidate version is a pre-release. */
@@ -205,7 +212,7 @@ public final class OutdatedCommand implements Command {
     static String newest(List<String> versions, boolean includePrerelease) {
         String best = null;
         for (String candidate : versions) {
-            if (candidate.endsWith("-SNAPSHOT")) {
+            if (candidate.toLowerCase(java.util.Locale.ROOT).endsWith("-snapshot")) {
                 continue;  // mjm does not resolve snapshots
             }
             if (!includePrerelease && isPrerelease(candidate)) {
@@ -223,8 +230,18 @@ public final class OutdatedCommand implements Command {
         return colon < 0 ? id : id.substring(0, colon);
     }
 
+    /**
+     * The artifact id without a classifier: {@code group:artifact:classifier} is
+     * one identity in the lock, but {@code maven-metadata.xml} lives under the
+     * base artifact — asking for {@code artifact:classifier/maven-metadata.xml}
+     * is a 404, not a missing version.
+     */
     private static String artifactName(String id) {
-        int colon = id.indexOf(':');
-        return colon < 0 ? id : id.substring(colon + 1);
+        int first = id.indexOf(':');
+        if (first < 0) {
+            return id;
+        }
+        int second = id.indexOf(':', first + 1);
+        return second < 0 ? id.substring(first + 1) : id.substring(first + 1, second);
     }
 }

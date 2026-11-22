@@ -125,12 +125,23 @@ class CleanOutdatedTest {
     }
 
     @Test
-    void aDashMarksAPreRelease() {
-        assertTrue(OutdatedCommand.allowsPrerelease("2.0.0-rc1"));
+    void qualifierTokensDecidePrereleases() {
+        assertTrue(OutdatedCommand.allowsPrerelease("2.0.0-rc1"), "rc1 is a release candidate");
+        assertTrue(OutdatedCommand.allowsPrerelease("2.0.0-m1"), "m1 is a milestone");
         assertTrue(OutdatedCommand.allowsPrerelease("2.0.0-alpha1"));
-        assertFalse(OutdatedCommand.allowsPrerelease("2.0.0"));
+        assertFalse(OutdatedCommand.allowsPrerelease("1.0.0-main"),
+                "-main starts with m but is not a milestone");
         assertFalse(OutdatedCommand.allowsPrerelease("30.0-jre"),
                 "a qualifier like -jre is not a pre-release marker");
+        assertFalse(OutdatedCommand.allowsPrerelease("2.0.0.Final"),
+                "a dot suffix is part of the number, not a qualifier");
+    }
+
+    @Test
+    void aLowercaseSnapshotIsNeverACandidate() {
+        assertEquals("2.0.0", OutdatedCommand.newest(
+                        List.of("2.0.0", "2.5.0-snapshot"), true),
+                "the snapshot suffix is case-insensitive");
     }
 
     // ------------------------------------------------------------------
@@ -221,6 +232,71 @@ class CleanOutdatedTest {
             assertTrue(out.contains("com.example:lib-a  1.0.0 → 1.1.0"), out);
             assertTrue(out.contains("major version changes"), out);
             assertTrue(out.contains("com.example:lib-b  1.0.0 → 2.0.0"), out);
+            assertFalse(out.contains("everything is up to date"), out);
+        } finally {
+            server.stop(0);
+            System.clearProperty("mjm.central.base");
+        }
+    }
+
+    @Test
+    void aMixedClosureIsNeverCalledUpToDate() throws Exception {
+        HttpServer server = server(200, metadata("1.0.0"));
+        System.setProperty("mjm.central.base",
+                "http://localhost:" + server.getAddress().getPort() + "/");
+        try {
+            projectWithLock(centralRow("com.example:lib-a", "1.0.0") + """
+                [[artifacts]]
+                id = "acme:mylib"
+                version = "1.0.0"
+                source = "gh:acme/mylib"
+                url = "https://github.com/acme/mylib/releases/download/v1.0.0/mylib-1.0.0.jar"
+                sha256 = "%s"
+                meta-sha256 = "%s"
+                depth = 1
+                """.formatted(SHA, SHA));
+
+            String out = runOutdated(0);
+
+            assertTrue(out.contains("not checked"), out);
+            assertFalse(out.contains("everything is up to date"),
+                    "one row was not compared, so the closure is not \"up to date\": " + out);
+        } finally {
+            server.stop(0);
+            System.clearProperty("mjm.central.base");
+        }
+    }
+
+    @Test
+    void aClassifierRowChecksTheBaseArtifact() throws Exception {
+        HttpServer server = server(200, metadata("1.0.0", "1.1.0"));
+        System.setProperty("mjm.central.base",
+                "http://localhost:" + server.getAddress().getPort() + "/");
+        try {
+            // the classifier is part of the identity, never of the metadata path
+            projectWithLock(centralRow("com.example:lib-a:linux", "1.0.0"));
+
+            String out = runOutdated(0);
+
+            assertTrue(out.contains("com.example:lib-a:linux  1.0.0 → 1.1.0"),
+                    "the metadata is the base artifact's, got: " + out);
+        } finally {
+            server.stop(0);
+            System.clearProperty("mjm.central.base");
+        }
+    }
+
+    @Test
+    void anEmptyVersionListIsAFailureNotAnUpdate() throws Exception {
+        HttpServer server = server(200, metadata());
+        System.setProperty("mjm.central.base",
+                "http://localhost:" + server.getAddress().getPort() + "/");
+        try {
+            projectWithLock(centralRow("com.example:lib-a", "1.0.0"));
+
+            String out = runOutdated(1);
+
+            assertTrue(out.contains("no versions listed"), out);
             assertFalse(out.contains("everything is up to date"), out);
         } finally {
             server.stop(0);
