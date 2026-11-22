@@ -104,14 +104,9 @@ public final class ArtifactStore {
         }
     }
 
-    /** The mjm home every user-level file lives under: {@code ~/.mjm}. */
-    public static Path home() {
-        return Path.of(System.getProperty("user.home"), ".mjm");
-    }
-
-    /** The store under that home: {@code ~/.mjm/store}. */
+    /** The user's store, wherever {@link Paths} decided it lives. */
     public static ArtifactStore userStore() {
-        return new ArtifactStore(home().resolve("store"));
+        return new ArtifactStore(Paths.store());
     }
 
     /**
@@ -209,7 +204,7 @@ public final class ArtifactStore {
             if (!sha256(jar).equals(artifact.sha256())) {
                 throw new StoreException("the store copy of " + artifact.id() + "@"
                         + artifact.version() + " does not match the locked sha256 — the store "
-                        + "is corrupted; delete ~/.mjm/store and run mjm lock");
+                        + "is corrupted; run mjm cache clean, then mjm lock");
             }
             jars.put(artifact.id(), jar);
         }

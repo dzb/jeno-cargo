@@ -26,7 +26,7 @@ mjm-0.1.0/
 |---|---|---|---|
 | mjm 运行时 | JDK 25 + mjm.jar + freeway 闭包 | 发行目录 lib/ | 随发行携带 |
 | 生命周期工具链 | junit 平台等 | 发行目录 lib/toolchain/ | 随发行携带(离线可测) |
-| 用户工程依赖 | mjm.toml 声明的任何东西 | ~/.mjm/store | 按需下载,sha256 钉定 |
+| 用户工程依赖 | mjm.toml 声明的任何东西 | `mjm/store`(XDG cache) | 按需下载,sha256 钉定 |
 
 `mjm selfpackage` 由 mjm 自己的 lockfile 组装发行目录(自举闭环:lock → build → selfpackage)。
 启动脚本 `bin/mjm` 展开 `lib/*` 与 `lib/toolchain/*/*/` 到 classpath,并要求 JDK 25(构建生命周期编译)。
@@ -65,7 +65,7 @@ mjm 又用严格可见性约束用户项目的依赖边界——**这个工具�
 | D4 | 冲突策略 = 语义感知 MVS(Go 式 + major 纪律) | 同 major 内取最大;**跨 major = 硬冲突报错**(Go 的 major 纪律翻译进单版本约束,防运行期 NoSuchMethodError)。central 物种 best-effort,非 semver 退回 max-wins。不用 Maven nearest-wins |
 | D5 | 深度预算 max-depth,默认硬错误 | 爆预算的错误信息 = 一次"依赖评审时刻",逼向零依赖/小依赖库(与 D-Freeway 哲学闭环) |
 | D6 | 严格可见性 = pnpm 精髓 | pnpm 的价值不是"扁平"而是"隔离":compile classpath 只有直接声明依赖,传递依赖只进 runtime classpath |
-| D7 | 内容寻址存储 ~/.mjm/store,classpath 直指 store 文件 | 学 pnpm/Coursier:全机一份,免拷贝(Java 没有 node_modules 目录约束,反而更轻) |
+| D7 | 内容寻址存储(XDG cache 下的 mjm/store),classpath 直指 store 文件 | 学 pnpm/Coursier:全机一份,免拷贝(Java 没有 node_modules 目录约束,反而更轻) |
 | D8 | lockfile 一等公民,sha256 双钉(artifact + 元数据) | release asset 可变,URL 不构成完整性承诺;代码与元数据分别钉死(go.sum 同时哈希 zip 与 go.mod 的先例) |
 | D9 | 发布去中心化,GitHub Releases 为一等后端 | Maven 发布链(Nexus/Sonatype/GPG)劝退个人开发者;GitHub 人人都有。owner/repo 即命名空间,无需 group |
 | D10 | 内置零依赖测试 runner | node:test 先例:注解 + 反射几百行,不引 JUnit,与零依赖自洽 |
@@ -229,8 +229,10 @@ scopes 只关心 compile/runtime;provided/test 大部分忽略。
 
 ### 6.1 存储
 
-- `~/.mjm/store/` 按 sha256 内容寻址存 jar,全机一份
-- **项目锁**:同一项目同时只允许一个写命令。锁文件在 `~/.mjm/locks/<sha256(real path)>.lock`(不在项目里——`clean` 会删 `target/`),同 JVM 内先排 `ReentrantLock` 队列再取 OS 文件锁。持锁命令:`lock`、`build`、`test`、`clean`、`add`、`remove`、`package`、`bundle`、`publish`;只读命令(`run`/`tree`/`why`/`info`)不参与,`info --source` 写的是 `~/.mjm/sources` 而非项目树,也不参与
+- store 在 `${XDG_CACHE_HOME:-~/.cache}/mjm/store`、sources 在 `${XDG_CACHE_HOME:-~/.cache}/mjm/sources`、项目锁在 `${XDG_STATE_HOME:-~/.local/state}/mjm/locks`(路径只在 `store/Paths` 一处推导)
+- **旧位置兼容**:`~/.mjm/{store,sources,locks}` 里已经存在的目录继续使用(不搬家、不报错,只在 stderr 提一句);新机器/新用户直接用 XDG 路径
+- store 按 sha256 内容寻址存 jar,全机一份
+- **项目锁**:同一项目同时只允许一个写命令。锁文件在 `${XDG_STATE_HOME:-~/.local/state}/mjm/locks/<sha256(real path)>.lock`(不在项目里——`clean` 会删 `target/`),同 JVM 内先排 `ReentrantLock` 队列再取 OS 文件锁。持锁命令:`lock`、`build`、`test`、`clean`、`add`、`remove`、`package`、`bundle`、`publish`;只读命令(`run`/`tree`/`why`/`info`)不参与,`info --source` 写的是 sources 目录(XDG cache)而非项目树,也不参与
 - URL→digest 索引以**锁里的 url 原样**为 key:相对 `file:` 行因此能跨 checkout 命中,`--offline` 在搬迁后的目录里仍然可用
 - classpath 直接指向 store 内文件,**不拷贝、不链接**(Java 无 node_modules 式目录约束)
 - store 目录只读(555)+ 下载用文件锁保证并发安全(吸收自 Go module cache:防工具误改 jar)
@@ -360,7 +362,7 @@ push tag v*  →  验证 + 发行
 | `mjm init [--pom] [--force]` | ✅ | 骨架,或从 pom.xml 迁移(逐条报告不可表达的事实) |
 | `mjm remove <id>` | ✅ | 删除一行声明并重锁 |
 | `mjm info <id> [--source]` | ✅ | 身份/来源/依赖/源码地址;`--source` 取源码树 |
-| `mjm clean [--target] [--dist]` | ✅ | **默认整棵删 `target/`**(无参或 `--target`;Maven 惯例——包括你自己放进 `target/` 的东西;里面只有可重建的 `classes`/`test-classes`,依赖缓存在 `~/.mjm/store` 不在此);`--dist` 才清 `dist/`(交付物,可能含其他版本的产物,所以是显式要求);两个都给就都清;**两个目标先全部探测,任一(含其内部嵌套)是挂载点则整次拒绝、一个字节不删**;**永不触碰 store** |
+| `mjm clean [--target] [--dist]` | ✅ | **默认整棵删 `target/`**(无参或 `--target`;Maven 惯例——包括你自己放进 `target/` 的东西;里面只有可重建的 `classes`/`test-classes`,依赖缓存在 XDG cache 的 `mjm/store` 不在此);`--dist` 才清 `dist/`(交付物,可能含其他版本的产物,所以是显式要求);两个都给就都清;**两个目标先全部探测,任一(含其内部嵌套)是挂载点则整次拒绝、一个字节不删**;**永不触碰 store** |
 | `mjm outdated [--json]` | ✅ | 已钉版本 vs 仓库可用版本;只查 Central 与命名 https 仓库,`gh:`/`url`/`local:`/`mjm:` 列为"未检查";预发布默认不报(除非当前就是预发布);跨 major 单独一节;`--json` 输出 `upToDate`/`updates`/`notChecked`/`failures` |
 | `--offline` | ✅ | 禁止一切网络访问;store 有则用,缺则报错。`update`/`publish`/`outdated` 不适用 |
 | daemon 常驻 | **M6** | 已确认需要:常驻 JVM 热命令,mvnd 已验证可快 2–4 倍 |
@@ -380,7 +382,7 @@ push tag v*  →  验证 + 发行
 | 组件装配、实现替换 | IoC 容器 |
 | 下载(Central/GitHub) | HttpModule + Defer 并发 |
 | 生命周期广播(resolving → downloading → linking → done) | EventBus(进度显示 + 未来 hook 接缝) |
-| `~/.mjm` store、解析缓存 | ScopedCache |
+| XDG cache 下的 store、解析缓存 | ScopedCache |
 | resolver / pom 解码 / store / lockfile / publish | 各自独立 Module,依赖显式声明(ModuleEx 约束) |
 
 IoC 接缝(未来扩展点,不引入插件机制):

@@ -33,7 +33,7 @@ import java.util.regex.Pattern;
  *
  * <p>The read/write split is deliberate: reading facts is free and safe, so
  * {@code mjm info} is pure output; fetching a source tree writes to
- * {@code ~/.mjm/sources}, which only {@code --source} asks for.
+ * the sources root, which only {@code --source} asks for.
  */
 public final class InfoCommand implements Command {
 
@@ -313,12 +313,12 @@ public final class InfoCommand implements Command {
         }
     }
 
-    /** {@code ~/.mjm/sources} — outside the store: extracted trees, not pinned bytes. */
+    /** The sources root ({@link com.jujin.mjm.store.Paths#sources()}) — extracted trees, not pinned bytes. */
     private static Path sourcesDir() {
         String override = System.getProperty("mjm.sources.root");
         if (override != null && !override.isBlank()) {
             return Path.of(override);
         }
-        return Path.of(System.getProperty("user.home"), ".mjm", "sources");
+        return com.jujin.mjm.store.Paths.sources();
     }
 }

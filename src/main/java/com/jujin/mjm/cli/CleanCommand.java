@@ -23,7 +23,7 @@ import java.util.stream.Stream;
  * versions at once, so deleting it is a separate, explicit request
  * ({@code --dist}) and never a side effect of "clean".
  *
- * <p>Never touches the store. {@code ~/.mjm/store} is content-addressed and
+ * <p>Never touches the store. The store is content-addressed and
  * shared across projects: deleting it would cost every project a re-download,
  * which is the opposite of what "clean my build" means. {@code mjm lock} is
  * the command that refreshes it, and it does so without destroying anything.

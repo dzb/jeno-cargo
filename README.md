@@ -79,7 +79,7 @@ can never leak into what mjm publishes.
 ```bash
 mjm init                      # skeleton mjm.toml
 mjm add "org.slf4j:slf4j-api" 2.0.18
-mjm lock                      # resolve, download into ~/.mjm/store, pin sha256
+mjm lock                      # resolve, download into ${XDG_CACHE_HOME:-~/.cache}/mjm/store, pin sha256
 mjm build                     # javac against declared deps only
 mjm test                      # forked JVM: @MjmTest + JUnit Jupiter
 mjm run com.example.App
@@ -237,7 +237,7 @@ is merged in, not shipped beside. The test toolchain is separate because a
 production run never loads a single byte of it.
 
 `mjm bundle` assembles that directory and a `tar.gz` for `curl | bash`; `setup.sh` installs
-surgically: it replaces `lib/` and `bin/`, and leaves `~/.mjm/store` (your entire
+surgically: it replaces `lib/` and `bin/`, and leaves `${XDG_CACHE_HOME:-~/.cache}/mjm/store` (your entire
 dependency cache) untouched. `mjm update` upgrades in place and takes effect on
 the next invocation.
 

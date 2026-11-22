@@ -35,11 +35,11 @@ final class ProjectLock {
             new ConcurrentHashMap<>();
 
     /**
-     * Where lock files live. The default is the user's {@code ~/.mjm/locks};
+     * Where lock files live. The default comes from {@link com.jujin.mjm.store.Paths};
      * tests point it at a scratch directory so a suite run does not litter the
-     * real home with one empty file per fixture project.
+     * real home with one file per fixture project.
      */
-    private static Path root = ArtifactStore.home().resolve("locks");
+    private static Path root = com.jujin.mjm.store.Paths.locks();
 
     private ProjectLock() {}
 
@@ -57,9 +57,9 @@ final class ProjectLock {
         root = lockRoot.toAbsolutePath().normalize();
     }
 
-    /** Back to {@code ~/.mjm/locks}. */
+    /** Back to the real locks root. */
     static void useUserRoot() {
-        root = ArtifactStore.home().resolve("locks");
+        root = com.jujin.mjm.store.Paths.locks();
     }
 
     /** The project's real path, so aliases of one project share a lock. */
