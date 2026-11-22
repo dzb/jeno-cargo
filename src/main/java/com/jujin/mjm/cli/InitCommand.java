@@ -40,7 +40,7 @@ public final class InitCommand implements Command {
 
     @Override
     public String summary() {
-        return "create mjm.toml — a skeleton, or --pom to migrate a Maven project";
+        return "create mjm.toml (a skeleton, --pom to migrate, --ws for a workspace file)";
     }
     @Override
     public String usage() {

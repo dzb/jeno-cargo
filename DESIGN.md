@@ -358,7 +358,7 @@ push tag v*  →  验证 + 发行
 | `mjm publish` | ✅ | 三件套(`target/dist/`);`gh:` 原生上传;**任意 http(s) 主机 → Maven 布局 + HTTP PUT**;描述符只含 MAIN 依赖 |
 | `mjm update` / `mjm upgrade` | ✅ | 自升级(alias 同一实现) |
 | ~~`mjm release`~~ | **已删除** | 生命周期属于项目自己的 CI;mjm 只提供单步机制 |
-| `mjm init [--pom] [--ws] [--force]` | ✅ | 骨架,或从 pom.xml 迁移(逐条报告不可表达的事实) |
+| `mjm init [--pom] [--ws] [--force]` | ✅ | 骨架;`--pom` 从 pom.xml 迁移(逐条报告不可表达的事实);`--ws` 写 `mjm.ws.toml`(本地工作区,见 `docs/workspace-design.md`) |
 | `mjm remove <id>` | ✅ | 删除一行声明并重锁 |
 | `mjm classpath [--test] [--file <path>]` | ✅ | 给 IDE 的 classpath:**默认严格可见性的编译 classpath**(target/classes + 直接声明的 jar,不含传递依赖,避免“IDE 能编过、mjm build 又拒绝”),`--test` 为测试 classpath(test-classes + classes + MAIN/DEV 闭包);jar 用 store 的内容寻址路径,不拷贝不链接;输出仅供本机 IDE,不应提交 |
 | `mjm info <id> [--source]` | ✅ | 身份/来源/依赖/源码地址;`--source` 取源码树 |
