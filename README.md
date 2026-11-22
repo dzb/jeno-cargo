@@ -14,7 +14,7 @@ curl -fsSL https://raw.githubusercontent.com/dzb/mjm-cargo/master/setup.sh | bas
 mjm --version          # mjm <version> — modern java manager
 ```
 
-**Docs** · [DESIGN.md](DESIGN.md) (14 ADRs, every decision traceable) · [SPEC.md](SPEC.md) (closed schemas) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs)
+**Docs** · [DESIGN.md](DESIGN.md) (14 ADRs, every decision traceable) · [SPEC.md](SPEC.md) (closed schemas) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does)
 
 ---
 
