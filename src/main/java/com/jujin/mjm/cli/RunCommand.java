@@ -175,7 +175,7 @@ public final class RunCommand implements Command {
     private int exec(List<String> command, Map<String, String> environment,
                      String what) {
         // a script runs from the project root: relative paths in a script mean
-        // the project, exactly as they do when the user runs mj from there
+        // the project, exactly as they do when the user runs mjm from there
         ProcessBuilder builder = new ProcessBuilder(command)
                 .directory(projectDir.toFile())
                 .inheritIO();

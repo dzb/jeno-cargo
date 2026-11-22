@@ -104,7 +104,7 @@ public final class ArtifactStore {
         }
     }
 
-    /** The store under the current user's home: {@code ~/.mj/store}. */
+    /** The store under the current user's home: {@code ~/.mjm/store}. */
     public static ArtifactStore userStore() {
         return new ArtifactStore(Path.of(System.getProperty("user.home"), ".mjm", "store"));
     }
@@ -191,7 +191,7 @@ public final class ArtifactStore {
             if (!sha256(jar).equals(artifact.sha256())) {
                 throw new StoreException("the store copy of " + artifact.id() + "@"
                         + artifact.version() + " does not match the locked sha256 — the store "
-                        + "is corrupted; delete ~/.mj/store and run mjm lock");
+                        + "is corrupted; delete ~/.mjm/store and run mjm lock");
             }
             jars.put(artifact.id(), jar);
         }
@@ -235,7 +235,7 @@ public final class ArtifactStore {
                     HttpResponse.BodyHandlers.ofByteArray());
             if (response.statusCode() != 200) {
                 throw new StoreException(url + " answered " + response.statusCode()
-                        + " (mj pins exact released artifacts)");
+                        + " (mjm pins exact released artifacts)");
             }
             return response.body();
         } catch (IOException e) {

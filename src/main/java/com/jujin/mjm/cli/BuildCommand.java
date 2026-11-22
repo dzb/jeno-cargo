@@ -63,7 +63,7 @@ public final class BuildCommand implements Command {
 
         // SPEC §2.1: [java].version means (a) produce bytecode for that major
         // via --release, and (b) require the running JDK to be at least that.
-        // Skipping (a) would let mj compile against a newer API than the
+        // Skipping (a) would let mjm compile against a newer API than the
         // declared target while the published descriptor claims the target —
         // a claim the bytes would not honor.
         if (project.javaVersion() != null) {
@@ -107,11 +107,11 @@ public final class BuildCommand implements Command {
             return 1;
         }
 
-        // In-process javac: mj runs on a JDK, so the compiler is always here —
+        // In-process javac: mjm runs on a JDK, so the compiler is always here —
         // no PATH dependency, output straight to the console.
         javax.tools.JavaCompiler compiler = javax.tools.ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
-            System.err.println("mjm: no system Java compiler — mj needs a JDK, not a JRE");
+            System.err.println("mjm: no system Java compiler — mjm needs a JDK, not a JRE");
             return 1;
         }
         List<String> command = new ArrayList<>();
@@ -153,7 +153,7 @@ public final class BuildCommand implements Command {
     /**
      * Writes {@code META-INF/mjm/version.properties} from mjm.toml — the one
      * declaration becomes a resource the running binary can read from a
-     * classes directory, a jar, or an installed dist alike. This is why mj's
+     * classes directory, a jar, or an installed dist alike. This is why mjm's
      * version is not a source constant: a resource survives every layout,
      * while {@code Package.getImplementationVersion()} is null off a jar.
      */

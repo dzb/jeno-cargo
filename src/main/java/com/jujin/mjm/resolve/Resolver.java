@@ -26,7 +26,7 @@ import java.util.Set;
 import java.util.TreeMap;
 
 /**
- * The dependency-graph resolver — mj's three-piece soul in one pass:
+ * The dependency-graph resolver — mjm's three-piece soul in one pass:
  *
  * <ol>
  *   <li><b>Constraint collection</b> — every requirement (declared or
@@ -362,7 +362,7 @@ public final class Resolver {
         /**
          * Same major takes the max; a cross-major demand is a hard conflict —
          * silent max-wins across a major is exactly the NoSuchMethodError
-         * trap mj exists to close. Central versions without an extractable
+         * trap mjm exists to close. Central versions without an extractable
          * major fall back to plain max-wins.
          */
         private String maximum(String id, List<String> candidates, List<Constraint> constraints) {

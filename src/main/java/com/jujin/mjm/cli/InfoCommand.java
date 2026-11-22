@@ -21,11 +21,11 @@ import java.util.regex.Pattern;
  * source lives.
  *
  * <pre>
- *   mj info "acme:widget"             show the facts (never writes anything)
- *   mj info "acme:widget" --source    also fetch the source tree and print its path
+ *   mjm info "acme:widget"             show the facts (never writes anything)
+ *   mjm info "acme:widget" --source    also fetch the source tree and print its path
  * </pre>
  *
- * <p>Source is addressed, not shipped: mj never publishes a {@code -sources.jar}
+ * <p>Source is addressed, not shipped: mjm never publishes a {@code -sources.jar}
  * (Go and Cargo never split source from artifact), but the lockfile pins the
  * exact tag, so the tree is always reachable at a stable URL. Central
  * dependencies — which were published by a binary-first ecosystem — fall back
@@ -33,7 +33,7 @@ import java.util.regex.Pattern;
  *
  * <p>The read/write split is deliberate: reading facts is free and safe, so
  * {@code mjm info} is pure output; fetching a source tree writes to
- * {@code ~/.mj/sources}, which only {@code --source} asks for.
+ * {@code ~/.mjm/sources}, which only {@code --source} asks for.
  */
 public final class InfoCommand implements Command {
 
@@ -137,7 +137,7 @@ public final class InfoCommand implements Command {
 
         if (!fetchSource) {
             if (sourcePage != null || !artifact.source().equals("url")) {
-                System.out.println("\nfetch the tree: mj info \"" + artifact.id() + "\" --source");
+                System.out.println("\nfetch the tree: mjm info \"" + artifact.id() + "\" --source");
             }
             return 0;
         }
@@ -308,7 +308,7 @@ public final class InfoCommand implements Command {
         }
     }
 
-    /** {@code ~/.mj/sources} — outside the store: extracted trees, not pinned bytes. */
+    /** {@code ~/.mjm/sources} — outside the store: extracted trees, not pinned bytes. */
     private static Path sourcesDir() {
         String override = System.getProperty("mjm.sources.root");
         if (override != null && !override.isBlank()) {

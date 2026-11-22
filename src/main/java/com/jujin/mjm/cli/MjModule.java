@@ -11,9 +11,9 @@ import com.jujin.mjm.store.StorePomSource;
 import java.nio.file.Path;
 
 /**
- * mj's composition (DESIGN.md §9): the store and its three source seams bound
+ * mjm's composition (DESIGN.md §9): the store and its three source seams bound
  * once, the commands contributed as extensions against the working directory
- * (the project root), the runner assembled through constructor injection. mj
+ * (the project root), the runner assembled through constructor injection. mjm
  * itself is the flagship Freeway application — the tool that manages
  * dependencies is assembled through dependency injection.
  */

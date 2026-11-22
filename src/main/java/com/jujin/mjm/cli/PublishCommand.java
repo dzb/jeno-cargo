@@ -30,9 +30,9 @@ import java.util.Map;
  * given — uploads it via the platform's release API:
  *
  * <pre>
- *   mj publish                    → dist/ + upload hint
- *   mj publish gh:owner/repo     → dist/ + GitHub native upload
- *   mj publish gitee:owner/repo  → dist/ + Gitee native upload
+ *   mjm publish                    → dist/ + upload hint
+ *   mjm publish gh:owner/repo     → dist/ + GitHub native upload
+ *   mjm publish gitee:owner/repo  → dist/ + Gitee native upload
  * </pre>
  *
  * <p>Authentication: {@code MJM_GITHUB_TOKEN} / {@code MJM_GITEE_TOKEN} env
@@ -121,7 +121,7 @@ public final class PublishCommand implements Command {
         }
 
         // publish uploads what package built — it never builds its own jar.
-        // Building one here would silently overwrite mj package's output with a
+        // Building one here would silently overwrite mjm package's output with a
         // different (manifest-less) jar, and a release would then carry bytes
         // nobody reviewed.
         Path jarFile = dist.resolve(jarName);
@@ -148,7 +148,7 @@ public final class PublishCommand implements Command {
         if (args.isEmpty()) {
             System.out.println("upload the three files wherever a URL can reach — a GitHub/Gitee "
                     + "release, an OSS bucket, any static server. then tell a teammate:");
-            System.out.println("  mj add \"" + name + "\" gh:<owner>/" + name + "@v" + version);
+            System.out.println("  mjm add \"" + name + "\" gh:<owner>/" + name + "@v" + version);
             return 0;
         }
 
@@ -190,7 +190,7 @@ public final class PublishCommand implements Command {
      *
      * <p>Upload is HTTP PUT (WebDAV semantics). It works against any server
      * that accepts PUT — nginx with dav_module, Apache mod_dav, most object
-     * storage gateways. mj speaks exactly one upload protocol on purpose: it
+     * storage gateways. mjm speaks exactly one upload protocol on purpose: it
      * cannot know every host's API, and inventing an adapter per backend is
      * how a build tool becomes a deployment platform.
      *
@@ -292,7 +292,7 @@ public final class PublishCommand implements Command {
         }
 
         System.out.println("uploaded; share it with:");
-        System.out.println("  mj add \"" + project.name() + "\" " + target + "@" + tag);
+        System.out.println("  mjm add \"" + project.name() + "\" " + target + "@" + tag);
 
         String page = target.startsWith("gh:")
                 ? ArtifactLocations.githubHost()
@@ -313,10 +313,10 @@ public final class PublishCommand implements Command {
         String body;
         if (isGh) {
             body = "{\"tag_name\":\"" + tag + "\",\"name\":\"" + tag
-                    + "\",\"body\":\"mj release\"}";
+                    + "\",\"body\":\"released with mjm publish\"}";
         } else {
             body = "{\"tag_name\":\"" + tag + "\",\"name\":\"" + tag
-                    + "\",\"body\":\"mj release\",\"access_token\":\"" + token
+                    + "\",\"body\":\"released with mjm publish\",\"access_token\":\"" + token
                     + "\",\"target_commitish\":\"master\"}";
         }
 

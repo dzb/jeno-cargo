@@ -5,7 +5,7 @@ import java.io.InputStream;
 import java.util.Properties;
 
 /**
- * mj's version, derived from the build — never hand-maintained in source.
+ * mjm's version, derived from the build — never hand-maintained in source.
  *
  * <p>One declaration, two derived forms (DESIGN.md §7.5):
  * <ul>
@@ -25,7 +25,7 @@ import java.util.Properties;
  * carries the value in every layout.
  *
  * <p>There is no embedded fallback: the build always writes the resource
- * before compiling, so a binary that cannot find it was not built by mj. That
+ * before compiling, so a binary that cannot find it was not built by mjm. That
  * case reports {@link #UNKNOWN} rather than inventing a number — a wrong
  * version is worse than an honest {@code dev}.
  */
@@ -34,14 +34,14 @@ public final class Version {
     /** The resource path the build writes. */
     static final String RESOURCE = "/META-INF/mjm/version.properties";
 
-    /** Reported when the resource is absent — a binary mj did not build. */
+    /** Reported when the resource is absent — a binary mjm did not build. */
     static final String UNKNOWN = "dev";
 
     private static final String CURRENT = resolve();
 
     private Version() {}
 
-    /** The running mj's version, or {@link #UNKNOWN} when the build wrote none. */
+    /** The running mjm's version, or {@link #UNKNOWN} when the build wrote none. */
     public static String current() {
         return CURRENT;
     }

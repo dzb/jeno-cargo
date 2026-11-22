@@ -10,7 +10,7 @@ import java.util.List;
 
 /**
  * Reads a {@code pom.xml} into a small element tree. This is the one place
- * mj touches Maven's wire format; everything above works on mj's own model
+ * mjm touches Maven's wire format; everything above works on mjm's own model
  * (DESIGN.md D3). The tree is deliberately dumb — traversal and meaning live
  * in {@link Poms}.
  *

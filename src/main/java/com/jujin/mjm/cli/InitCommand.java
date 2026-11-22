@@ -13,13 +13,13 @@ import java.util.List;
  * {@code mjm init} — start a project, or migrate one from Maven.
  *
  * <pre>
- *   mj init                    skeleton mjm.toml for the current directory
- *   mj init --pom         translate ./pom.xml into mjm.toml (reviewed, not
+ *   mjm init                    skeleton mjm.toml for the current directory
+ *   mjm init --pom         translate ./pom.xml into mjm.toml (reviewed, not
  *                              imported: every unrepresentable fact is printed)
  * </pre>
  *
  * <p>The migrated file is validated through {@link ProjectReader} before it is
- * written — a translation that mj itself would refuse never lands on disk.
+ * written — a translation that mjm itself would refuse never lands on disk.
  * An existing mjm.toml is never overwritten without {@code --force}.
  */
 public final class InitCommand implements Command {
@@ -92,7 +92,7 @@ public final class InitCommand implements Command {
             toml = skeleton(nameOf(projectDir));
         }
 
-        // never write a file mj would refuse to read
+        // never write a file mjm would refuse to read
         try {
             ProjectReader.parse(toml);
         } catch (RuntimeException e) {
@@ -109,11 +109,11 @@ public final class InitCommand implements Command {
 
         System.out.println("created " + target
                 + (migratePom ? " (migrated from pom.xml)" : ""));
-        System.out.println("next: mj add \"group:artifact\" <version>   then   mj lock");
+        System.out.println("next: mjm add \"group:artifact\" <version>   then   mjm lock");
         return 0;
     }
 
-    /** The skeleton: a directory name is a valid mj project name, or gets one. */
+    /** The skeleton: a directory name is a valid mjm project name, or gets one. */
     private static String skeleton(String name) {
         return """
             [project]

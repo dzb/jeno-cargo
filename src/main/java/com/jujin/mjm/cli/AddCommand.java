@@ -137,7 +137,7 @@ public final class AddCommand implements Command {
             for (String version : versions) {
                 System.out.println("  " + version);
             }
-            System.out.println("choose one: mj add \"" + key + "\" <version>");
+            System.out.println("choose one: mjm add \"" + key + "\" <version>");
             return 1;
         }
         return search(key);
@@ -196,7 +196,7 @@ public final class AddCommand implements Command {
                         + ")");
             }
         }
-        System.out.println("add one: mj add \"<group:artifact>\" <version>");
+        System.out.println("add one: mjm add \"<group:artifact>\" <version>");
         return 1;
     }
 

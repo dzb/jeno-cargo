@@ -3,7 +3,7 @@ package com.jujin.mjm.pom;
 import java.util.List;
 
 /**
- * One dependency of a decoded pom, in the form mj's resolver consumes: an
+ * One dependency of a decoded pom, in the form mjm's resolver consumes: an
  * exact version (never a range, never a snapshot), a transitive scope
  * ({@code compile} or {@code runtime}), and the exclusions the declaring pom
  * attached — wildcards ({@code *}) included, since Maven Central uses them.

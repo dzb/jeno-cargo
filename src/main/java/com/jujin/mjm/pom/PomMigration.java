@@ -9,7 +9,7 @@ import java.util.Map;
  * {@code pom.xml} → {@code mjm.toml} migration (the {@code mjm init --pom}
  * path). This is a translation, not an import: the output is a hand-editable
  * mjm.toml a human reviews before the first {@code mjm lock}, and anything that
- * has no mj equivalent is reported instead of silently dropped.
+ * has no mjm equivalent is reported instead of silently dropped.
  *
  * <p>What carries over:
  * <ul>
@@ -109,22 +109,22 @@ public final class PomMigration {
                 continue;
             }
             if (depVersion.endsWith("-SNAPSHOT")) {
-                notes.add(id + " is a snapshot — mj rejects snapshots; pin a released version");
+                notes.add(id + " is a snapshot — mjm rejects snapshots; pin a released version");
                 continue;
             }
             if ("system".equals(scope)) {
-                notes.add(id + " has scope system (a local jar path) — mj has no equivalent;"
+                notes.add(id + " has scope system (a local jar path) — mjm has no equivalent;"
                         + " publish it to a repository, or use a URL dependency");
                 continue;
             }
             if ("import".equals(scope)) {
-                notes.add(id + " has scope import (a BOM) — mj resolves poms directly;"
+                notes.add(id + " has scope import (a BOM) — mjm resolves poms directly;"
                         + " declare the libraries it pins instead");
                 continue;
             }
             if ((type != null && !type.equals("jar")) || classifier != null) {
                 notes.add(id + " uses type=" + type + " classifier=" + classifier
-                        + " — mj resolves plain jars only; that artifact is skipped");
+                        + " — mjm resolves plain jars only; that artifact is skipped");
                 continue;
             }
             if ("provided".equals(scope)) {

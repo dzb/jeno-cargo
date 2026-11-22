@@ -20,8 +20,8 @@ import java.util.stream.Stream;
 /**
  * {@code mjm test} — compiles test sources, then forks a separate JVM to
  * execute them. The forked JVM's classpath IS the test classpath: test
- * classes, code under test, closure jars, junit toolchain, and mj's test API
- * ({@code MjmTestFork}). No mj process classes leak in — zero classloader
+ * classes, code under test, closure jars, junit toolchain, and mjm's test API
+ * ({@code MjmTestFork}). No mjm process classes leak in — zero classloader
  * identity issues.
  *
  * <p>Two runners in the forked JVM ({@code MjmTestFork}):
@@ -79,7 +79,7 @@ public final class TestCommand implements Command {
             return 1;
         }
 
-        // fork a separate JVM — complete classloader isolation from the mj process
+        // fork a separate JVM — complete classloader isolation from the mjm process
         List<String> runClasspath = classpath(toolchain, true);
         Path testOutput = projectDir.resolve(TEST_OUTPUT);
 

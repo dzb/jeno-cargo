@@ -10,7 +10,7 @@ import java.util.Map;
  * never re-reads the file.
  *
  * @param group           the {@code [project].group} — a reverse-DNS id
- *                        ({@code com.jujin8.mj}); null when unset. Required by
+ *                        ({@code com.jujin8.mjm}); null when unset. Required by
  *                        a Maven-layout publish (the path is group-based) and
  *                        carried into the published descriptor so consumers
  *                        address the library as {@code group:artifact}

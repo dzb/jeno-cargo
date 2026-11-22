@@ -29,7 +29,7 @@ import java.util.stream.Stream;
  */
 public final class UpdateCommand implements Command {
 
-    /** The default GitHub repo that hosts mj's releases. */
+    /** The default GitHub repo that hosts mjm's releases. */
     private static final String RELEASES_API_DEFAULT =
             "https://api.github.com/repos/dzb/mjm-cargo/releases/latest";
 

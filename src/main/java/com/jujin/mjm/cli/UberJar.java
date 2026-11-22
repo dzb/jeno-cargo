@@ -25,7 +25,7 @@ import java.util.zip.ZipOutputStream;
  * survives), signatures and {@code module-info} dropped, and the first writer
  * winning on any duplicate resource.
  *
- * <p>mj's own dist ships as one {@code lib/mj-<version>.jar}: the framework it
+ * <p>mjm's own dist ships as one {@code lib/mjm-<version>.jar}: the framework it
  * is built on (freeway, slf4j) is its skeleton, not a dependency a user could
  * swap. The lifecycle toolchain (junit) is deliberately *not* merged — it is
  * only needed by {@code mjm test}, and lives in {@code lib/toolchain/}.

@@ -26,7 +26,7 @@ import java.util.stream.Stream;
  * and its single product is a jar.
  *
  * <p>bundle exists for one job: producing the artifact an application ships to
- * its own users — the thing behind a {@code curl | bash}. mj itself is the first
+ * its own users — the thing behind a {@code curl | bash}. mjm itself is the first
  * consumer; any CLI project can use it. A library never needs it.
  *
  * <pre>
@@ -44,7 +44,7 @@ import java.util.stream.Stream;
  *
  * <p><b>What this command does not decide.</b> Whether a project wants a
  * bundle, what to name it, where to upload it — all of that is the project's
- * CI. mj provides the packaging mechanics (merge the skeleton, place the
+ * CI. mjm provides the packaging mechanics (merge the skeleton, place the
  * launcher, write setup.sh, checksum it) and nothing else.
  */
 public final class BundleCommand implements Command {
@@ -53,7 +53,7 @@ public final class BundleCommand implements Command {
 
     private static final String LAUNCHER_TEMPLATE = """
         #!/bin/sh
-        # mj — modern java manager
+        # mjm — modern java manager
 
         PRG="$0"
         while [ -h "$PRG" ]; do
@@ -71,11 +71,11 @@ public final class BundleCommand implements Command {
             JAVA=$(command -v java 2>/dev/null)
         fi
         if [ -z "$JAVA" ]; then
-            echo "mj: no java found — set JAVA_HOME or add java to PATH" >&2
+            echo "mjm: no java found — set JAVA_HOME or add java to PATH" >&2
             exit 1
         fi
 
-        # lib/ holds one jar — mj and its skeleton merged. The lifecycle
+        # lib/ holds one jar — mjm and its skeleton merged. The lifecycle
         # toolchain under lib/toolchain/ is loaded only by the forked test JVM.
         exec "$JAVA" -cp "$MJM_HOME/lib/*" %s "$@"
         """;
@@ -186,7 +186,7 @@ public final class BundleCommand implements Command {
             Files.createDirectories(lib);
 
             // the project as ONE jar: its own classes plus the runtime closure
-            // (freeway, slf4j) merged in. They are mj's skeleton, not swappable
+            // (freeway, slf4j) merged in. They are mjm's skeleton, not swappable
             // dependencies — a user never picks a different freeway-ioc. The
             // lifecycle toolchain (junit) is separate: only `mjm test` needs it.
             Map<String, Path> mainJars = UberJar.mainJars(locked, jars);
@@ -210,7 +210,7 @@ public final class BundleCommand implements Command {
                 return 1;
             }
 
-            // the lifecycle toolchain — shipped apart, loaded only by mj test
+            // the lifecycle toolchain — shipped apart, loaded only by mjm test
             if (!toolchainJars.isEmpty()) {
                 Path toolchainDir = lib.resolve("toolchain");
                 Files.createDirectories(toolchainDir);
@@ -279,7 +279,7 @@ public final class BundleCommand implements Command {
      * Zips {@code classes} into {@code jarFile} with the JDK's jar tool,
      * adding the Java-conventional manifest entries ({@code
      * Implementation-Title}/{@code Implementation-Version}) so outside tools
-     * and IDEs can read the version without mj's resource.
+     * and IDEs can read the version without mjm's resource.
      */
     static int jar(Path classes, Path jarFile, String title, String version, String mainClass) {
         try {

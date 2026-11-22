@@ -3,7 +3,7 @@ package com.jujin.mjm.cli;
 import java.util.List;
 
 /**
- * One mj command ({@code lock}, {@code build}, {@code run} — the M3 set).
+ * One mjm command ({@code lock}, {@code build}, {@code run} — the M3 set).
  * Commands are contributed to the container and constructed with injection;
  * {@link CommandRunner} dispatches by name.
  */

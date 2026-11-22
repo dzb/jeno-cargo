@@ -3,8 +3,8 @@ package com.jujin.mjm.pom;
 import java.util.List;
 
 /**
- * A Maven {@code pom.xml} decoded into mj's own model — the wire format never
- * leaks past this type (DESIGN.md D3: XML is Central's dialect; mj listens,
+ * A Maven {@code pom.xml} decoded into mjm's own model — the wire format never
+ * leaks past this type (DESIGN.md D3: XML is Central's dialect; mjm listens,
  * it does not speak).
  *
  * <p>The record holds the <em>effective</em> view: coordinates and packaging

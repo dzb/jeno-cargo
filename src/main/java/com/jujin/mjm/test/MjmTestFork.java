@@ -19,7 +19,7 @@ import java.util.stream.Stream;
  * The test bootstrap that runs in a forked JVM — mjm test forks a new JVM
  * with the test classpath and invokes this class. The forked JVM's classpath
  * IS the test classpath: test classes, code under test, closure jars, and
- * the junit toolchain. No mj process classes leak in, so there are no
+ * the junit toolchain. No mjm process classes leak in, so there are no
  * classloader identity issues.
  *
  * <p>Supports two runners:

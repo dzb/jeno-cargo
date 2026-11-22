@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
 
 /**
  * Reads mjm.lock back into typed rows (SPEC.md §4). The schema is closed like
- * every mj file: unknown keys in a row, a missing digest, or a depth below
+ * every mjm file: unknown keys in a row, a missing digest, or a depth below
  * one are errors — a hand-edited lock is a bug to surface, not a hint.
  */
 public final class LockFileReader {

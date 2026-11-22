@@ -377,7 +377,7 @@ public final class ProjectReader {
         }
         if (version.startsWith("[") || version.startsWith("(")) {
             throw new ProjectException("[" + where + "] '" + key
-                    + "' — version ranges are not supported; mj pins exact versions");
+                    + "' — version ranges are not supported; mjm pins exact versions");
         }
         if (version.endsWith("-SNAPSHOT")) {
             throw new ProjectException("[" + where + "] '" + key
