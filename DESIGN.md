@@ -337,7 +337,6 @@ push tag v*  →  验证 + 发行
 - 自举链断裂的逃生舱(旧 mjm 读不了新 mjm.toml 等):本机 Maven 引导
   (`mvn -DskipTests package` → `java -cp target/classes:…` 跑 `Mjm`)→ `mjm bundle` → `gh release upload` 手工补发
 - 引导链有根:v0.1.0 由 Maven 本地引导(已完成),此后链条不断
-- Gitee 仓只镜像代码,release 仅 GitHub(决策:公开发布用 GitHub)
 
 ---
 

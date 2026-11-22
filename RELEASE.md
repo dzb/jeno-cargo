@@ -79,7 +79,6 @@ gh release create v{ver} dist/mjm-{ver}.tar.gz --title "mjm v{ver}" --notes "…
 
 ## 已知边界
 
-- Gitee 仓只镜像代码与 tag,不承载 release(公开发布用 GitHub,已决策)
 - `mjm publish` 与本管线无关:它是"把库发布给消费方"的三件套命令;
   mjm 自身的工具发行走 CI 的 bundle + Release,两个语义不混用
 - mjm 不提供 `release` 命令:CI 显式调用 `mjm lock` / `build` / `test` / `bundle`,
