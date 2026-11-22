@@ -33,21 +33,41 @@ public final class CommandRunner {
 
     public int run(String... args) {
         if (args.length == 0) {
-            return usage();
+            return usage(2);
+        }
+        if (args.length == 1 && (args[0].equals("--help") || args[0].equals("-h"))) {
+            return usage(0);  // a request for the listing is not an error
         }
         Command command = byName.get(args[0]);
         if (command == null) {
             System.err.println("mjm: unknown command '" + args[0] + "'");
-            return usage();
+            return usage(2);
         }
-        // `mjm <command> --help` is a request for that command's syntax, not an
-        // argument to it — the one convention every CLI shares.
-        List<String> rest = List.of(args).subList(1, args.length);
+        List<String> raw = List.of(args).subList(1, args.length);
+
+        // `--` ends mjm's own options: everything after it is positional and is
+        // handed to the command untouched (for `run`, to the program).
+        List<String> rest = new java.util.ArrayList<>();
+        List<String> passthrough = new java.util.ArrayList<>();
+        boolean afterTerminator = false;
+        for (String arg : raw) {
+            if (!afterTerminator && arg.equals("--")) {
+                afterTerminator = true;
+                continue;
+            }
+            (afterTerminator ? passthrough : rest).add(arg);
+        }
 
         // --offline/-o is a property of the run, applied before the command sees
-        // its arguments: every store access below this point obeys it. The two
-        // spellings are interchangeable and may repeat.
-        boolean offline = rest.contains("--offline") || rest.contains("-o");
+        // its arguments. It is only recognized where this command's global flags
+        // live: `run app --offline` gives --offline to the program.
+        int flagsEnd = Math.min(command.flagsEndAt(rest), rest.size());
+        boolean offline = false;
+        for (int i = 0; i < flagsEnd; i++) {
+            if (rest.get(i).equals("--offline") || rest.get(i).equals("-o")) {
+                offline = true;
+            }
+        }
         if (offline) {
             if (!command.supportsOffline()) {
                 System.err.println("mjm: " + command.name() + " needs the network by design — "
@@ -55,11 +75,16 @@ public final class CommandRunner {
                 return 2;
             }
             com.jujin.mjm.store.ArtifactStore.goOffline();
-            List<String> filtered = new java.util.ArrayList<>(rest);
-            filtered.removeIf(flag -> flag.equals("--offline") || flag.equals("-o"));
-            rest = filtered;
+            for (int i = flagsEnd - 1; i >= 0; i--) {
+                if (rest.get(i).equals("--offline") || rest.get(i).equals("-o")) {
+                    rest.remove(i);
+                }
+            }
         }
-        if (rest.size() == 1 && (rest.getFirst().equals("--help") || rest.getFirst().equals("-h"))) {
+        // `--help` is mjm's only before `--`, and only when it is the one thing
+        // left: after a target it belongs to the program.
+        if (passthrough.isEmpty() && rest.size() == 1
+                && (rest.getFirst().equals("--help") || rest.getFirst().equals("-h"))) {
             String syntax = command.usage();
             System.out.println("usage: mjm " + command.name()
                     + (syntax.isEmpty() ? "" : " " + syntax));
@@ -77,10 +102,10 @@ public final class CommandRunner {
             }
             return 0;
         }
-        return command.execute(rest);
+        return command.execute(List.copyOf(rest), List.copyOf(passthrough));
     }
 
-    private int usage() {
+    private int usage(int exit) {
         int column = MIN_COLUMN;
         for (Command command : commands) {
             column = Math.max(column, label(command).length() + 2);
@@ -93,8 +118,10 @@ public final class CommandRunner {
         }
         System.out.println();
         System.out.println("  -o, --offline        refuse all network access (store hits only; "
-                + "not for update/publish/outdated/audit)");
-        return 2;
+                + "not for update/publish/outdated/audit); before the target, after -- it is "
+                + "the program's");
+        System.out.println("  --                   end mjm's options; the rest goes to the command");
+        return exit;
     }
 
     /** {@code lock}, or {@code update | upgrade} when the command has aliases. */

@@ -59,15 +59,60 @@ public final class RunCommand implements Command {
     }
 
     @Override
+    public String help() {
+        return """
+               a [scripts] name wins over a main class of the same name.
+               mjm's flags (--module, --offline) are read only before the target;
+               after it they are the program's arguments.
+               -- ends mjm's options; everything after it goes to the program.""";
+    }
+
+    @Override
     public String summary() {
         return "run a main class or a [scripts] entry, or [project].main when no"
                 + " argument is given";
     }
 
     @Override
+    public boolean passThroughArguments() {
+        return true;
+    }
+
+    /**
+     * mjm's own flags end at the target: {@code run --module x --offline app}
+     * has its flags before {@code app}, and {@code run app --offline} gives
+     * {@code --offline} to the program.
+     */
+    @Override
+    public int flagsEndAt(List<String> args) {
+        int i = 0;
+        while (i < args.size()) {
+            String arg = args.get(i);
+            if (arg.equals("--module")) {
+                i += 2;
+                continue;
+            }
+            if (arg.startsWith("--module=")) {
+                i++;
+                continue;
+            }
+            if (arg.startsWith("-") && !arg.equals("-")) {
+                i++;
+                continue;
+            }
+            return i;
+        }
+        return args.size();
+    }
+
     public int execute(List<String> args) {
-        Integer workspace = WorkspaceRun.requireModule(projectDir, args,
-                (dir, rest) -> new RunCommand(store, dir).execute(rest));
+        return execute(args, List.of());
+    }
+
+    @Override
+    public int execute(List<String> args, List<String> passthrough) {
+        Integer workspace = WorkspaceRun.requireModule(projectDir, args, true,
+                (dir, rest) -> new RunCommand(store, dir).execute(rest, passthrough));
         if (workspace != null) {
             return workspace;
         }
@@ -87,7 +132,7 @@ public final class RunCommand implements Command {
         List<String> rest;
         if (args.isEmpty()) {
             target = project.main();
-            rest = List.of();
+            rest = List.copyOf(passthrough);
             if (target == null || target.isBlank()) {
                 System.err.println("mjm: run needs a main class or a script name — "
                         + "mjm run <main-class> [args...] | mjm run <script-name>, or set "
@@ -96,7 +141,9 @@ public final class RunCommand implements Command {
             }
         } else {
             target = args.get(0);
-            rest = args.subList(1, args.size());
+            rest = new ArrayList<>(args.subList(1, args.size()));
+            rest.addAll(passthrough);
+            rest = List.copyOf(rest);
         }
 
         // A [scripts] key wins over a main class name — scripts are the

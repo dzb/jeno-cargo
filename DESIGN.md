@@ -343,7 +343,7 @@ push tag v*  →  验证 + 发行
 
 ## 8. 构建与命令面(草案)
 
-命令面(以 `mjm` 的 usage 输出为准):
+命令面(以 `mjm` 的 usage 输出为准)。参数约定:未知参数是用法错误(exit 2),不静默忽略;`--` 结束 mjm 的选项,其后作为位置参数交给命令(`run` 交给程序);`--help` 只在 `--` 之前且为唯一剩余参数时生效。
 
 | 命令 | 状态 | 说明 |
 |---|---|---|
@@ -352,7 +352,7 @@ push tag v*  →  验证 + 发行
 | `mjm tree [--json]` | ✅ | 依赖树 + 深度标注(dev 工件标 `, dev`);`--json` 输出单个 JSON 文档(artifacts 按 id 排序、children 排序,不嵌套)。**以 `mjm.lock` 为准**:先读锁,再解析 manifest 只为补边;id/version/source/depth/scope 任一不一致 → exit 1、列出至多 10 行差异、不输出图 |
 | `mjm why <dep>` | ✅ | 谁引入的、占多少深度预算。同样以锁为准,漂移时拒绝画图(与 tree 共用同一个一致性 helper) |
 | `mjm build` | ✅ | javac 编译(严格可见性 classpath —— 只含 MAIN 声明);`--release N` 目标化字节码;`-processorpath` 注入处理器;`src/main/resources` 拷入产物 |
-| `mjm run [<main>]` / scripts | ✅ | runtime classpath 运行(排除 dev);不给参数时用 `[project].main`(`package` 写进 MANIFEST、`bundle` 写进 launcher 的同一个入口) |
+| `mjm run [<main>]` / scripts | ✅ | runtime classpath 运行(排除 dev);不给参数时用 `[project].main`(`package` 写进 MANIFEST、`bundle` 写进 launcher 的同一个入口)。mjm 自己的旗标(`--module`/`--offline`)只在 target 之前生效,之后是程序参数;`--` 之后一律归程序;`[scripts]` 优先于同名主类 |
 | `mjm test` | ✅ | fork JVM runner:`@MjmTest` + JUnit Platform;classpath 含 MAIN + dev;`[test]` include/exclude 过滤源;每次开跑前清空 `target/test-results/`,跑完每个测试类一个 surefire 形状的 `TEST-<类名>.xml`(无 timestamp、可逐字节 diff) |
 | `mjm package` | ✅ | 纯 jar;`--uber` 合并闭包(排除 dev)并输出 `target/dist/<name>-<ver>-uber.jar`——与普通 jar 不同名,互不覆盖 |
 | `mjm bundle` | ✅ | 发行目录 + setup.sh + tar.gz,输出 `target/dist/`(应用自用;库不需要) |

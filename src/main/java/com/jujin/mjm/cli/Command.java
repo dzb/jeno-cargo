@@ -60,6 +60,40 @@ public interface Command {
     /** The one-line summary the usage listing shows — it never repeats the name. */
     String summary();
 
+    /**
+     * Whether arguments after the target belong to the program ({@code run}).
+     * When false, everything the runner passes — including text after
+     * {@code --} — is this command's own positional argument, and a strict
+     * command rejects it.
+     */
+    default boolean passThroughArguments() {
+        return false;
+    }
+
+    /**
+     * How far into {@code args} this command's global flags may appear. The
+     * runner consumes {@code --offline} only before this index; everything from
+     * it on belongs to the command (for {@code run}, to the program). Defaults
+     * to the whole list.
+     */
+    default int flagsEndAt(List<String> args) {
+        return args.size();
+    }
+
     /** Runs the command with its arguments and returns the process exit code. */
     int execute(List<String> args);
+
+    /**
+     * Runs with the part after a {@code --} kept separate. The default appends
+     * it as ordinary positional arguments — a strict command then rejects it,
+     * which is exactly the rule "only the runner interprets {@code --}".
+     */
+    default int execute(List<String> args, List<String> passthrough) {
+        if (passthrough.isEmpty()) {
+            return execute(args);
+        }
+        java.util.List<String> combined = new java.util.ArrayList<>(args);
+        combined.addAll(passthrough);
+        return execute(combined);
+    }
 }

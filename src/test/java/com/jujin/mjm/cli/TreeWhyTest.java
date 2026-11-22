@@ -437,7 +437,6 @@ class TreeWhyTest {
             """.formatted(repo));
 
         writeLock();
-        writeLock();
         TreeCommand tree = new TreeCommand(new ArtifactStore(dir.resolve("store")),
                 localPomSource(), text -> { throw new IllegalStateException("no natives here"); },
                 dir);
