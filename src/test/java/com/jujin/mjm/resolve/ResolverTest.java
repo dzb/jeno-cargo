@@ -349,6 +349,29 @@ class ResolverTest {
 
         assertEquals(Scope.MAIN, byId(graph.artifacts(), "com.example:common").scope(),
                 "a main root reaches it, so it is main");
+
+        // the same artifact is also reached from [dev-deps]; main reachability
+        // decides the scope, and with it the budget: budget 1 must reject depth 2
+        ResolveException overBudget = assertThrows(ResolveException.class, () ->
+                Resolver.resolve(project("""
+                    [project]
+                    name = "demo"
+                    version = "0.1.0"
+
+                    [limits]
+                    max-depth = 1
+
+                    [deps]
+                    "com.example:lib-a" = "1.0.0"
+
+                    [dev-deps]
+                    "com.example:lib-d" = "1.0.0"
+                    """), poms, descriptorSource()));
+
+        assertTrue(overBudget.getMessage().contains("depth 2 (budget is 1)"),
+                "charged like a main dependency, got: " + overBudget.getMessage());
+        assertTrue(overBudget.getMessage().contains("com.example:lib-a@1.0.0 -> "),
+                "the main path is the one named, got: " + overBudget.getMessage());
     }
 
     private static ResolvedGraph.ResolvedArtifact byId(

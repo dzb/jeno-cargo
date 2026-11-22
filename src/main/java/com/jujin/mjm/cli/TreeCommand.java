@@ -57,6 +57,14 @@ public final class TreeCommand implements Command {
     }
 
     @Override
+    public String help() {
+        return """
+               each artifact prints once, at its first occurrence: a declared
+               dependency that first appears inside another subtree gets no root
+               line of its own — its 'declared' marker still shows on that line""";
+    }
+
+    @Override
     public int execute(List<String> args) {
         MjProject project;
         try {

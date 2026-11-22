@@ -33,6 +33,16 @@ public interface Command {
     }
 
     /**
+     * Extra help text, printed under the summary by
+     * {@code mjm <command> --help} — the rules of a command's output that do
+     * not fit on one line. Defaults to empty; each line is indented to match
+     * the summary.
+     */
+    default String help() {
+        return "";
+    }
+
+    /**
      * Whether {@code --offline} is meaningful for this command. Defaults to
      * true: every command that only reads the store obeys the flag through
      * {@code ArtifactStore.ensure}, with no per-command code. {@code update}

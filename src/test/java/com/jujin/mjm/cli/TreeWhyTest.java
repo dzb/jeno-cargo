@@ -157,6 +157,97 @@ class TreeWhyTest {
     }
 
     @Test
+    void treePrintsEachArtifactAtItsFirstOccurrence() throws Exception {
+        // rule: one line per artifact, where it first appears. root-a reaches
+        // mid and root-b; root-b is also declared, so it must not get a second
+        // (root) line — it shows up as root-a's child instead.
+        Path repo = dir.resolve("fix-repo");
+        pom(repo, "com/example/root-a/1.0.0", "root-a", "1.0.0", """
+            <dependencies>
+              <dependency>
+                <groupId>com.example</groupId>
+                <artifactId>mid</artifactId>
+                <version>1.0.0</version>
+              </dependency>
+              <dependency>
+                <groupId>com.example</groupId>
+                <artifactId>root-b</artifactId>
+                <version>1.0.0</version>
+              </dependency>
+            </dependencies>
+            """);
+        pom(repo, "com/example/mid/1.0.0", "mid", "1.0.0", """
+            <dependencies>
+              <dependency>
+                <groupId>com.example</groupId>
+                <artifactId>common</artifactId>
+                <version>1.0.0</version>
+              </dependency>
+            </dependencies>
+            """);
+        pom(repo, "com/example/root-b/1.0.0", "root-b", "1.0.0", """
+            <dependencies>
+              <dependency>
+                <groupId>com.example</groupId>
+                <artifactId>common</artifactId>
+                <version>1.0.0</version>
+              </dependency>
+            </dependencies>
+            """);
+        pom(repo, "com/example/root-c/1.0.0", "root-c", "1.0.0", """
+            <dependencies>
+              <dependency>
+                <groupId>com.example</groupId>
+                <artifactId>common</artifactId>
+                <version>1.0.0</version>
+              </dependency>
+            </dependencies>
+            """);
+        pom(repo, "com/example/common/1.0.0", "common", "1.0.0", "");
+
+        Files.writeString(dir.resolve("mjm.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [limits]
+            max-depth = 5
+
+            [repos]
+            fix = "local:%s"
+
+            [deps.fix]
+            "com.example:root-a" = "1.0.0"
+            "com.example:root-b" = "1.0.0"
+            "com.example:root-c" = "1.0.0"
+            """.formatted(repo));
+
+        TreeCommand tree = new TreeCommand(new ArtifactStore(dir.resolve("store")),
+                localPomSource(), text -> { throw new IllegalStateException("no natives here"); },
+                dir);
+        assertEquals(0, tree.execute(List.of()));
+
+        String out = readConsole();
+        String expected = """
+            demo@0.1.0 (budget 5)
+            com.example:root-a@1.0.0  [depth 1, declared]
+            ├─ com.example:mid@1.0.0  [depth 2]
+            │  └─ com.example:common@1.0.0  [depth 3]
+            └─ com.example:root-b@1.0.0  [depth 1, declared]
+               └─ com.example:common@1.0.0  [depth 3]  (*) above
+            com.example:root-c@1.0.0  [depth 1, declared]
+            └─ com.example:common@1.0.0  [depth 3]  (*) above
+            """;
+        assertEquals(expected, out, "rule A: every artifact prints where it first appears");
+
+        assertEquals(1, count(out, "com.example:root-b@1.0.0"),
+                "the declared root reached through root-a gets no second line");
+        assertFalse(out.contains("\ncom.example:root-b@1.0.0"),
+                "root-b must not appear at column 0, got: " + out);
+        assertEquals(2, count(out, "(*) above"), "both later common lines carry the marker");
+    }
+
+    @Test
     void treeMarksDevRootsAndTheirSubtrees() throws Exception {
         Path repo = dir.resolve("fix-repo");
         pom(repo, "com/example/lib-b/1.1.0", "lib-b", "1.1.0", """

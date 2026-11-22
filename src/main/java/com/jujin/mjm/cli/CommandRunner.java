@@ -69,6 +69,11 @@ public final class CommandRunner {
             } else {
                 System.out.println("       " + command.summary());
             }
+            for (String line : command.help().split("\n")) {
+                if (!line.isBlank()) {
+                    System.out.println("       " + line);
+                }
+            }
             return 0;
         }
         return command.execute(rest);
