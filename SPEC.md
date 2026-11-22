@@ -311,7 +311,7 @@ scope = "dev"             # 可选:[dev-deps] 可达的工件。缺省 = main
 
 1. id 在闭包内唯一(MVS 单版本)
 2. sha256 与 meta-sha256 必为 64 位十六进制(URL 叶子无元数据,meta-sha256 缺省);**每次下载都强制核对,任一不匹配即失败**(release asset 可变风险由它们兜底;元数据变了依赖图就变了——go.sum 同时哈希 zip 与 go.mod 的先例)。`local:` 仓库与远程同等钉定
-3. url 必须 https
+3. url 必须 https;唯一例外是 loopback `mjm:` 仓库(`http://localhost` / `http://127.0.0.1`,仅供测试)
 4. depth ≥ 1
 5. 按 id 字典序输出(稳定 diff)
 6. 一致性:lock 的依赖集合与 mjm.toml + 描述符闭包一致;不一致 → 拒绝 build/run,提示 `mjm lock`

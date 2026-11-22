@@ -1,6 +1,8 @@
 package com.jujin.mjm.cli;
 
 import com.jujin.mjm.resolve.ArtifactLocations;
+import com.jujin.mjm.store.StoreDescriptorSource;
+import com.jujin.mjm.store.StorePomSource;
 import com.jujin.mjm.store.ArtifactStore;
 import com.jujin.mjm.store.LockFileReader;
 import com.jujin.mjm.store.LockedArtifact;
@@ -136,6 +138,129 @@ class MjmRepositoryTest {
 
         exit = new PublishCommand(project).execute(List.of(base + "/maven/"));
         assertEquals(1, exit, "the Maven layout still requires [project].group");
+    }
+
+    @Test
+    void publishingToTheSameRepositoryWritesSiblingsAsBareNames(@TempDir Path storeDir)
+            throws Exception {
+        serve("""
+            [project]
+            name = "gadget"
+            version = "0.9.0"
+            """.getBytes(), "/gadget/0.9.0/gadget-0.9.0.mjm.toml");
+        serve(validJar(), "/gadget/0.9.0/gadget-0.9.0.jar");
+        String base = start();
+
+        Path project = siblingProject(base);
+        ArtifactStore store = new ArtifactStore(storeDir);
+        LockService lockService = new LockService(store, new StorePomSource(store),
+                new StoreDescriptorSource(store));
+        lockService.refresh(project);
+        assertEquals(0, new BuildCommand(store, project).execute(List.of()));
+        assertEquals(0, new PackageCommand(store, project).execute(List.of()));
+
+        int exit = new PublishCommand(project).execute(List.of("mjm:" + base + "/"));
+
+        assertEquals(0, exit);
+        String descriptor = Files.readString(project.resolve("dist/demo-0.1.0.mjm.toml"));
+        assertTrue(descriptor.contains("\"gadget\" = \"0.9.0\""),
+                "a sibling is a fact: bare name and version, got:\n" + descriptor);
+        assertTrue(!descriptor.contains("mine:"), descriptor);
+    }
+
+    @Test
+    void publishingElsewhereRefusesTheSibling(@TempDir Path storeDir) throws Exception {
+        serve("""
+            [project]
+            name = "gadget"
+            version = "0.9.0"
+            """.getBytes(), "/gadget/0.9.0/gadget-0.9.0.mjm.toml");
+        serve(validJar(), "/gadget/0.9.0/gadget-0.9.0.jar");
+        String base = start();
+
+        Path project = siblingProject(base);
+        ArtifactStore store = new ArtifactStore(storeDir);
+        LockService lockService = new LockService(store, new StorePomSource(store),
+                new StoreDescriptorSource(store));
+        lockService.refresh(project);
+        assertEquals(0, new BuildCommand(store, project).execute(List.of()));
+        assertEquals(0, new PackageCommand(store, project).execute(List.of()));
+
+        java.io.PrintStream original = System.err;
+        var errors = new java.io.ByteArrayOutputStream();
+        int exit;
+        try {
+            System.setErr(new java.io.PrintStream(errors, true, StandardCharsets.UTF_8));
+            exit = new PublishCommand(project)
+                    .execute(List.of("mjm:http://localhost:1/elsewhere/"));
+        } finally {
+            System.setErr(original);
+        }
+
+        String message = errors.toString(StandardCharsets.UTF_8);
+        assertEquals(1, exit);
+        assertTrue(message.contains("belongs to repository 'mine'"), message);
+        assertTrue(message.contains("http://localhost:1/elsewhere/"),
+                "the message names where you are publishing instead: " + message);
+    }
+
+    @Test
+    void aGhTargetStillRefusesARepoBoundDependency(@TempDir Path storeDir) throws Exception {
+        String base = start();
+        Path project = siblingProject(base);
+        Files.createDirectories(project.resolve("target/classes"));
+        ArtifactStore store = new ArtifactStore(storeDir);
+        // no lock/build needed: the dependency rule is checked before any upload
+
+        java.io.PrintStream original = System.err;
+        var errors = new java.io.ByteArrayOutputStream();
+        int exit;
+        try {
+            System.setErr(new java.io.PrintStream(errors, true, StandardCharsets.UTF_8));
+            exit = new PublishCommand(project).execute(List.of("gh:acme/demo"));
+        } finally {
+            System.setErr(original);
+        }
+
+        assertEquals(1, exit);
+        assertTrue(errors.toString(StandardCharsets.UTF_8)
+                .contains("belongs to repository 'mine'"));
+    }
+
+    private Path siblingProject(String base) throws IOException {
+        Path project = Files.createDirectories(dir.resolve("sibling"));
+        Files.createDirectories(project.resolve("src/main/java/demo"));
+        Files.writeString(project.resolve("src/main/java/demo/Main.java"), """
+            package demo;
+
+            public final class Main {
+                public static void main(String[] args) {
+                }
+            }
+            """);
+        Files.writeString(project.resolve("mjm.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+            main = "demo.Main"
+
+            [repos]
+            mine = "mjm:%s"
+
+            [deps]
+            "gadget" = "mine:0.9.0"
+            """.formatted(base));
+        return project;
+    }
+
+    private static byte[] validJar() throws IOException {
+        Path jar = Files.createTempFile("fixture", ".jar");
+        try (var out = new java.util.zip.ZipOutputStream(Files.newOutputStream(jar))) {
+            out.putNextEntry(new java.util.zip.ZipEntry("META-INF/MANIFEST.MF"));
+            out.write("Manifest-Version: 1.0\n".getBytes(StandardCharsets.UTF_8));
+            out.closeEntry();
+        }
+        return Files.readAllBytes(jar);
     }
 
     // ------------------------------------------------------------------

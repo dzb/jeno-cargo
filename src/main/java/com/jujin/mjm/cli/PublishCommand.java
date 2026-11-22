@@ -32,6 +32,7 @@ import java.util.Map;
  * <pre>
  *   mjm publish                    → dist/ + upload hint
  *   mjm publish gh:owner/repo     → dist/ + GitHub native upload
+ *   mjm publish mjm:https://host/ → dist/ + mjm layout PUT (no group needed)
  *   mjm publish https://host/     → dist/ + Maven layout PUT (needs [project].group)
  * </pre>
  *
@@ -66,7 +67,7 @@ public final class PublishCommand implements Command {
 
     @Override
     public String summary() {
-        return "write the release triple and upload it: gh:, or an http(s) host";
+        return "write the release triple and upload it: gh:, mjm:https://host/, or an http(s) host";
     }
     @Override
     public String usage() {
@@ -105,14 +106,30 @@ public final class PublishCommand implements Command {
             return 1;
         }
 
+        String target = args.isEmpty() ? null : args.getFirst();
+        // A dependency in the repository we are publishing to is a sibling: the
+        // descriptor can say "gadget, 0.9.0" and the consumer's resolver reads it
+        // back as another artifact in that same repository. Anything bound to a
+        // different repository stays a rule, and rules do not travel.
+        String publishBase = target != null && target.startsWith("mjm:")
+                ? mjmBase(target) : null;
+        java.util.Set<String> siblings = new java.util.HashSet<>();
         for (var requirement : project.requirements()) {
-            if (requirement.repository() != null) {
-                System.err.println("mjm: '" + requirement.id() + "' is bound to repository '"
-                        + requirement.repository() + "' — descriptors carry Central, gh: "
-                        + "and URL dependencies only (a named repository is a rule, not a fact); "
-                        + "publish that dependency to Central or GitHub, or drop it");
-                return 1;
+            if (requirement.repository() == null) {
+                continue;
             }
+            String where = mjmBase(project.repos().get(requirement.repository()));
+            if (publishBase != null && publishBase.equals(where)) {
+                siblings.add(requirement.id());
+                continue;
+            }
+            System.err.println("mjm: '" + requirement.id() + "' belongs to repository '"
+                    + requirement.repository() + "' (" + where + ") — you are publishing to "
+                    + (publishBase == null ? target : "mjm:" + publishBase)
+                    + "; a descriptor can only name siblings in the repository it is "
+                    + "published to. Move that dependency to Central/GitHub, publish it to "
+                    + "this same repository first, or drop it");
+            return 1;
         }
 
         Path dist;
@@ -141,7 +158,7 @@ public final class PublishCommand implements Command {
         }
 
         try {
-            Files.writeString(dist.resolve(descriptorName), descriptor(project));
+            Files.writeString(dist.resolve(descriptorName), descriptor(project, siblings));
             Files.writeString(dist.resolve(shaName),
                     ArtifactStore.sha256(jarFile) + "\n");
         } catch (IOException e) {
@@ -155,21 +172,21 @@ public final class PublishCommand implements Command {
         System.out.println("  " + dist.resolve(shaName));
 
         if (args.isEmpty()) {
-            System.out.println("upload the three files wherever a URL can reach — a GitHub/Gitee "
-                    + "release, an OSS bucket, any static server. then tell a teammate:");
+            System.out.println("upload the three files wherever a URL can reach — a GitHub "
+                    + "release, an mjm: repository, an OSS bucket, any static server. "
+                    + "then tell a teammate:");
             System.out.println("  mjm add \"" + name + "\" gh:<owner>/" + name + "@v" + version);
             return 0;
         }
 
         // target given — attempt native upload
-        String target = args.getFirst();
-        if (target.startsWith("mjm:")) {
+        if (target != null && target.startsWith("mjm:")) {
             return uploadToMjmRepository(target, project, dist, jarName, descriptorName, shaName);
         }
-        if (target.startsWith("https://") || target.startsWith("http://")) {
+        if (target != null && (target.startsWith("https://") || target.startsWith("http://"))) {
             return uploadToHost(target, project, dist, jarName, descriptorName, shaName);
         }
-        if (!target.startsWith("gh:")) {
+        if (target != null && !target.startsWith("gh:")) {
             System.err.println("mjm: unknown publish target '" + target
                     + "' — use gh:owner/repo, mjm:https://host/, or an http(s) base URL");
             return 1;
@@ -430,7 +447,15 @@ public final class PublishCommand implements Command {
         System.out.println("  uploaded " + fileName);
     }
 
-    private static String descriptor(MjProject project) {
+    /** The base an mjm: declaration points at, normalized with a trailing slash. */
+    private static String mjmBase(String declaration) {
+        String host = declaration != null && declaration.startsWith("mjm:")
+                ? declaration.substring("mjm:".length())
+                : declaration;
+        return ArtifactLocations.baseUrl(host);
+    }
+
+    private static String descriptor(MjProject project, java.util.Set<String> siblings) {
         StringBuilder out = new StringBuilder();
         out.append("[project]\n");
         out.append("name = \"").append(project.name()).append("\"\n");
@@ -456,7 +481,8 @@ public final class PublishCommand implements Command {
             out.append("\n[deps]\n");
             for (Requirement requirement : project.requirements()) {
                 out.append("\"").append(requirement.id()).append("\" = \"")
-                        .append(requirementValue(requirement)).append("\"\n");
+                        .append(requirementValue(requirement, siblings.contains(requirement.id())))
+                        .append("\"\n");
             }
         }
         return out.toString();
@@ -467,13 +493,20 @@ public final class PublishCommand implements Command {
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
-    private static String requirementValue(Requirement requirement) {
+    private static String requirementValue(Requirement requirement, boolean sibling) {
         return switch (requirement.species()) {
             case CENTRAL -> requirement.version();
             case GH -> requirement.origin() + "@" + requirement.tag();
             case URL -> requirement.url();
-            case NAMED -> throw new IllegalStateException(
-                    "a repo-bound dependency never reaches a published descriptor");
+            // the bare name/version a descriptor is allowed to state; the
+            // resolver reads it back as an artifact of the publishing repository
+            case NAMED -> {
+                if (!sibling) {
+                    throw new IllegalStateException(
+                            "a non-sibling repo-bound dependency never reaches a descriptor");
+                }
+                yield requirement.version();
+            }
         };
     }
 
