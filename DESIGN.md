@@ -221,6 +221,7 @@ scopes 只关心 compile/runtime;provided/test 大部分忽略。
 ### 6.1 存储
 
 - `~/.mjm/store/` 按 sha256 内容寻址存 jar,全机一份
+- URL→digest 索引以**锁里的 url 原样**为 key:相对 `file:` 行因此能跨 checkout 命中,`--offline` 在搬迁后的目录里仍然可用
 - classpath 直接指向 store 内文件,**不拷贝、不链接**(Java 无 node_modules 式目录约束)
 - store 目录只读(555)+ 下载用文件锁保证并发安全(吸收自 Go module cache:防工具误改 jar)
 
@@ -246,6 +247,7 @@ sha256 = "…"
 depth = 1
 ```
 
+- `local:` 来源的 `url` 写为**相对项目根的** `file:vendor/…` 形式(路径落在项目根之外时才写绝对 `file:///…`),读取时按项目根展开——锁不再绑定某个 checkout 的绝对路径,同一 fixture 在两个目录锁出的字节一致
 - sha256 + meta-sha256 双钉(artifact 与元数据),每次下载核对,任一不匹配即失败
 - Central artifact 优先用其自带 `.sha256`,缺失则现算并钉死
 - lock 存在且与 mjm.toml 一致 → 直接采用,不重新解析

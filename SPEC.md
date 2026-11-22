@@ -273,7 +273,10 @@ id = "com.example:foo"    # central: "group:artifact";mjm 原生: repo 名
 version = "1.2.3"
 source = "central"        # "central" / "gh:owner/repo" / "gitee:owner/repo" / "url"
                           # / 命名仓库的 base 原文(如 "local:vendor")
-url = "https://…"         # 实际下载 URL(local: 仓库为 file:// URI),必须 https 或 file://
+url = "https://…"         # 实际下载 URL。local: 仓库写为相对项目根的 file: 形式
+                          # (如 file:vendor/com/…/x.jar),读取时按项目根展开;
+                          # 路径落在项目根之外(如 local:/opt/repo)仍写绝对 file:///…;
+                          # 旧的绝对 file:/// 锁行照旧可读
 sha256 = "…"              # artifact 字节(jar),64 位十六进制,必填
 meta-sha256 = "…"         # 元数据字节(pom.xml 或描述符);URL 叶子无元数据,省略该字段
 depth = 1                 # 实际深度,>= 1

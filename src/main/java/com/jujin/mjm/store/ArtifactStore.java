@@ -213,20 +213,26 @@ public final class ArtifactStore {
     }
 
     private byte[] fetch(String url) {
-        URI uri = URI.create(url);
-        if (url.startsWith("file://")) {
+        if (url.startsWith("file:")) {
+            // A lock row may be relative (file:vendor/…): expand it against the
+            // project root. The URL string itself — exactly as the lock wrote it —
+            // stays the index key, so a store warmed in one checkout answers in
+            // another.
             try {
-                return Files.readAllBytes(Path.of(uri));
+                return Files.readAllBytes(
+                        com.jujin.mjm.resolve.ArtifactLocations.localPath(
+                                url, com.jujin.mjm.resolve.ArtifactLocations.projectRoot()));
             } catch (IOException | IllegalArgumentException e) {
                 throw new StoreException("cannot read " + url, e);
             }
         }
+        URI uri = URI.create(url);
         // https everywhere, except plain http on the loopback — the local
         // test/dev channel never crosses a network.
         boolean loopbackHttp = url.startsWith("http://")
                 && (uri.getHost().equals("localhost") || uri.getHost().equals("127.0.0.1"));
         if (!url.startsWith("https://") && !loopbackHttp) {
-            throw new StoreException("only https, file:// and loopback http URLs are fetched, got "
+            throw new StoreException("only https, file: and loopback http URLs are fetched, got "
                     + url);
         }
         try {

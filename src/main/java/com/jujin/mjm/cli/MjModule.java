@@ -27,6 +27,9 @@ public final class MjModule implements ModuleEx {
         binder.bind(LockService.class).to(LockService.class);
         binder.bind(CommandRunner.class).to(CommandRunner.class);
         Path projectDir = Path.of("").toAbsolutePath();
+        // one run, one project: relative local: bases and relative file: lock
+        // rows resolve against this, not against the shell's cwd
+        com.jujin.mjm.resolve.ArtifactLocations.useProjectRoot(projectDir);
         binder.contribute(Command.class).addDeferred("lock",
                 c -> new LockCommand(c.get(LockService.class), projectDir));
         binder.contribute(Command.class).addDeferred("build",

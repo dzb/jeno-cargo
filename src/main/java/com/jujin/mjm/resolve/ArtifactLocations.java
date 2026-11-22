@@ -1,18 +1,43 @@
 package com.jujin.mjm.resolve;
 
+import java.net.URI;
+import java.nio.file.Path;
 import java.util.Map;
 
 /**
  * The one place that turns coordinates into URLs — Maven's repository layout
  * and mj-native release layout, over three base kinds: the Central default,
  * an https named repository, and a {@code local:} directory (a Maven-layout
- * folder on disk, served as a {@code file://} URL — the self-bootstrap
- * channel of DESIGN.md Q9).
+ * folder on disk — the self-bootstrap channel of DESIGN.md Q9).
+ *
+ * <p>A {@code local:} artifact is written into {@code mjm.lock} as
+ * {@code file:vendor/com/…/x.jar} — relative to the project root, so the lock
+ * does not bind one checkout's absolute path. Reading expands it against the
+ * project root again ({@link #localPath}); {@code file:///abs/…} rows stay
+ * readable for locks written before this rule. Only paths outside the project
+ * root (for example {@code local:/opt/repo}) are written absolute, because a
+ * relative form would not describe them.
  */
 public final class ArtifactLocations {
 
     /** Maven Central's canonical repository base — the default of {@link #centralBase()}. */
     public static final String CENTRAL_BASE = "https://repo.maven.apache.org/maven2/";
+
+    /**
+     * The project this process works in. A {@code local:} base declared as a
+     * relative path, and a relative {@code file:} lock URL, both resolve here —
+     * never against whatever directory the shell happened to start in.
+     */
+    private static Path projectRoot = Path.of("").toAbsolutePath().normalize();
+
+    /** One process works in one project; the CLI sets this once at assembly. */
+    public static void useProjectRoot(Path projectDir) {
+        projectRoot = projectDir.toAbsolutePath().normalize();
+    }
+
+    public static Path projectRoot() {
+        return projectRoot;
+    }
 
     /** Maven Central's effective base — overridable by {@code -Dmjm.central.base} (mirrors, tests). */
     public static String centralBase() {
@@ -36,9 +61,9 @@ public final class ArtifactLocations {
 
     /**
      * The base a named repository resolves to: Central when the name is null,
-     * the declared base otherwise. {@code local:} paths are normalized here —
-     * {@code ~} expands to the home directory, relative paths stay relative
-     * (they resolve against the working directory, i.e. the project root).
+     * the declared base otherwise. A {@code local:} path keeps its declaration
+     * as written ({@code ~} expands to the home directory); a relative one is
+     * resolved against the project root where the URL is built.
      */
     public static String repositoryBase(Map<String, String> repos, String name) {
         if (name == null) {
@@ -86,17 +111,60 @@ public final class ArtifactLocations {
     }
 
     private static String file(String base, String path) {
-        String root = base.startsWith("local:") ? asFileUrl(base.substring("local:".length())) : base;
-        return (root.endsWith("/") ? root : root + "/") + path;
+        if (!base.startsWith("local:")) {
+            return (base.endsWith("/") ? base : base + "/") + path;
+        }
+        Path artifact = localBase(base).resolve(path).normalize();
+        return lockUrl(artifact, projectRoot);
     }
 
-    private static String asFileUrl(String raw) {
-        String path = raw.strip();
-        if (path.startsWith("~/") || path.equals("~")) {
-            path = System.getProperty("user.home") + path.substring(1);
+    /** The declared {@code local:} directory as an absolute path on this machine. */
+    private static Path localBase(String base) {
+        String raw = base.substring("local:".length()).strip();
+        if (raw.startsWith("~/") || raw.equals("~")) {
+            raw = System.getProperty("user.home") + raw.substring(1);
         }
-        java.nio.file.Path normalized = java.nio.file.Path.of(path).normalize();
-        String url = normalized.toUri().toString();
-        return url.endsWith("/") ? url : url + "/";
+        Path declared = Path.of(raw);
+        return declared.isAbsolute()
+                ? declared.normalize()
+                : projectRoot.resolve(declared).normalize();
+    }
+
+    /**
+     * The lock representation of a file on disk: {@code file:vendor/…} when it
+     * sits inside the project (portable), the absolute {@code file:///…} form
+     * when it does not (no relative form could describe it).
+     */
+    static String lockUrl(Path artifact, Path root) {
+        Path normalized = artifact.toAbsolutePath().normalize();
+        if (normalized.startsWith(root)) {
+            return "file:" + root.relativize(normalized).toString().replace('\\', '/');
+        }
+        return normalized.toUri().toString();
+    }
+
+    /** The absolute URL a lock row points at, expanded against this project. */
+    public static String expand(String url) {
+        return expand(url, projectRoot);
+    }
+
+    /** The same expansion against an explicit root — the pure form, for callers and tests. */
+    public static String expand(String url, Path root) {
+        return url.startsWith("file:") ? localPath(url, root).toUri().toString() : url;
+    }
+
+    /**
+     * The file a {@code file:} URL points at. Absolute {@code file:///…} rows
+     * (old locks) resolve as they are; a relative {@code file:vendor/…} row is
+     * relative to the project root, never to the working directory.
+     */
+    public static Path localPath(String url, Path root) {
+        String rest = url.substring("file:".length());
+        if (rest.startsWith("//")) {
+            return Path.of(URI.create(url));
+        }
+        Path declared = Path.of(rest);
+        return (declared.isAbsolute() ? declared : root.resolve(declared))
+                .toAbsolutePath().normalize();
     }
 }
