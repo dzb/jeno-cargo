@@ -67,8 +67,9 @@ public final class TestCommand implements Command {
             System.err.println("mjm: no mjm.lock in " + projectDir + " — run mjm lock first");
             return 1;
         }
-        List<String> testSources = sources(projectDir.resolve(TEST_SOURCES),
-                Filter.from(projectDir));        if (testSources.isEmpty()) {
+        Filter filter = Filter.from(projectDir);
+        List<String> testSources = sources(projectDir.resolve(TEST_SOURCES), filter);
+        if (testSources.isEmpty()) {
             System.out.println("no tests under " + projectDir.resolve(TEST_SOURCES));
             return 0;
         }
@@ -180,7 +181,7 @@ public final class TestCommand implements Command {
      * Maven's surefire has the same pair; without them a project cannot skip
      * integration-style tests that need a running service.
      */
-    private static final class Filter {
+    static final class Filter {
         final List<String> include;
         final List<String> exclude;
 
@@ -195,9 +196,14 @@ public final class TestCommand implements Command {
             MjProject project;
             try {
                 project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
-            } catch (IOException e) {
-                // no manifest: build/lock already report it; test without filters
+            } catch (java.nio.file.NoSuchFileException e) {
+                // no manifest at all: build/lock already report that; test unfiltered
                 return new Filter(List.of(), List.of());
+            } catch (IOException e) {
+                // the file is there but cannot be read — silence would run every
+                // test and hide why the filters did not apply
+                throw new IllegalStateException("cannot read "
+                        + projectDir.resolve("mjm.toml") + " — " + e.getMessage(), e);
             }
             return new Filter(project.testInclude(), project.testExclude());
         }

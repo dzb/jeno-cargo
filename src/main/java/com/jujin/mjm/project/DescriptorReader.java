@@ -74,7 +74,9 @@ public final class DescriptorReader {
 
         Integer javaVersion = null;
         Map<String, Object> javaSection = optionalSection(root, "java");
-        if (javaSection != null) {
+        // SPEC.md §3.1: [java].version is optional, same semantics as §2.1 — an
+        // empty [java] means "no target", not a missing required key.
+        if (javaSection != null && javaSection.containsKey("version")) {
             javaVersion = requireInteger(javaSection, "java", "version");
         }
 

@@ -3,6 +3,7 @@ package com.jujin.mjm.project;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -49,6 +50,20 @@ class DescriptorReaderTest {
             () -> DescriptorReader.parse(DESCRIPTOR, "mylib", "1.3.0"));
         assertTrue(version.getMessage().contains("declares version '1.2.0'"),
                 "got: " + version.getMessage());
+    }
+
+    @Test
+    void anEmptyJavaSectionMeansNoTarget() {
+        // SPEC.md §3.1: [java].version is optional (same semantics as §2.1)
+        Descriptor descriptor = DescriptorReader.parse("""
+            [project]
+            name = "mylib"
+            version = "1.2.0"
+
+            [java]
+            """, "mylib", "1.2.0");
+
+        assertNull(descriptor.javaVersion(), "an empty [java] must not demand a version");
     }
 
     @Test

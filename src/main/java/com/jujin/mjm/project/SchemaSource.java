@@ -34,28 +34,62 @@ final class SchemaSource {
                 continue;
             }
             if (line.startsWith("[")) {
-                int close = line.indexOf(']');
+                int close = outsideQuotes(line, ']', 1);
                 if (close < 0) {
                     continue;
                 }
-                currentSection = line.substring(1, close).strip();
+                currentSection = unquote(line.substring(1, close).strip());
                 source.sections.putIfAbsent(currentSection, new Site(lineNumber, column));
                 continue;
             }
-            int equals = line.indexOf('=');
+            int equals = outsideQuotes(line, '=', 0);
             if (equals < 0) {
                 continue;  // a string-array continuation
             }
-            String key = line.substring(0, equals).strip();
-            if (key.length() >= 2 && key.startsWith("\"") && key.endsWith("\"")) {
-                key = key.substring(1, key.length() - 1);
-            } else if (!key.matches("[A-Za-z0-9_-]+")) {
+            String rawKey = line.substring(0, equals).strip();
+            String key = unquote(rawKey);
+            if (key.equals(rawKey) && !key.matches("[A-Za-z0-9_-]+")) {
                 continue;  // a continuation line that happens to hold '='
             }
             source.keys.computeIfAbsent(currentSection, ignored -> new LinkedHashMap<>())
                     .putIfAbsent(key, new Site(lineNumber, column));
         }
         return source;
+    }
+
+    /**
+     * The first {@code target} outside a basic string. A quoted key may contain
+     * {@code =} ({@code "mi=an"}), and a quoted table name may contain
+     * {@code ]} ({@code ["dep"]}) — both are legal TOML, and both used to eat
+     * the separator and leave an error with no line or column.
+     */
+    private static int outsideQuotes(String line, char target, int from) {
+        boolean quoted = false;
+        for (int i = from; i < line.length(); i++) {
+            char current = line.charAt(i);
+            if (quoted && current == '\\') {
+                i++;  // an escaped character cannot close the string
+                continue;
+            }
+            if (current == '"') {
+                quoted = !quoted;
+                continue;
+            }
+            if (current == target && !quoted) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** A basic string without its quotes and with the two escapes the subset allows. */
+    private static String unquote(String token) {
+        if (token.length() < 2 || !token.startsWith("\"") || !token.endsWith("\"")) {
+            return token;
+        }
+        return token.substring(1, token.length() - 1)
+                .replace("\\\"", "\"")
+                .replace("\\\\", "\\");
     }
 
     /** The header line of a section, or null when it is absent. */

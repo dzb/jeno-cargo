@@ -88,6 +88,37 @@ class ProjectReaderTest {
     }
 
     @Test
+    void quotedKeysAndSectionsStillCarryTheirPosition() {
+        // both are legal TOML; the scanner must not read the '=' or ']' inside
+        // the quotes as the separator and lose the coordinates
+        ProjectException quotedKey = assertThrows(ProjectException.class,
+            () -> ProjectReader.parse("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+                "mi=an" = 1
+                """));
+        assertTrue(quotedKey.getMessage().contains("mjm.toml:4:1"),
+                "got: " + quotedKey.getMessage());
+        assertTrue(quotedKey.getMessage().contains("[project].mi=an is not a key"),
+                "the key is reported as it was written, got: " + quotedKey.getMessage());
+
+        ProjectException quotedSection = assertThrows(ProjectException.class,
+            () -> ProjectReader.parse("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+
+                ["dep"]
+                "com.example:lib-a" = "1.0.0"
+                """));
+        assertTrue(quotedSection.getMessage().contains("mjm.toml:5:1"),
+                "got: " + quotedSection.getMessage());
+        assertTrue(quotedSection.getMessage().contains("unknown section [dep]"),
+                "got: " + quotedSection.getMessage());
+    }
+
+    @Test
     void everyDocumentedKeyIsAccepted() {
         MjProject project = ProjectReader.parse("""
             [project]

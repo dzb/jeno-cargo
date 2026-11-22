@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The built-in runner (node:test's shape): compile src/test/java against the
@@ -94,6 +96,8 @@ class TestRunnerTest {
 
             import org.junit.jupiter.api.Test;
             import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
             public class JupiterTests {
                 @Test
@@ -122,6 +126,8 @@ class TestRunnerTest {
 
             import org.junit.jupiter.api.Test;
             import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
             public class JupiterTests {
                 @Test
@@ -144,6 +150,24 @@ class TestRunnerTest {
         lock();
         assertEquals(0, new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of()),
                 "a project without src/test/java has nothing to run");
+    }
+
+    @Test
+    void aMissingManifestMeansNoFilters() {
+        // the one case that stays silent: lock/build already say mjm.toml is missing
+        assertTrue(TestCommand.Filter.from(dir).keeps("anything.java"));
+    }
+
+    @Test
+    void aManifestThatCannotBeReadIsAnErrorNotAnEmptyFilter() throws IOException {
+        Files.createDirectory(dir.resolve("mjm.toml"));  // exists, but is not a file
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> TestCommand.Filter.from(dir));
+
+        assertTrue(error.getMessage().contains("cannot read"),
+                "a broken manifest must not silently run every test, got: "
+                        + error.getMessage());
     }
 
     private void project() throws IOException {
