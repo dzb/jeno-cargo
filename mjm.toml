@@ -17,15 +17,15 @@ max-depth = 3   # junit arrives through jupiter-engine -> platform-engine -> ope
 [repos]
 vendor = "local:vendor"
 
-[deps.vendor]
-"com.jujin8.freeway:freeway-commons" = "2.0.2"
-"com.jujin8.freeway:freeway-ioc" = "2.0.2"
-"org.slf4j:slf4j-api" = "2.0.18"
-"org.junit.jupiter:junit-jupiter-api" = "6.1.3"
-"org.junit.jupiter:junit-jupiter-engine" = "6.1.3"
-"org.junit.platform:junit-platform-commons" = "6.1.3"
-"org.junit.platform:junit-platform-engine" = "6.1.3"
-"org.junit.platform:junit-platform-launcher" = "6.1.3"
+[deps]
+"com.jujin8.freeway:freeway-commons" = "vendor:2.0.2"
+"com.jujin8.freeway:freeway-ioc" = "vendor:2.0.2"
+"org.slf4j:slf4j-api" = "vendor:2.0.18"
+"org.junit.jupiter:junit-jupiter-api" = "vendor:6.1.3"
+"org.junit.jupiter:junit-jupiter-engine" = "vendor:6.1.3"
+"org.junit.platform:junit-platform-commons" = "vendor:6.1.3"
+"org.junit.platform:junit-platform-engine" = "vendor:6.1.3"
+"org.junit.platform:junit-platform-launcher" = "vendor:6.1.3"
 
 [scripts]
 bootstrap = "mjm run com.jujin.mjm.cli.Mjm"
