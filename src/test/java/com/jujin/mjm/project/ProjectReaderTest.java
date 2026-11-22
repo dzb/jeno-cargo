@@ -2,6 +2,7 @@ package com.jujin.mjm.project;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -54,6 +55,8 @@ class ProjectReaderTest {
                 """));
         assertTrue(unknown.getMessage().contains("unknown section [dep]"),
                 "a misspelled section must be named, got: " + unknown.getMessage());
+        assertTrue(unknown.getMessage().contains("mjm.toml:5:1"),
+                "the section's line and column are named, got: " + unknown.getMessage());
 
         ProjectException notATable = assertThrows(ProjectException.class,
             () -> ProjectReader.parse("""
@@ -61,6 +64,61 @@ class ProjectReaderTest {
                 """));
         assertTrue(notATable.getMessage().contains("must be a table"),
                 "got: " + notATable.getMessage());
+    }
+
+    @Test
+    void anUnknownKeyFailsWithItsLineColumnAndTheNearestKey() {
+        ProjectException error = assertThrows(ProjectException.class,
+            () -> ProjectReader.parse("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+                mian = "com.example.Main"
+                """));
+
+        assertTrue(error.getMessage().contains("mjm.toml:4:1"),
+                "the key's line and column are named, got: " + error.getMessage());
+        assertTrue(error.getMessage().contains("[project].mian is not a key"),
+                "the key and its section are named, got: " + error.getMessage());
+        assertTrue(error.getMessage().contains("did you mean 'main'?"),
+                "a typo gets the key it meant, got: " + error.getMessage());
+        assertTrue(error.getMessage().contains("allowed: "),
+                "and the keys that are legal there, got: " + error.getMessage());
+    }
+
+    @Test
+    void everyDocumentedKeyIsAccepted() {
+        MjProject project = ProjectReader.parse("""
+            [project]
+            name = "demo"
+            group = "com.example"
+            version = "0.1.0"
+            main = "com.example.Main"
+            summary = "a demo"
+            homepage = "https://example.com/demo"
+            license = "Apache-2.0"
+
+            [java]
+            version = 21
+
+            [limits]
+            max-depth = 3
+
+            [build]
+            parameters = ["-parameters"]
+            processors = ["com.example:proc:1.0.0"]
+
+            [test]
+            include = ["*Test"]
+            exclude = ["*Slow*"]
+            """);
+
+        assertEquals("com.example.Main", project.main());
+        assertEquals("https://example.com/demo", project.homepage());
+        assertEquals(3, project.maxDepth());
+        assertEquals(List.of("-parameters"), project.buildParameters());
+        assertEquals(1, project.processorRequirements().size(),
+                "the processor coordinate resolves as its own closure");
     }
 
     @Test

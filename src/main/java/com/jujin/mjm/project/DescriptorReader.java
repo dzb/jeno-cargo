@@ -29,6 +29,8 @@ public final class DescriptorReader {
      */
     public static Descriptor parse(String text, String expectedName, String expectedVersion) {
         Map<String, Object> root = TomlUtils.parse(text);
+        SchemaSource source = SchemaSource.scan(text);
+        String file = expectedName + "-" + expectedVersion + ".mjm.toml";
 
         for (Map.Entry<String, Object> entry : root.entrySet()) {
             if (!(entry.getValue() instanceof Map)) {
@@ -37,10 +39,25 @@ public final class DescriptorReader {
             }
             switch (entry.getKey()) {
                 case "project", "java", "deps", "retract" -> { }
-                default -> throw new ProjectException("descriptor " + expectedName
-                        + ": unknown section [" + entry.getKey()
+                default -> throw new ProjectException(
+                        ProjectReader.at(file, source.section(entry.getKey()))
+                        + "descriptor " + expectedName + ": unknown section [" + entry.getKey()
                         + "] — a descriptor carries facts only (SPEC.md §3)");
             }
+        }
+
+        // Fixed sections follow SPEC.md §3.1: an unknown key is a typo. [deps]
+        // and [retract] are tables of user-chosen names — values decide.
+        Map<String, Object> projectKeys = optionalSection(root, "project");
+        if (projectKeys != null) {
+            ProjectReader.checkKeys(projectKeys, source, file, "project",
+                    java.util.Set.of("name", "group", "version", "summary", "homepage",
+                            "license"), "SPEC.md §3.1");
+        }
+        Map<String, Object> javaKeys = optionalSection(root, "java");
+        if (javaKeys != null) {
+            ProjectReader.checkKeys(javaKeys, source, file, "java",
+                    java.util.Set.of("version"), "SPEC.md §3.1");
         }
 
         Map<String, Object> projectSection = section(root, "project");

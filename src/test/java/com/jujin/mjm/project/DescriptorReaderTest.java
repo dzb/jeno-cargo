@@ -52,6 +52,24 @@ class DescriptorReaderTest {
     }
 
     @Test
+    void descriptorsRejectUnknownKeysWithTheirPosition() {
+        ProjectException error = assertThrows(ProjectException.class,
+            () -> DescriptorReader.parse("""
+                [project]
+                name = "mylib"
+                version = "1.2.0"
+                sumary = "a library"
+                """, "mylib", "1.2.0"));
+
+        assertTrue(error.getMessage().contains("mylib-1.2.0.mjm.toml:4:1"),
+                "the file, line and column are named, got: " + error.getMessage());
+        assertTrue(error.getMessage().contains("[project].sumary is not a key"),
+                "got: " + error.getMessage());
+        assertTrue(error.getMessage().contains("did you mean 'summary'?"),
+                "got: " + error.getMessage());
+    }
+
+    @Test
     void descriptorsRejectRuleSections() {
         assertThrows(ProjectException.class,
             () -> DescriptorReader.parse("""

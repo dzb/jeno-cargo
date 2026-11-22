@@ -32,10 +32,36 @@ public final class ProjectReader {
     private static final Pattern TAG = Pattern.compile("[vV]?(\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.]+)?)");
     private static final Pattern OWNER = Pattern.compile("[A-Za-z0-9_.-]+");
 
+    /**
+     * The sections whose keys are fixed: SPEC.md §2.1 lists every field, so a
+     * key outside the list is a typo, never an extension point. Sections that
+     * are tables of user-chosen names ({@code [deps]}, {@code [repos]},
+     * {@code [scripts]}, {@code [overrides]}) validate value shapes instead.
+     */
+    private static final Map<String, Set<String>> FIXED_KEYS = Map.of(
+            "project", Set.of("name", "group", "version", "main", "summary", "homepage",
+                    "license"),
+            "java", Set.of("version"),
+            "limits", Set.of("max-depth"),
+            "build", Set.of("parameters", "processors"),
+            "test", Set.of("include", "exclude"));
+
+    private static final String SPEC_SECTION = "SPEC.md §2.1";
+
     private ProjectReader() {}
 
     public static MjProject parse(String text) {
+        return parse(text, "mjm.toml", SPEC_SECTION);
+    }
+
+    /**
+     * The same parse, labelled for error messages — {@code file} is the name
+     * the user typed or the descriptor that was fetched, {@code spec} the
+     * section of SPEC.md that decided the schema.
+     */
+    static MjProject parse(String text, String file, String spec) {
         Map<String, Object> root = TomlUtils.parse(text);
+        SchemaSource source = SchemaSource.scan(text);
 
         for (Map.Entry<String, Object> entry : root.entrySet()) {
             if (!(entry.getValue() instanceof Map)) {
@@ -46,10 +72,18 @@ public final class ProjectReader {
                 case "project", "java", "deps", "dev-deps", "repos", "limits", "overrides",
                      "scripts", "build", "test" -> { }
 
-                // [test] is read by TestCommand (include/exclude patterns);
-                // validating its keys here would duplicate that owner
-                default -> throw new ProjectException("unknown section [" + entry.getKey()
+                default -> throw new ProjectException(at(file, source.section(entry.getKey()))
+                        + "unknown section [" + entry.getKey()
                         + "] — mjm.toml is a closed schema (SPEC.md §2)");
+            }
+        }
+
+        // Fixed sections list every field in SPEC.md §2.1: an unknown key is a
+        // misspelling that used to be dropped silently.
+        for (Map.Entry<String, Set<String>> fixed : FIXED_KEYS.entrySet()) {
+            Map<String, Object> fixedSection = optionalSection(root, fixed.getKey());
+            if (fixedSection != null) {
+                checkKeys(fixedSection, source, file, fixed.getKey(), fixed.getValue(), spec);
             }
         }
 
@@ -393,5 +427,77 @@ public final class ProjectReader {
                     + min + " and " + max + ", got " + integer);
         }
         return integer.intValue();
+    }
+
+    // ------------------------------------------------------------------
+    // closed-schema key checks — positions come from SchemaSource
+    // ------------------------------------------------------------------
+
+    /** Rejects every key outside one fixed section's list, naming the line. */
+    static void checkKeys(Map<String, Object> section, SchemaSource source, String file,
+                          String sectionName, Set<String> allowed, String spec) {
+        for (String key : section.keySet()) {
+            if (!allowed.contains(key)) {
+                throw unknownKey(file, source, sectionName, key, allowed, spec);
+            }
+        }
+    }
+
+    private static ProjectException unknownKey(String file, SchemaSource source, String sectionName,
+                                               String key, Set<String> allowed, String spec) {
+        StringBuilder message = new StringBuilder(at(file, source.key(sectionName, key)));
+        message.append('[').append(sectionName).append("]").append('.').append(key)
+                .append(" is not a key — allowed: ")
+                .append(String.join(", ", allowed.stream().sorted().toList()));
+        String guess = nearest(key, allowed);
+        if (guess != null) {
+            message.append("; did you mean '").append(guess).append("'?");
+        }
+        message.append(" (").append(spec).append(')');
+        return new ProjectException(message.toString());
+    }
+
+    /**
+     * {@code file:line:column: } — the prefix every schema error carries. A key
+     * the scan could not place falls back to the file name alone, so the
+     * message never loses the rule it is naming.
+     */
+    static String at(String file, SchemaSource.Site site) {
+        return site == null ? file + ": "
+                : file + ":" + site.line() + ":" + site.column() + ": ";
+    }
+
+    /** The allowed key closest to a typo, when it is close enough to suggest. */
+    private static String nearest(String key, Set<String> candidates) {
+        String best = null;
+        int bestDistance = 3;  // two edits or fewer is a typo, not a different name
+        for (String candidate : candidates) {
+            int distance = editDistance(key, candidate);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = candidate;
+            }
+        }
+        return best;
+    }
+
+    private static int editDistance(String left, String right) {
+        int[] previous = new int[right.length() + 1];
+        int[] current = new int[right.length() + 1];
+        for (int j = 0; j <= right.length(); j++) {
+            previous[j] = j;
+        }
+        for (int i = 1; i <= left.length(); i++) {
+            current[0] = i;
+            for (int j = 1; j <= right.length(); j++) {
+                int substitution = left.charAt(i - 1) == right.charAt(j - 1) ? 0 : 1;
+                current[j] = Math.min(Math.min(current[j - 1] + 1, previous[j] + 1),
+                        previous[j - 1] + substitution);
+            }
+            int[] swap = previous;
+            previous = current;
+            current = swap;
+        }
+        return previous[right.length()];
     }
 }
