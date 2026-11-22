@@ -103,51 +103,18 @@ public final class ClasspathCommand implements Command {
             return 1;
         }
 
-        List<Path> entries = new ArrayList<>();
-        if (test) {
-            entries.add(projectDir.resolve(TEST_CLASSES));
-        }
-        entries.add(projectDir.resolve(CLASSES));
-
-        Map<String, LockedArtifact> byId = new LinkedHashMap<>();
-        for (LockedArtifact artifact : locked) {
-            byId.put(artifact.id(), artifact);
-        }
-
-        List<LockedArtifact> wanted = new ArrayList<>();
-        if (test) {
-            // the whole closure, main and dev alike; processors are build tools
-            // and never belong on an IDE classpath
-            for (LockedArtifact artifact : locked) {
-                if (artifact.scope() != Scope.PROCESSOR) {
-                    wanted.add(artifact);
-                }
-            }
-        } else {
-            // strict visibility: only what the manifest declares directly
-            for (Requirement requirement : project.requirements()) {
-                LockedArtifact artifact = byId.get(requirement.id());
-                if (artifact == null) {
-                    System.err.println("mjm: mjm.lock is stale — '" + requirement.id()
-                            + "' is declared in mjm.toml but not locked; run mjm lock");
-                    return 1;
-                }
-                wanted.add(artifact);
-            }
+        ClasspathAssembler.Classpath classpath;
+        try {
+            classpath = ClasspathAssembler.of(
+                    test ? ClasspathAssembler.Mode.EXPORT_TEST
+                            : ClasspathAssembler.Mode.EXPORT_MAIN,
+                    projectDir, store, ClasspathAssembler.Input.export(project, locked));
+        } catch (ClasspathAssembler.ClasspathException e) {
+            System.err.println("mjm: " + e.getMessage());
+            return 1;
         }
 
-        for (LockedArtifact artifact : wanted) {
-            Path jar = store.findByDigest(artifact.sha256(), ArtifactStore.Kind.JAR);
-            if (jar == null) {
-                System.err.println("mjm: " + artifact.id() + "@" + artifact.version()
-                        + " is not in the store — run mjm lock");
-                return 1;
-            }
-            entries.add(jar);
-        }
-
-        String line = entries.stream().map(Path::toString)
-                .collect(java.util.stream.Collectors.joining(File.pathSeparator));
+        String line = classpath.joined();
         if (file != null) {
             try {
                 Path parent = file.toAbsolutePath().getParent();

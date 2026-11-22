@@ -92,14 +92,14 @@ public final class BuildCommand implements Command {
             return 1;
         }
 
-        List<String> compileClasspath = new ArrayList<>();
-        for (var requirement : project.requirements()) {
-            if (!jarById.containsKey(requirement.id())) {
-                System.err.println("mjm: mjm.lock is stale — '" + requirement.id()
-                        + "' is declared in mjm.toml but not locked; run mjm lock");
-                return 1;
-            }
-            compileClasspath.add(jarById.get(requirement.id()).toString());
+        String compileClasspath;
+        try {
+            compileClasspath = ClasspathAssembler.of(ClasspathAssembler.Mode.COMPILE,
+                    projectDir, store,
+                    ClasspathAssembler.Input.compile(project, jarById)).joined();
+        } catch (ClasspathAssembler.ClasspathException e) {
+            System.err.println("mjm: " + e.getMessage());
+            return 1;
         }
         List<String> sources = sources();
         if (sources.isEmpty()) {
@@ -126,7 +126,7 @@ public final class BuildCommand implements Command {
         command.add("-d");
         command.add(output.toString());
         command.add("-cp");
-        command.add(String.join(File.pathSeparator, compileClasspath));
+        command.add(compileClasspath);
         // full debug info: line numbers, source file, and local variable names
         // — what a debugger and a decompiler need to make `mjm source` trees
         // line up with the bytes
@@ -141,7 +141,7 @@ public final class BuildCommand implements Command {
         }
         if (!processorPath.isEmpty()) {
             command.add("-processorpath");
-            command.add(String.join(File.pathSeparator, processorPath));
+            command.add(ClasspathAssembler.join(processorPath));
         }
         if (project.javaVersion() != null) {
             command.add("--release");

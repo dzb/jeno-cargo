@@ -110,13 +110,13 @@ public final class TestCommand implements Command {
     /** Compile and fork; the caller holds the project's lock. */
     private int runTests(List<String> testSources) {
         List<Path> toolchain = toolchainPaths();
-        List<String> compileClasspath = classpath(toolchain, false);
-        if (!compile(testSources, compileClasspath)) {
+        ClasspathAssembler.Classpath compileClasspath = classpath(toolchain, false);
+        if (!compile(testSources, compileClasspath.joined())) {
             return 1;
         }
 
         // fork a separate JVM — complete classloader isolation from the mjm process
-        List<String> runClasspath = classpath(toolchain, true);
+        String runClasspath = classpath(toolchain, true).joined();
         Path testOutput = projectDir.resolve(TEST_OUTPUT);
 
         Path results = projectDir.resolve(RESULTS);
@@ -131,7 +131,7 @@ public final class TestCommand implements Command {
         List<String> command = new ArrayList<>();
         command.add("java");
         command.add("-cp");
-        command.add(String.join(File.pathSeparator, runClasspath));
+        command.add(runClasspath);
         command.add("com.jujin.mjm.test.MjmTestFork");
         command.add(testOutput.toString());
         command.add(results.toAbsolutePath().toString());
@@ -163,26 +163,11 @@ public final class TestCommand implements Command {
     // classpath assembly
     // ------------------------------------------------------------------
 
-    private List<String> classpath(List<Path> toolchain, boolean includeTestOutput) {
-        List<String> entries = new ArrayList<>();
-        Path testOutput = projectDir.resolve(TEST_OUTPUT);
-        if (includeTestOutput && Files.exists(testOutput)) {
-            entries.add(testOutput.toString());
-        }
-        entries.add(projectDir.resolve("target/classes").toString());
-        // the full closure, MAIN and DEV alike: [dev-deps] exists for this
-        // classpath and for nothing else
-        for (LockedArtifact artifact : lock()) {
-            Path jar = store.findByDigest(artifact.sha256(), ArtifactStore.Kind.JAR);
-            if (jar != null) {
-                entries.add(jar.toString());
-            }
-        }
-        entries.add(runtimeLocation().toString());
-        for (Path jar : toolchain) {
-            entries.add(jar.toString());
-        }
-        return entries;
+    private ClasspathAssembler.Classpath classpath(List<Path> toolchain,
+                                                  boolean includeTestOutput) {
+        return ClasspathAssembler.of(ClasspathAssembler.Mode.TEST, projectDir, store,
+                ClasspathAssembler.Input.test(lock(), toolchain, runtimeLocation(),
+                        includeTestOutput));
     }
 
     /**
@@ -324,7 +309,7 @@ public final class TestCommand implements Command {
         }
     }
 
-    private boolean compile(List<String> sources, List<String> classpath) {
+    private boolean compile(List<String> sources, String classpath) {
         Path output = projectDir.resolve(TEST_OUTPUT);
         // a stale test-classes tree makes deleted tests run forever: the fork
         // scans whatever is on disk, so `NoClassDefFoundError` from a removed
@@ -354,7 +339,7 @@ public final class TestCommand implements Command {
         command.add("-d");
         command.add(output.toString());
         command.add("-cp");
-        command.add(String.join(File.pathSeparator, classpath));
+        command.add(classpath);
         // test code compiles for the same target as the code under test
         Integer javaVersion = projectJavaVersion();
         if (javaVersion != null) {

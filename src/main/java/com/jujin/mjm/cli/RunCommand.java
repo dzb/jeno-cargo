@@ -87,7 +87,7 @@ public final class RunCommand implements Command {
             return runScript(target, scriptCommand, rest);
         }
 
-        List<String> classpath;
+        String classpath;
         try {
             classpath = classpath();
         } catch (RuntimeException e) {
@@ -98,7 +98,7 @@ public final class RunCommand implements Command {
         List<String> command = new ArrayList<>();
         command.add("java");
         command.add("-cp");
-        command.add(String.join(File.pathSeparator, classpath));
+        command.add(classpath);
         command.addAll(args);
         return exec(command, null, "mjm run");
     }
@@ -115,8 +115,8 @@ public final class RunCommand implements Command {
         Map<String, String> environment = new LinkedHashMap<>();
         environment.put("MJM_HOME", projectDir.toAbsolutePath().toString());
         try {
-            List<String> classpath = classpath();
-            environment.put("MJM_CLASSPATH", String.join(File.pathSeparator, classpath));
+            String classpath = classpath();
+            environment.put("MJM_CLASSPATH", classpath);
         } catch (RuntimeException e) {
             System.err.println("mjm: running '" + name + "' without MJM_CLASSPATH — " + e.getMessage());
         }
@@ -140,7 +140,7 @@ public final class RunCommand implements Command {
      * {@code target/classes} followed by every MAIN jar in the closure.
      * Throws with a next action when the build or the lockfile is missing.
      */
-    private List<String> classpath() {
+    private String classpath() {
         Path output = projectDir.resolve(OUTPUT);
         if (!Files.isDirectory(output)) {
             throw new IllegalStateException(output + " is missing — run mjm build first");
@@ -156,20 +156,8 @@ public final class RunCommand implements Command {
             throw new IllegalStateException("cannot read mjm.lock", e);
         }
 
-        List<String> classpath = new ArrayList<>();
-        classpath.add(output.toString());
-        for (LockedArtifact artifact : locked) {
-            if (!artifact.isMain()) {
-                continue;  // [dev-deps] never reaches a production run
-            }
-            Path jar = store.findByDigest(artifact.sha256(), ArtifactStore.Kind.JAR);
-            if (jar == null) {
-                throw new IllegalStateException(artifact.id() + "@" + artifact.version()
-                        + " is not in the store — run mjm lock");
-            }
-            classpath.add(jar.toString());
-        }
-        return classpath;
+        return ClasspathAssembler.of(ClasspathAssembler.Mode.RUN, projectDir, store,
+                ClasspathAssembler.Input.run(locked)).joined();
     }
 
     private int exec(List<String> command, Map<String, String> environment,

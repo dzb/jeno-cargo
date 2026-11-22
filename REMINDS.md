@@ -397,3 +397,31 @@ manifest 可以使用值形态；旧二进制不能 lock 新形态”，并在 C
 
 **正确的解法**:把 `prepare` 的网络与 store 阶段移出项目锁，只在 `commit` 期间持锁（这需要保证
 “prepare 之后 manifest 没被别人改过”——可以用内容哈希做乐观并发检查）；或引入读/写两把锁。
+
+---
+
+## 14. `mjm test` 的 classpath 仍含 processor 工件（2026-11-22 记录）
+
+**位置**:`ClasspathAssembler`，`Mode.TEST` 与 `Mode.EXPORT_TEST`。
+
+**现状**:测试 classpath（`mjm test`）把锁里**全部**工件放进去，包括 `scope = "processor"`；而给 IDE
+的 `classpath --test`（`EXPORT_TEST`）明确排除 processor。两种行为都在 `ClasspathAssembler` 收拢
+之前就存在，这次只把它们搬进同一个 seam，**没有改任何一个**。
+
+**为什么先不动**:
+- `mjm test` 的 classpath 只影响测试 JVM，processor 多一个 jar 不会让测试失败；`EXPORT_TEST` 的
+  排除是给 IDE 看的（processor 是构建工具，不是 API）。
+- 两边谁对需要一次单独的决定：测试 classpath 到底该不该与“构建工具”隔离？改它会让某些用
+  processor 生成测试代码的项目突然少一个 jar。
+
+**代价/风险**:
+- 同一个概念（测试 classpath）有两个不同答案，读代码的人会以为其中一个是 bug。
+- 若将来 `mjm test` 也排除 processor，依赖 processor 在测试期运行的项目会静默变化。
+
+**触发重新决定的条件**（任一即可）:
+- 有人报告“测试里能用、IDE 里不能用”或反之
+- 引入 workspace 后需要统一 classpath 语义
+- processor 从 `javac -processorpath` 改成别的机制
+
+**正确的解法**:让两个模式共享同一个 scope 过滤策略（大概率先统一为“排除 processor”），并在
+`ClasspathAssembler` 里用一个函数表达，而不是两处 `switch` 分支各写一遍。
