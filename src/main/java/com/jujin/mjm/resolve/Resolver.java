@@ -447,6 +447,13 @@ public final class Resolver {
             String offender = null;
             int offenderDepth = -1;
             for (String id : selected.keySet()) {
+                // The budget governs what the build and the published closure
+                // carry: main and processor reachability (SPEC.md §2.3 — a
+                // test-scope subtree is not charged). Depths stay recorded for
+                // every artifact, and the cycle check above stays global.
+                if (!mainReachable.contains(id) && !processorReachable.contains(id)) {
+                    continue;
+                }
                 int depth = depths.depth(id);
                 if (depth > project.maxDepth() && depth > offenderDepth) {
                     offender = id;
