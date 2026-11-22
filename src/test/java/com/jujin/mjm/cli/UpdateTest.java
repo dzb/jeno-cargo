@@ -90,6 +90,7 @@ class UpdateTest {
                 "http://localhost:" + server.getAddress().getPort()
                         + "/repos/dzb/mjm-cargo/releases/latest");
         System.setProperty("mjm.update.home", home.toString());
+        System.setProperty("mjm.update.backoff.ms", "1,1,1,1");
         java.io.PrintStream original = System.err;
         var errors = new ByteArrayOutputStream();
         int exit;
@@ -101,6 +102,7 @@ class UpdateTest {
             server.stop(0);
             System.clearProperty("mjm.update.api");
             System.clearProperty("mjm.update.home");
+            System.clearProperty("mjm.update.backoff.ms");
         }
 
         String message = errors.toString(StandardCharsets.UTF_8);
@@ -113,7 +115,7 @@ class UpdateTest {
     @Test
     void aPersistentlyTruncatedDownloadNamesPropagation(@TempDir Path home) throws Exception {
         packageDist("0.1.99");
-        HttpServer server = serveLatest("v0.1.99", 3);
+        HttpServer server = serveLatest("v0.1.99", 10);
         Path tmp = Path.of(System.getProperty("java.io.tmpdir"));
         long leftoversBefore = countUpgradeTemps(tmp);
 
@@ -121,6 +123,7 @@ class UpdateTest {
                 "http://localhost:" + server.getAddress().getPort()
                         + "/repos/dzb/mjm-cargo/releases/latest");
         System.setProperty("mjm.update.home", home.toString());
+        System.setProperty("mjm.update.backoff.ms", "1,1,1,1");
         java.io.PrintStream original = System.err;
         var errors = new ByteArrayOutputStream();
         int exit;
@@ -132,16 +135,29 @@ class UpdateTest {
             server.stop(0);
             System.clearProperty("mjm.update.api");
             System.clearProperty("mjm.update.home");
+            System.clearProperty("mjm.update.backoff.ms");
         }
 
         String message = errors.toString(StandardCharsets.UTF_8);
         assertEquals(1, exit);
         assertTrue(message.contains("may not have propagated"),
                 "the next action is named: " + message);
+        assertTrue(message.contains("download attempt 4 failed"),
+                "all five tries happened (four retries): " + message);
         assertFalse(Files.exists(home.resolve(".mjm/marker")),
                 "nothing was installed over the working one");
         assertEquals(leftoversBefore, countUpgradeTemps(tmp),
                 "no mjm-upgrade-* temp file or directory survives the failure");
+    }
+
+    @Test
+    void theShippedRetryWindowSpansAboutFifteenSeconds() {
+        System.clearProperty("mjm.update.backoff.ms");
+
+        long total = java.util.Arrays.stream(UpdateCommand.backoffMillis()).sum();
+
+        assertEquals(14_500L, total,
+                "5 tries with 500ms + 2s + 4s + 8s between them");
     }
 
     private static long countUpgradeTemps(Path tmp) throws IOException {

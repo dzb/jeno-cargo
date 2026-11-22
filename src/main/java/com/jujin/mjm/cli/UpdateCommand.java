@@ -33,9 +33,17 @@ public final class UpdateCommand implements Command {
     private static final String RELEASES_API_DEFAULT =
             "https://api.github.com/repos/dzb/mjm-cargo/releases/latest";
 
-    /** Three tries is enough for a CDN edge to catch up; 300ms then 1s back-off. */
-    private static final int DOWNLOAD_ATTEMPTS = 3;
-    private static final long[] BACKOFF_MS = {300L, 1_000L};
+    /**
+     * GitHub's release assets have taken tens of seconds to appear at the CDN
+     * edge (two releases measured 20–60s). Five tries with 500ms, 2s, 4s and 8s
+     * between them give the asset about fifteen seconds to show up, and still
+     * fail in bounded time.
+     *
+     * <p>The waits are injectable ({@code -Dmjm.update.backoff.ms=1,1,1,1}) so
+     * the retry tests do not spend those fifteen seconds proving the logic.
+     */
+    private static final int DOWNLOAD_ATTEMPTS = 5;
+    private static final long[] BACKOFF_MS = {500L, 2_000L, 4_000L, 8_000L};
 
     private final HttpClient http = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL)
@@ -184,6 +192,7 @@ public final class UpdateCommand implements Command {
      * retried. The releases API lookup is deliberately still one-shot.
      */
     private Fetch downloadWithRetry(String url) throws InterruptedException {
+        long[] backoff = backoffMillis();
         String lastFailure = "no attempt made";
         boolean propagationLikely = false;
         for (int attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt++) {
@@ -209,10 +218,23 @@ public final class UpdateCommand implements Command {
             if (attempt < DOWNLOAD_ATTEMPTS) {
                 System.err.println("download attempt " + attempt + " failed ("
                         + lastFailure + ") — retrying");
-                Thread.sleep(BACKOFF_MS[Math.min(attempt - 1, BACKOFF_MS.length - 1)]);
+                Thread.sleep(backoff[Math.min(attempt - 1, backoff.length - 1)]);
             }
         }
         return new Fetch(null, lastFailure, propagationLikely);
+    }
+
+    /** The shipped back-off, or the test override when one is set. */
+    static long[] backoffMillis() {
+        String override = System.getProperty("mjm.update.backoff.ms");
+        if (override != null && !override.isBlank()) {
+            return java.util.Arrays.stream(override.split(","))
+                    .map(String::strip)
+                    .filter(part -> !part.isEmpty())
+                    .mapToLong(Long::parseLong)
+                    .toArray();
+        }
+        return BACKOFF_MS;
     }
 
     private static void deleteTree(Path root) {
