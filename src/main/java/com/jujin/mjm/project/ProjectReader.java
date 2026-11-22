@@ -114,7 +114,9 @@ public final class ProjectReader {
 
         Integer javaVersion = null;
         Map<String, Object> javaSection = optionalSection(root, "java");
-        if (javaSection != null) {
+        // SPEC.md §2.1: [java].version is optional — absent means "no target",
+        // so an empty [java] section must not fail.
+        if (javaSection != null && javaSection.containsKey("version")) {
             javaVersion = requireInteger(javaSection, "java", "version", 1, 100);
         }
 
@@ -196,7 +198,9 @@ public final class ProjectReader {
 
         int maxDepth = 2;
         Map<String, Object> limitsSection = optionalSection(root, "limits");
-        if (limitsSection != null) {
+        // SPEC.md §2.1: max-depth is optional, default 2 — an empty [limits] is
+        // legal, only a declared-and-wrong value fails.
+        if (limitsSection != null && limitsSection.containsKey("max-depth")) {
             maxDepth = requireInteger(limitsSection, "limits", "max-depth", 1, 255);
         }
 

@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -178,6 +179,24 @@ class ProjectReaderTest {
             parameters = ["-parameters"]
             bogus = 1
             """, "[build].bogus is not a key");
+    }
+
+    @Test
+    void anEmptySectionFallsBackToItsDefault() {
+        // SPEC.md §2.1: max-depth defaults to 2 and [java].version is optional —
+        // an emptied section must not force a value.
+        MjProject project = ProjectReader.parse("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [limits]
+
+            [java]
+            """);
+
+        assertEquals(2, project.maxDepth(), "an empty [limits] means the default budget");
+        assertNull(project.javaVersion(), "an empty [java] means no target");
     }
 
     @Test
