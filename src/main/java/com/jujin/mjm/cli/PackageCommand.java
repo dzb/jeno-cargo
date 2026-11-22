@@ -177,12 +177,16 @@ public final class PackageCommand implements Command {
                 attrs.put(new java.util.jar.Attributes.Name("Built-By"), "mjm");
                 attrs.put(new java.util.jar.Attributes.Name("Implementation-Title"), name);
                 attrs.put(new java.util.jar.Attributes.Name("Implementation-Version"), version);
-                out.putNextEntry(new java.util.zip.ZipEntry("META-INF/MANIFEST.MF"));
+                out.putNextEntry(ZipEntries.entry("META-INF/MANIFEST.MF"));
                 manifest.write(out);
                 out.closeEntry();
 
                 try (Stream<Path> stream = Files.walk(classes)) {
-                    for (Path file : stream.filter(Files::isRegularFile).toList()) {
+                    List<Path> files = stream.filter(Files::isRegularFile)
+                            .sorted(java.util.Comparator.comparing(
+                                    file -> classes.relativize(file).toString()))
+                            .toList();
+                    for (Path file : files) {
                         String entry = classes.relativize(file).toString().replace('\\', '/');
                         writeEntry(out, entry, Files.readAllBytes(file));
                     }
@@ -262,7 +266,7 @@ public final class PackageCommand implements Command {
 
     private static void writeEntry(java.util.zip.ZipOutputStream out, String name,
                                    byte[] bytes) throws IOException {
-        out.putNextEntry(new java.util.zip.ZipEntry(name));
+        out.putNextEntry(ZipEntries.entry(name));
         out.write(bytes);
         out.closeEntry();
     }

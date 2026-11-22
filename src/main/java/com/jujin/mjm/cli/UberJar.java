@@ -89,14 +89,18 @@ final class UberJar {
             if (carriesVersionedEntries(input.jars(), input.classDirs())) {
                 attributes.put(new Attributes.Name("Multi-Release"), "true");
             }
-            out.putNextEntry(new ZipEntry("META-INF/MANIFEST.MF"));
+            out.putNextEntry(ZipEntries.entry("META-INF/MANIFEST.MF"));
             manifest.write(out);
             out.closeEntry();
 
             // the project's own classes win every collision
             Set<String> written = new LinkedHashSet<>();
             try (Stream<Path> stream = Files.walk(input.classes())) {
-                for (Path file : stream.filter(Files::isRegularFile).toList()) {
+                List<Path> files = stream.filter(Files::isRegularFile)
+                        .sorted(java.util.Comparator.comparing(
+                                file -> input.classes().relativize(file).toString()))
+                        .toList();
+                for (Path file : files) {
                     String entry = input.classes().relativize(file).toString().replace('\\', '/');
                     if (written.add(entry)) {
                         writeEntry(out, entry, Files.readAllBytes(file));
@@ -107,7 +111,11 @@ final class UberJar {
             Map<String, Set<String>> services = new TreeMap<>();
             for (Path classDir : input.classDirs()) {
                 try (Stream<Path> stream = Files.walk(classDir)) {
-                    for (Path file : stream.filter(Files::isRegularFile).toList()) {
+                    List<Path> files = stream.filter(Files::isRegularFile)
+                            .sorted(java.util.Comparator.comparing(
+                                    file -> classDir.relativize(file).toString()))
+                            .toList();
+                    for (Path file : files) {
                         String name = classDir.relativize(file).toString().replace('\\', '/');
                         if (name.equals("META-INF/MANIFEST.MF") || isSignature(name)
                                 || isModuleInfo(name)) {
@@ -179,7 +187,7 @@ final class UberJar {
 
     private static void writeEntry(ZipOutputStream out, String name, byte[] bytes)
             throws IOException {
-        out.putNextEntry(new ZipEntry(name));
+        out.putNextEntry(ZipEntries.entry(name));
         out.write(bytes);
         out.closeEntry();
     }

@@ -478,7 +478,7 @@ Gradle 9 / Maven 4 后,尚未覆盖的场景按下表排期。
 | 7 | workspace 依赖继承 | Cargo `[workspace.dependencies]`、Gradle version catalogs(freeway 7 模块版本重复声明的现场教训) |
 | 8 | `mjm publish --dry-run` | cargo publish --dry-run、npm pack |
 | 9 | `--offline` | cargo --offline、pnpm --offline(store 内容寻址,成本近零) |
-| 10 | 可复现发行物 | Maven reproducible builds(SOURCE_DATE_EPOCH;dist tar.gz 时间戳归一化) |
+| 10 | 可复现发行物 | Maven reproducible builds(SOURCE_DATE_EPOCH;dist tar.gz 时间戳归一化) | ✅ 已完成(2026-11-23):jar 条目统一 `1980-02-01T00:00:00Z`(creation/access time 也置同一值,否则 extra field 会带入墙钟),条目按相对路径字典序写入;plain 与 uber 都适用,同源码两次 package 逐字节相同(clean 重编译亦然) |
 
 ### P2 — 记录缓行
 
