@@ -51,6 +51,11 @@ public final class RemoveCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        Integer workspace = WorkspaceRun.requireModule(projectDir, args,
+                (dir, rest) -> new RemoveCommand(lockService, dir).execute(rest));
+        if (workspace != null) {
+            return workspace;
+        }
         if (args.size() != 1) {
             System.err.println("mjm: remove needs exactly one dependency id — "
                     + "mjm remove \"group:artifact\"");

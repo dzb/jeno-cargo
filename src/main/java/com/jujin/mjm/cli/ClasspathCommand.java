@@ -64,6 +64,11 @@ public final class ClasspathCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        Integer workspace = WorkspaceRun.requireModule(projectDir, args,
+                (dir, rest) -> new ClasspathCommand(store, dir).execute(rest));
+        if (workspace != null) {
+            return workspace;
+        }
         boolean test = false;
         Path file = null;
         for (int i = 0; i < args.size(); i++) {

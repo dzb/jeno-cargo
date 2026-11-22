@@ -37,6 +37,11 @@ public final class LockCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        Integer workspace = WorkspaceRun.orchestrate(projectDir, args, "locked", false,
+                (dir, rest) -> new LockCommand(lockService, dir).execute(rest));
+        if (workspace != null) {
+            return workspace;
+        }
         boolean check = false;
         boolean refresh = false;
         for (String arg : args) {

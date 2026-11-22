@@ -54,6 +54,12 @@ public final class WhyCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        Integer workspace = WorkspaceRun.requireModule(projectDir, args,
+                (dir, rest) -> new WhyCommand(store, pomSource, descriptorSource, dir)
+                        .execute(rest));
+        if (workspace != null) {
+            return workspace;
+        }
         if (args.isEmpty()) {
             System.err.println("mjm: why needs an id — mjm why <group:artifact> (or a name)");
             return 2;

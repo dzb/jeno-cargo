@@ -146,6 +146,11 @@ public final class BundleCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        Integer workspace = WorkspaceRun.orchestrate(projectDir, args, "bundled", false,
+                (dir, rest) -> new BundleCommand(store, dir).execute(rest));
+        if (workspace != null) {
+            return workspace;
+        }
         // the whole assembly writes target/dist/: skeleton, toolchain, launcher, tar.gz
         return ProjectLock.with(projectDir, this::assemble);
     }

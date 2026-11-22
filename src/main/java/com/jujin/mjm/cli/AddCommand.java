@@ -55,6 +55,11 @@ public final class AddCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        Integer workspace = WorkspaceRun.requireModule(projectDir, args,
+                (dir, rest) -> new AddCommand(lockService, store, dir).execute(rest));
+        if (workspace != null) {
+            return workspace;
+        }
         if (args.isEmpty() || args.size() > 2) {
             System.err.println("mjm: add needs a key and an optional value — "
                     + "mjm add \"group:artifact\" 1.2.3 | mjm add mylib gh:owner/repo@v1.0.0");

@@ -49,6 +49,11 @@ public final class BuildCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        Integer workspace = WorkspaceRun.orchestrate(projectDir, args, "built", false,
+                (dir, rest) -> new BuildCommand(store, dir).execute(rest));
+        if (workspace != null) {
+            return workspace;
+        }
         if (!Files.exists(projectDir.resolve("mjm.lock"))) {
             System.err.println("mjm: no mjm.lock in " + projectDir + " — run mjm lock first");
             return 1;

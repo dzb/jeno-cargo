@@ -66,6 +66,11 @@ public final class InfoCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        Integer workspace = WorkspaceRun.requireModule(projectDir, args,
+                (dir, rest) -> new InfoCommand(store, dir).execute(rest));
+        if (workspace != null) {
+            return workspace;
+        }
         boolean fetchSource = false;
         String id = null;
         for (String arg : args) {

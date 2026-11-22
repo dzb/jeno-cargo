@@ -71,6 +71,12 @@ public final class TreeCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        Integer workspace = WorkspaceRun.requireModule(projectDir, args,
+                (dir, rest) -> new TreeCommand(store, pomSource, descriptorSource, dir)
+                        .execute(rest));
+        if (workspace != null) {
+            return workspace;
+        }
         boolean json = false;
         for (String arg : args) {
             if (arg.equals("--json")) {

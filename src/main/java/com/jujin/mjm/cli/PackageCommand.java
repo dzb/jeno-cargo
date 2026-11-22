@@ -70,6 +70,11 @@ public final class PackageCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        Integer workspace = WorkspaceRun.orchestrate(projectDir, args, "packaged", false,
+                (dir, rest) -> new PackageCommand(store, dir).execute(rest));
+        if (workspace != null) {
+            return workspace;
+        }
         boolean uber = false;
         String mainClass = null;
         for (int i = 0; i < args.size(); i++) {

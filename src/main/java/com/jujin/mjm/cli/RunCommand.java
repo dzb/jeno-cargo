@@ -63,6 +63,11 @@ public final class RunCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        Integer workspace = WorkspaceRun.requireModule(projectDir, args,
+                (dir, rest) -> new RunCommand(store, dir).execute(rest));
+        if (workspace != null) {
+            return workspace;
+        }
         if (args.isEmpty()) {
             System.err.println("mjm: run needs a main class or a script name — "
                     + "mjm run <main-class> [args...] | mjm run <script-name>");

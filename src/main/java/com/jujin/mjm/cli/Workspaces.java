@@ -5,12 +5,18 @@ import com.jujin.freeway.commons.toml.TomlUtils;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import com.jujin.mjm.project.MjProject;
+import com.jujin.mjm.project.ProjectReader;
+import com.jujin.mjm.project.Requirement;
+
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * {@code mjm.ws.toml} — the local workspace file, read from the nearest
@@ -50,6 +56,134 @@ public final class Workspaces {
             dir = dir.getParent();
         }
         return Optional.empty();
+    }
+
+    /** The id a module is addressed by, the same convention native artifacts use. */
+    public static String moduleId(MjProject project) {
+        return project.group() == null || project.group().isBlank()
+                ? project.name()
+                : project.group() + ":" + project.name();
+    }
+
+    /** The workspace whose root is exactly {@code projectDir}, or empty. */
+    public static Optional<Workspace> rootAt(Path projectDir) {
+        Path real;
+        try {
+            real = projectDir.toRealPath();
+        } catch (IOException e) {
+            return Optional.empty();
+        }
+        return read(projectDir).filter(workspace -> workspace.root().equals(real));
+    }
+
+    /**
+     * The modules in dependency order: a module that another one declares comes
+     * first. Ties are broken by path so the order is stable, not derived from
+     * file order — the workspace file deliberately carries no order at all.
+     */
+    public static List<Path> topological(Workspace workspace) {
+        Map<Path, Set<Path>> edges = new TreeMap<>();
+        Map<String, Path> idToModule = new HashMap<>();
+        for (Path module : workspace.modules()) {
+            edges.put(module, new LinkedHashSet<>());
+            idToModule.put(moduleId(readProject(module, workspace)), module);
+        }
+        for (Path module : workspace.modules()) {
+            MjProject project = readProject(module, workspace);
+            for (String id : declaredIds(project)) {
+                Path dependency = idToModule.get(id);
+                if (dependency != null && !dependency.equals(module)) {
+                    edges.get(dependency).add(module);  // dependency before dependent
+                }
+            }
+        }
+
+        List<Path> ordered = new ArrayList<>();
+        Set<Path> placed = new LinkedHashSet<>();
+        while (ordered.size() < edges.size()) {
+            List<Path> ready = edges.keySet().stream()
+                    .filter(module -> !placed.contains(module))
+                    .filter(module -> edges.entrySet().stream()
+                            .filter(entry -> entry.getValue().contains(module))
+                            .allMatch(entry -> placed.contains(entry.getKey())))
+                    .toList();
+            if (ready.isEmpty()) {
+                throw new WorkspaceException("workspace modules form a dependency cycle: "
+                        + cycle(edges, placed, workspace));
+            }
+            ordered.addAll(ready);
+            placed.addAll(ready);
+        }
+        return List.copyOf(ordered);
+    }
+
+    /** One cycle, as {@code a -> b -> a}, for the error message. */
+    private static String cycle(Map<Path, Set<Path>> edges, Set<Path> placed,
+                                Workspace workspace) {
+        for (Path start : edges.keySet()) {
+            if (placed.contains(start)) {
+                continue;
+            }
+            List<Path> found = new ArrayList<>();
+            java.util.Deque<Path> stack = new java.util.ArrayDeque<>();
+            if (walkCycle(start, edges, placed, stack, found)) {
+                List<String> shown = new ArrayList<>();
+                for (Path module : found) {
+                    shown.add(display(workspace.root(), module));
+                }
+                return String.join(" -> ", shown);
+            }
+        }
+        return "(unresolved)";
+    }
+
+    private static boolean walkCycle(Path node, Map<Path, Set<Path>> edges, Set<Path> placed,
+                                     java.util.Deque<Path> stack, List<Path> found) {
+        if (stack.contains(node)) {
+            List<Path> slice = new ArrayList<>(stack);
+            found.addAll(slice.subList(slice.indexOf(node), slice.size()));
+            found.add(node);
+            return true;
+        }
+        stack.addLast(node);
+        for (Path next : edges.getOrDefault(node, Set.of())) {
+            if (placed.contains(next)) {
+                continue;
+            }
+            if (walkCycle(next, edges, placed, stack, found)) {
+                return true;
+            }
+        }
+        stack.removeLast();
+        return false;
+    }
+
+    private static List<String> declaredIds(MjProject project) {
+        List<String> ids = new ArrayList<>();
+        for (Requirement requirement : project.requirements()) {
+            ids.add(requirement.id());
+        }
+        for (Requirement requirement : project.devRequirements()) {
+            ids.add(requirement.id());
+        }
+        for (Requirement requirement : project.processorRequirements()) {
+            ids.add(requirement.id());
+        }
+        return ids;
+    }
+
+    private static MjProject readProject(Path module, Workspace workspace) {
+        try {
+            return ProjectReader.parse(Files.readString(module.resolve("mjm.toml")));
+        } catch (IOException | RuntimeException e) {
+            throw new WorkspaceException("cannot read " + display(workspace.root(), module)
+                    + "/mjm.toml — " + e.getMessage());
+        }
+    }
+
+    /** A module path as the workspace file spells it: relative, forward slashes. */
+    static String display(Path root, Path module) {
+        return root.relativize(module).toString().replace('\\', '/');
     }
 
     /** Parses one file; {@code root} is the directory it lives in. */

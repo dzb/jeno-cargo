@@ -59,6 +59,11 @@ public final class CleanCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        Integer workspace = WorkspaceRun.orchestrate(projectDir, args, "cleaned", true,
+                (dir, rest) -> new CleanCommand(dir).execute(rest));
+        if (workspace != null) {
+            return workspace;
+        }
         // No flag means the safe default (target/). A flag states exactly what
         // to remove, and repeating it accumulates: --target --dist is both.
         boolean target = false;
