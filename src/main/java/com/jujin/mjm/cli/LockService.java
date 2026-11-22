@@ -35,33 +35,86 @@ public final class LockService {
         this.descriptorSource = descriptorSource;
     }
 
-    /** Resolves, downloads and (re)writes mjm.lock; returns the closed graph. */
-    public ResolvedGraph refresh(Path projectDir) {
-        MjProject project;
-        try {
-            project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
-        } catch (IOException e) {
-            throw new IllegalStateException("no mjm.toml in " + projectDir
-                    + " — run mjm init to create one", e);
-        }
+    /**
+     * A resolution that is ready to be written: the graph, the manifest text it
+     * came from, and the lock text. Producing it touches only the store, never
+     * the project, so a caller can decide afterwards whether to commit.
+     */
+    public record Prepared(ResolvedGraph graph, String mjmToml, String lockText) {}
 
+    /**
+     * Parses {@code mjmTomlText}, resolves it and puts every byte in the store,
+     * but writes nothing into the project. {@code add}/{@code remove} call this
+     * with the edited manifest so a failure leaves the disk untouched.
+     */
+    public Prepared prepare(String mjmTomlText) {
+        MjProject project = ProjectReader.parse(mjmTomlText);
         ResolvedGraph graph = Resolver.resolve(project, pomSource, descriptorSource);
-
         for (ResolvedGraph.ResolvedArtifact artifact : graph.artifacts()) {
             store.ensure(artifact.jarUrl(), ArtifactStore.Kind.JAR);
             if (artifact.metadataUrl() != null) {
                 store.ensure(artifact.metadataUrl(), metadataKind(artifact));
             }
         }
+        return new Prepared(graph, mjmTomlText, LockFile.serialize(graph, store::digestOf));
+    }
 
+    /**
+     * Writes the manifest, then the lock. If the lock cannot be written the old
+     * manifest bytes go back, so the project never keeps a declaration whose
+     * lock was never produced.
+     */
+    public void commit(Path projectDir, Prepared prepared) {
+        Path manifest = projectDir.resolve("mjm.toml");
+        String previous = null;
         try {
-            Files.writeString(projectDir.resolve("mjm.lock"),
-                    LockFile.serialize(graph, store::digestOf));
+            previous = Files.readString(manifest);
+        } catch (IOException ignored) {
+            // no manifest yet (mjm init): nothing to restore
+        }
+        write(manifest, prepared.mjmToml());
+        try {
+            write(projectDir.resolve("mjm.lock"), prepared.lockText());
+        } catch (RuntimeException e) {
+            restore(manifest, previous);
+            throw e;
+        }
+    }
+
+    /** The lock command's flow: read the manifest, prepare, commit. */
+    public ResolvedGraph refresh(Path projectDir) {
+        String text;
+        try {
+            text = Files.readString(projectDir.resolve("mjm.toml"));
         } catch (IOException e) {
-            throw new IllegalStateException("cannot write mjm.lock in " + projectDir
+            throw new IllegalStateException("no mjm.toml in " + projectDir
+                    + " — run mjm init to create one", e);
+        }
+        Prepared prepared = prepare(text);
+        commit(projectDir, prepared);
+        return prepared.graph();
+    }
+
+    private static void write(Path file, String text) {
+        try {
+            Files.writeString(file, text);
+        } catch (IOException e) {
+            throw new IllegalStateException("cannot write " + file
                     + " — check the directory is writable", e);
         }
-        return graph;
+    }
+
+    private static void restore(Path manifest, String previous) {
+        if (previous == null) {
+            return;
+        }
+        try {
+            Files.writeString(manifest, previous);
+        } catch (IOException e) {
+            throw new IllegalStateException("cannot restore " + manifest
+                    + " after a failed lock write — the declaration is now unbacked; "
+                    + "restore it by hand", e);
+        }
     }
 
     private static ArtifactStore.Kind metadataKind(ResolvedGraph.ResolvedArtifact artifact) {

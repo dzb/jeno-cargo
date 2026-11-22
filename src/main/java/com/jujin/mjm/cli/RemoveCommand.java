@@ -93,23 +93,21 @@ public final class RemoveCommand implements Command {
                     + "' — the file may use an unusual layout; edit it by hand");
             return 1;
         }
+        LockService.Prepared prepared;
         try {
-            ProjectReader.parse(updated);  // the edited file must still be a valid project
+            prepared = lockService.prepare(updated);
         } catch (RuntimeException e) {
-            System.err.println("mjm: removing '" + id + "' would break mjm.toml — " + e.getMessage());
+            System.err.println("mjm: " + e.getMessage());
             return 1;
         }
         try {
-            Files.writeString(file, updated);
-        } catch (IOException e) {
-            System.err.println("mjm: cannot write " + projectDir.resolve("mjm.toml")
-                    + " — check the directory is writable");
+            lockService.commit(projectDir, prepared);
+        } catch (RuntimeException e) {
+            System.err.println("mjm: " + e.getMessage());
             return 1;
         }
-
-        var graph = lockService.refresh(projectDir);
         System.out.println("removed " + id + " — locked "
-                + graph.artifacts().size() + " artifact(s) into mjm.lock");
+                + prepared.graph().artifacts().size() + " artifact(s) into mjm.lock");
         return 0;
     }
 

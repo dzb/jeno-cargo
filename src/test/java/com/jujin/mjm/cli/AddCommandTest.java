@@ -19,7 +19,9 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -116,6 +118,60 @@ class AddCommandTest {
         assertEquals(1, locked.size());
         assertEquals("com.example:lib-a", locked.getFirst().id());
         assertEquals(64, locked.getFirst().sha256().length(), "the re-lock pinned the digest");
+        try (var files = Files.list(dir)) {
+            assertFalse(files.anyMatch(path -> path.getFileName().toString().endsWith(".tmp")),
+                    "a successful add leaves no temporary file behind");
+        }
+    }
+
+    @Test
+    void aFailedAddLeavesTheProjectByteForByte(@TempDir Path projectStore) throws Exception {
+        Path project = Files.createDirectories(dir.resolve("project"));
+        vendorProject(project);
+        ArtifactStore store = new ArtifactStore(projectStore);
+        LockService lockService = new LockService(store, new StorePomSource(store),
+                new StoreDescriptorSource(store));
+        lockService.refresh(project);
+        byte[] toml = Files.readAllBytes(project.resolve("mjm.toml"));
+        byte[] locked = Files.readAllBytes(project.resolve("mjm.lock"));
+
+        // nothing serves this coordinate: the fetch fails inside prepare
+        central = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        central.createContext("/", exchange -> {
+            exchange.sendResponseHeaders(404, -1);
+            exchange.close();
+        });
+        central.start();
+        System.setProperty("mjm.central.base",
+                "http://localhost:" + central.getAddress().getPort() + "/");
+
+        int exit = new AddCommand(lockService, store, project)
+                .execute(List.of("com.example:absent", "1.0.0"));
+
+        assertEquals(1, exit, "the dependency cannot be resolved");
+        assertArrayEquals(toml, Files.readAllBytes(project.resolve("mjm.toml")),
+                "mjm.toml is byte-for-byte what it was");
+        assertArrayEquals(locked, Files.readAllBytes(project.resolve("mjm.lock")),
+                "mjm.lock is byte-for-byte what it was");
+    }
+
+    /** A project whose one dependency comes from a local Maven-layout repo. */
+    private static void vendorProject(Path project) throws IOException {
+        Path pom = project.resolve("vendor/com/example/lib-a/1.0.0/lib-a-1.0.0.pom");
+        Files.createDirectories(pom.getParent());
+        Files.writeString(pom, LIB_A_POM);
+        Files.write(pom.resolveSibling("lib-a-1.0.0.jar"), "lib-a".getBytes());
+        Files.writeString(project.resolve("mjm.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [repos]
+            vendor = "local:%s"
+
+            [deps.vendor]
+            "com.example:lib-a" = "1.0.0"
+            """.formatted(project.resolve("vendor").toAbsolutePath()));
     }
 
     @Test

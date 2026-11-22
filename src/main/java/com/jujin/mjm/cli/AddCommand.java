@@ -84,23 +84,23 @@ public final class AddCommand implements Command {
             return 1;
         }
         String updated = appendToDeps(mjToml, key, value);
+        LockService.Prepared prepared;
         try {
-            ProjectReader.parse(updated);  // the edited file must still be a valid project
+            // parse + resolve + download first: a failure here leaves the disk
+            // exactly as it was
+            prepared = lockService.prepare(updated);
         } catch (RuntimeException e) {
             System.err.println("mjm: " + e.getMessage());
             return 1;
         }
         try {
-            Files.writeString(projectDir.resolve("mjm.toml"), updated);
-        } catch (IOException e) {
-            System.err.println("mjm: cannot write " + projectDir.resolve("mjm.toml")
-                    + " — check the directory is writable");
+            lockService.commit(projectDir, prepared);
+        } catch (RuntimeException e) {
+            System.err.println("mjm: " + e.getMessage());
             return 1;
         }
-
-        var graph = lockService.refresh(projectDir);
         System.out.println("added " + requirement.id() + "@" + value + " — locked "
-                + graph.artifacts().size() + " artifact(s) into mjm.lock");
+                + prepared.graph().artifacts().size() + " artifact(s) into mjm.lock");
         return 0;
     }
 
