@@ -231,40 +231,53 @@ class ResolverTest {
     }
 
     @Test
-    void aDevSubtreeIsNotChargedAgainstTheBudget() {
-        // SPEC.md §2.3: the budget counts the compile/runtime closure — a test
-        // subtree may be deeper than the budget, as long as its depth is still
-        // recorded for the lockfile and the tree.
-        ResolvedGraph graph = Resolver.resolve(project("""
-            [project]
-            name = "demo"
-            version = "0.1.0"
+    void devArtifactsCountAgainstTheDepthBudgetWithTheirFullPath() {
+        // SPEC.md §2.1: the budget treats [deps] and [dev-deps] alike — the
+        // "test-scope" SPEC §2.3 excludes is a pom <scope>, dropped at decode.
+        ResolveException error = assertThrows(ResolveException.class, () ->
+                Resolver.resolve(project("""
+                    [project]
+                    name = "demo"
+                    version = "0.1.0"
 
-            [limits]
-            max-depth = 1
+                    [limits]
+                    max-depth = 1
 
-            [dev-deps]
-            "com.example:test-kit" = "1.0.0"
-            """), pomSource(
-                "com.example:test-kit:1.0.0", pom("com.example", "test-kit", "1.0.0", """
-                    <dependencies>
-                      <dependency>
-                        <groupId>com.example</groupId>
-                        <artifactId>assert-lib</artifactId>
-                        <version>2.0.0</version>
-                      </dependency>
-                    </dependencies>
-                    """),
-                "com.example:assert-lib:2.0.0", pom("com.example", "assert-lib", "2.0.0", "")),
-            descriptorSource());
+                    [dev-deps]
+                    "com.example:test-kit" = "1.0.0"
+                    """), pomSource(
+                    "com.example:test-kit:1.0.0", pom("com.example", "test-kit", "1.0.0", """
+                        <dependencies>
+                          <dependency>
+                            <groupId>com.example</groupId>
+                            <artifactId>assert-lib</artifactId>
+                            <version>2.0.0</version>
+                          </dependency>
+                        </dependencies>
+                        """),
+                    "com.example:assert-lib:2.0.0", pom("com.example", "assert-lib", "2.0.0", """
+                        <dependencies>
+                          <dependency>
+                            <groupId>com.example</groupId>
+                            <artifactId>deep-lib</artifactId>
+                            <version>3.0.0</version>
+                          </dependency>
+                        </dependencies>
+                        """),
+                    "com.example:deep-lib:3.0.0", pom("com.example", "deep-lib", "3.0.0", "")),
+                descriptorSource()));
 
-        assertEquals(Scope.DEV, byId(graph.artifacts(), "com.example:assert-lib").scope());
-        assertEquals(2, byId(graph.artifacts(), "com.example:assert-lib").depth(),
-                "the dev depth is still recorded, only not charged");
+        assertTrue(error.getMessage().contains("depth 3 (budget is 1)"),
+                "the dev chain is measured like any other, got: " + error.getMessage());
+        assertTrue(error.getMessage().contains(
+                        "com.example:test-kit@1.0.0 -> com.example:assert-lib@2.0.0 -> "
+                                + "com.example:deep-lib@3.0.0"),
+                "the full introduction path is named, got: " + error.getMessage());
+        assertTrue(error.getMessage().contains("max-depth"), "the exits are named");
     }
 
     @Test
-    void aMainChainOverBudgetStillFailsWithItsFullPathAndExits() {
+    void aMainChainOverBudgetFailsWithItsFullPathAndExits() {
         ResolveException error = assertThrows(ResolveException.class, () ->
                 Resolver.resolve(project("""
                     [project]
@@ -293,14 +306,14 @@ class ResolverTest {
                 "got: " + error.getMessage());
         assertTrue(error.getMessage().contains(
                         "com.example:lib-a@1.0.0 -> com.example:lib-b@1.1.0"),
-                "the full introduction path is named, got: " + error.getMessage());
+                "got: " + error.getMessage());
         assertTrue(error.getMessage().contains("max-depth"), "the exits are named");
     }
 
     @Test
-    void anArtifactReachedFromMainIsChargedEvenWhenADevRootReachesItToo() {
+    void anArtifactReachedFromMainIsMainEvenWhenADevRootReachesItToo() {
         // lib-a ([deps]) and lib-d ([dev-deps]) both reach common at depth 2;
-        // main reachability decides the scope, and with it the budget.
+        // main reachability decides the scope.
         PomSource poms = pomSource(
                 "com.example:lib-a:1.0.0", pom("com.example", "lib-a", "1.0.0", """
                     <dependencies>
@@ -327,39 +340,17 @@ class ResolverTest {
             name = "demo"
             version = "0.1.0"
 
-            [limits]
-            max-depth = 2
-
             [deps]
             "com.example:lib-a" = "1.0.0"
 
             [dev-deps]
             "com.example:lib-d" = "1.0.0"
             """), poms, descriptorSource());
+
         assertEquals(Scope.MAIN, byId(graph.artifacts(), "com.example:common").scope(),
                 "a main root reaches it, so it is main");
-
-        ResolveException error = assertThrows(ResolveException.class, () ->
-                Resolver.resolve(project("""
-                    [project]
-                    name = "demo"
-                    version = "0.1.0"
-
-                    [limits]
-                    max-depth = 1
-
-                    [deps]
-                    "com.example:lib-a" = "1.0.0"
-
-                    [dev-deps]
-                    "com.example:lib-d" = "1.0.0"
-                    """), poms, descriptorSource()));
-        assertTrue(error.getMessage().contains("depth 2 (budget is 1)"),
-                "main reachability makes the shared artifact count, got: "
-                        + error.getMessage());
-        assertTrue(error.getMessage().contains("com.example:lib-a@1.0.0 -> "),
-                "charged through the main path, got: " + error.getMessage());
     }
+
     private static ResolvedGraph.ResolvedArtifact byId(
             List<ResolvedGraph.ResolvedArtifact> artifacts, String id) {
         return artifacts.stream().filter(a -> a.id().equals(id)).findFirst().orElseThrow();

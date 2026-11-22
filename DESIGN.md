@@ -156,7 +156,7 @@ MVS 收敛:同 id 同 major 取最大(跨 major = 硬冲突)→ 全图单版本
   ↓
 闭包构建(visited set 防环)
   ↓
-深度预算检查(compile/runtime 闭包计入;test-scope 不计)
+深度预算检查(compile/runtime 闭包计入;test-scope = pom 的 test/provided/system scope,解码时即丢弃;[dev-deps] 与 [deps] 同等计入)
   ↓
 mjm.lock 写出(每个 artifact:来源、resolved-url、sha256、depth)
 ```
@@ -166,6 +166,7 @@ mjm.lock 写出(每个 artifact:来源、resolved-url、sha256、depth)
 - 定义:直接依赖 = 深度 1,依赖的依赖 = 2,……;`max-depth` 限制路径最大深度
 - 在 MVS 收敛后的最终图上取**最长引入路径**(预算的真意是暴露最深的链);**依赖环 = 硬错误**(环让"最深链"无定义)
 - compile/runtime 闭包计入预算;test-scope 排除
+- 这里的 test-scope 指 **Maven pom 的 `<scope>test/provided/system</scope>`**——`Poms` 解码依赖时就丢弃,它们根本不进图。mjm 自己的 `[dev-deps]` 不是 test-scope:**与 `[deps]` 同等计入预算**(SPEC §2.1 对照表),所以项目要为自己的测试依赖付深度
 - 超限 → **硬错误**,错误信息必须包含:
   - 超限依赖的完整路径(谁把谁带进来的)
   - 当前预算值
