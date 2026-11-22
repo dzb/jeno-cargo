@@ -124,7 +124,14 @@ modules = ["libs/core", "libs/util", "apps/web", "tools/cli"]
 第二条不需要新文件:`mjm build` 本来就会写这个资源。它比 mtime 可靠(git checkout
 会刷新 mtime)。
 
-**前提:兄弟模块的坐标仍必须可解析。** 替换发生在装配阶段,解析照旧——所以兄弟模块的
+**前提一:模块的 id 必须等于它被引用时的坐标。** 替换按 `id` 匹配,而 `id` 是
+`[project].group + ":" + [project].name`(无 group 时只有 name)。从 Maven 迁来的模块
+往往只写了 `name`,于是它的 id 是 `freeway-http`,而别人声明的是
+`com.jujin8.freeway:freeway-http` —— 两边对不上,替换**静默不生效**,拓扑排序也会因为
+没有边而退化成字母序。真机验证时踩过:补上 `group = "com.jujin8.freeway"` 之后,
+替换与排序同时恢复正常。
+
+**前提二:兄弟模块的坐标仍必须可解析。** 替换发生在装配阶段,解析照旧——所以兄弟模块的
 `id + version` 必须能被 `[repos]` 里某个仓库解析出来(`mjm.lock` 里要有那一行)。一个
 从未发布过的新模块,第一次被当作依赖引用时会卡在 `unable to fetch the pom`,而不是
 "工作区里明明有它"。
