@@ -104,9 +104,14 @@ public final class ArtifactStore {
         }
     }
 
-    /** The store under the current user's home: {@code ~/.mjm/store}. */
+    /** The mjm home every user-level file lives under: {@code ~/.mjm}. */
+    public static Path home() {
+        return Path.of(System.getProperty("user.home"), ".mjm");
+    }
+
+    /** The store under that home: {@code ~/.mjm/store}. */
     public static ArtifactStore userStore() {
-        return new ArtifactStore(Path.of(System.getProperty("user.home"), ".mjm", "store"));
+        return new ArtifactStore(home().resolve("store"));
     }
 
     /**

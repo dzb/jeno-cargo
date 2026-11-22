@@ -76,6 +76,14 @@ public final class CleanCommand implements Command {
             target = true;
         }
 
+        boolean removeTarget = target;
+        boolean removeDist = dist;
+        // build and test write the same tree; clean deletes it. One lock per
+        // project keeps them from acting on a half-deleted target/.
+        return ProjectLock.with(projectDir, () -> removeOutputs(removeTarget, removeDist));
+    }
+
+    private int removeOutputs(boolean target, boolean dist) {
         boolean removedTarget = false;
         boolean removedSomething = false;
         if (target) {
@@ -139,10 +147,17 @@ public final class CleanCommand implements Command {
                 System.out.println("removed " + label);
                 return true;
             }
-            if (isMountPoint(directory)) {
-                throw new IllegalStateException("refusing to remove " + directory
-                        + " — it is a mount point (a different file store from its parent); "
-                        + "unmount it first, or remove its contents by hand");
+            List<Path> mounts = Mounts.inside(directory);
+            if (mounts == null) {
+                // Not Linux (no mountinfo): only a different file store is
+                // visible from here. This misses bind mounts of the same
+                // filesystem — an incomplete guard, documented rather than
+                // pretended.
+                if (isMountPoint(directory)) {
+                    throw mountRefusal(directory, directory);
+                }
+            } else if (!mounts.isEmpty()) {
+                throw mountRefusal(directory, mounts.getFirst());
             }
             DistOutput.clear(directory);
             System.out.println("removed " + label);
@@ -154,9 +169,20 @@ public final class CleanCommand implements Command {
     }
 
     /**
-     * A directory whose file store differs from its parent's is a mount point:
-     * removing it would try to delete a whole mounted filesystem. That is never
-     * what "clean my build" means, so the command refuses instead.
+     * Refuses a tree that contains a mount point: walking into it would delete
+     * the mounted filesystem's contents, which is never what "clean my build"
+     * means.
+     */
+    private static IllegalStateException mountRefusal(Path directory, Path mount) {
+        return new IllegalStateException("refusing to remove " + directory + " — " + mount
+                + " is a mount point; unmount it first (umount " + mount
+                + "), or remove the contents by hand");
+    }
+
+    /**
+     * The non-Linux fallback: a directory whose file store differs from its
+     * parent's is a mount point. This only sees a different filesystem — a bind
+     * mount of the same one needs {@link Mounts}.
      */
     static boolean isMountPoint(Path directory) {
         try {

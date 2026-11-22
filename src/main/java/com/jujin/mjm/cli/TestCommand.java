@@ -11,15 +11,10 @@ import com.jujin.mjm.test.MjmTest;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
 
 /**
@@ -79,50 +74,14 @@ public final class TestCommand implements Command {
             return 0;
         }
 
-        // One test run per project at a time. The output tree is rewritten in
-        // place (deleted, then compiled into), so a second run starting while a
-        // fork is still executing would pull classes out from under it — the
-        // lazily loaded javac companions (enum switch maps) die first.
-        Path lockPath = lockFile(projectDir);
-        try {
-            Files.createDirectories(lockPath.getParent());
-        } catch (IOException e) {
-            System.err.println("mjm: cannot prepare " + lockPath.getParent()
-                    + " — " + e.getMessage());
-            return 1;
-        }
-        // Two runs inside one JVM cannot wait on the same OS file lock (the JVM
-        // treats it as overlapping and throws), so they queue here first; the
-        // file lock then covers runs in other processes.
-        ReentrantLock inProcess = RUN_LOCKS.computeIfAbsent(
-                lockPath.toAbsolutePath().normalize().toString(), key -> new ReentrantLock());
-        inProcess.lock();
-        try (FileChannel channel = FileChannel.open(lockPath,
-                StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             FileLock ignored = channel.lock()) {
-            return runTests(testSources);
-        } catch (IOException e) {
-            System.err.println("mjm: cannot lock " + lockPath + " — " + e.getMessage());
-            return 1;
-        } finally {
-            inProcess.unlock();
-        }
+        // The output tree is rewritten in place (deleted, then compiled into):
+        // a second command touching target/ — another test run, a build, a
+        // clean — would pull classes out from under the fork, and the lazily
+        // loaded javac companions (enum switch maps) die first.
+        return ProjectLock.with(projectDir, () -> runTests(testSources));
     }
 
-    /** Per-project queues for runs inside this JVM; the OS lock covers the rest. */
-    private static final ConcurrentHashMap<String, ReentrantLock> RUN_LOCKS =
-            new ConcurrentHashMap<>();
-
-    /**
-     * The file that serializes test runs in one project. It lives beside the
-     * output trees, not inside one — {@code compile} deletes
-     * {@code target/test-classes} on every run, and the lock must outlive it.
-     */
-    static Path lockFile(Path projectDir) {
-        return projectDir.resolve("target/.mjm-test.lock");
-    }
-
-    /** Compile and fork; the caller holds the project's test lock. */
+    /** Compile and fork; the caller holds the project's lock. */
     private int runTests(List<String> testSources) {
         List<Path> toolchain = toolchainPaths();
         List<String> compileClasspath = classpath(toolchain, false);

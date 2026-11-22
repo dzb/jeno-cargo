@@ -134,6 +134,19 @@ class CleanOutdatedTest {
     }
 
     @Test
+    void cleanLeavesTheProjectLockAlone() throws Exception {
+        Files.createDirectories(dir.resolve("target/classes"));
+        Path lock = ProjectLock.lockFile(dir);
+        assertFalse(lock.startsWith(dir.resolve("target")),
+                "a lock inside target/ would be deleted by clean itself");
+
+        assertEquals(0, new CleanCommand(dir).execute(List.of()));
+
+        assertFalse(Files.exists(dir.resolve("target")), "target/ is gone");
+        assertTrue(Files.exists(lock), "the lock file survives clean — it is not target/'s to delete");
+    }
+
+    @Test
     void cleanSaysWhenThereIsNothingToDo() throws Exception {
         java.io.PrintStream original = System.out;
         var buffer = new java.io.ByteArrayOutputStream();

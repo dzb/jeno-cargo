@@ -58,6 +58,14 @@ public final class BuildCommand implements Command {
                     + " — run mjm init to create one");
             return 1;
         }
+        // A build writes target/classes; a test run deletes and refills
+        // target/test-classes; a clean removes target/. Serialize them per
+        // project so none of them pulls files out from under another.
+        return ProjectLock.with(projectDir, this::build);
+    }
+
+    /** The locked body of {@link #execute}. */
+    private int build() {
         List<LockedArtifact> locked = readLock();
         MjProject project = readProject();
 
