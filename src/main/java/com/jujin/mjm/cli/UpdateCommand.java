@@ -33,6 +33,10 @@ public final class UpdateCommand implements Command {
     private static final String RELEASES_API_DEFAULT =
             "https://api.github.com/repos/dzb/mjm-cargo/releases/latest";
 
+    /** Three tries is enough for a CDN edge to catch up; 300ms then 1s back-off. */
+    private static final int DOWNLOAD_ATTEMPTS = 3;
+    private static final long[] BACKOFF_MS = {300L, 1_000L};
+
     private final HttpClient http = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
@@ -107,20 +111,26 @@ public final class UpdateCommand implements Command {
             return 1;
         }
 
+        Path tempTar = null;
+        Path tempDir = null;
         try {
-            // download to temp
-            Path tempTar = Files.createTempFile("mjm-upgrade-", ".tar.gz");
-            HttpResponse<byte[]> download = http.send(
-                    HttpRequest.newBuilder(URI.create(tarGzUrl)).GET().build(),
-                    HttpResponse.BodyHandlers.ofByteArray());
-            if (download.statusCode() != 200) {
-                System.err.println("mjm: download failed (" + download.statusCode() + ")");
+            Fetch fetch = downloadWithRetry(tarGzUrl);
+            if (fetch.body() == null) {
+                System.err.println("mjm: download failed: " + fetch.failure());
+                if (fetch.propagationLikely()) {
+                    System.err.println("  the release asset may not have propagated yet — "
+                            + "retry in a moment; if it keeps failing, download it from "
+                            + tarGzUrl);
+                }
                 return 1;
             }
-            Files.write(tempTar, download.body());
+
+            // download to temp
+            tempTar = Files.createTempFile("mjm-upgrade-", ".tar.gz");
+            Files.write(tempTar, fetch.body());
 
             // extract to temp
-            Path tempDir = Files.createTempDirectory("mjm-upgrade-");
+            tempDir = Files.createTempDirectory("mjm-upgrade-");
             Process tar = new ProcessBuilder("tar", "-xzf", tempTar.toString(),
                     "-C", tempDir.toString()).inheritIO().start();
             if (tar.waitFor() != 0) {
@@ -139,19 +149,6 @@ public final class UpdateCommand implements Command {
             Process install = installProcess(installScript);
             int exit = install.waitFor();
 
-            // cleanup
-            Files.deleteIfExists(tempTar);
-            try (Stream<Path> walk = Files.walk(tempDir)) {
-                walk.sorted(java.util.Comparator.reverseOrder())
-                        .forEach(path -> {
-                            try {
-                                Files.deleteIfExists(path);
-                            } catch (IOException e) {
-                                // best-effort cleanup
-                            }
-                        });
-            }
-
             if (exit != 0) {
                 System.err.println("mjm: installation failed (exit " + exit + ")");
                 return 1;
@@ -162,6 +159,76 @@ public final class UpdateCommand implements Command {
         } catch (IOException | InterruptedException e) {
             System.err.println("mjm: upgrade failed: " + e.getMessage());
             return 1;
+        } finally {
+            // the temp tree goes away whether the upgrade succeeded, failed or
+            // was interrupted; nothing half-downloaded outlives the command
+            if (tempTar != null) {
+                try {
+                    Files.deleteIfExists(tempTar);
+                } catch (IOException e) {
+                    // best-effort cleanup
+                }
+            }
+            deleteTree(tempDir);
+        }
+    }
+
+    /** The release asset, or the reason it could not be fetched. */
+    private record Fetch(byte[] body, String failure, boolean propagationLikely) {}
+
+    /**
+     * The tarball download, retried. A just-created release can 404 or be cut
+     * off at the CDN edge for a few seconds; both are transient, so an
+     * IOException (EOF, reset, timeout) and 5xx/429 are retried three times with
+     * a short back-off. A 4xx (other than 429) is a client-side fact and is not
+     * retried. The releases API lookup is deliberately still one-shot.
+     */
+    private Fetch downloadWithRetry(String url) throws InterruptedException {
+        String lastFailure = "no attempt made";
+        boolean propagationLikely = false;
+        for (int attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt++) {
+            try {
+                HttpResponse<byte[]> response = http.send(
+                        HttpRequest.newBuilder(URI.create(url)).GET().build(),
+                        HttpResponse.BodyHandlers.ofByteArray());
+                int status = response.statusCode();
+                if (status == 200) {
+                    return new Fetch(response.body(), null, false);
+                }
+                boolean transientStatus = status >= 500 || status == 429;
+                lastFailure = "server answered " + status;
+                if (!transientStatus) {
+                    return new Fetch(null, lastFailure, false);
+                }
+                propagationLikely = true;
+            } catch (IOException e) {
+                lastFailure = e.getMessage() == null ? e.getClass().getSimpleName()
+                        : e.getMessage();
+                propagationLikely = true;
+            }
+            if (attempt < DOWNLOAD_ATTEMPTS) {
+                System.err.println("download attempt " + attempt + " failed ("
+                        + lastFailure + ") — retrying");
+                Thread.sleep(BACKOFF_MS[Math.min(attempt - 1, BACKOFF_MS.length - 1)]);
+            }
+        }
+        return new Fetch(null, lastFailure, propagationLikely);
+    }
+
+    private static void deleteTree(Path root) {
+        if (root == null) {
+            return;
+        }
+        try (Stream<Path> walk = Files.walk(root)) {
+            walk.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException e) {
+                    // best-effort cleanup
+                }
+            });
+        } catch (IOException e) {
+            // best-effort cleanup
         }
     }
 

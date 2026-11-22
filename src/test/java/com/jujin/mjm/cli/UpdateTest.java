@@ -82,6 +82,76 @@ class UpdateTest {
     }
 
     @Test
+    void aTruncatedDownloadIsRetried(@TempDir Path home) throws Exception {
+        packageDist("0.1.99");
+        HttpServer server = serveLatest("v0.1.99", 1);
+
+        System.setProperty("mjm.update.api",
+                "http://localhost:" + server.getAddress().getPort()
+                        + "/repos/dzb/mjm-cargo/releases/latest");
+        System.setProperty("mjm.update.home", home.toString());
+        java.io.PrintStream original = System.err;
+        var errors = new ByteArrayOutputStream();
+        int exit;
+        try {
+            System.setErr(new PrintStream(errors, true, StandardCharsets.UTF_8));
+            exit = new UpdateCommand().execute(List.of());
+        } finally {
+            System.setErr(original);
+            server.stop(0);
+            System.clearProperty("mjm.update.api");
+            System.clearProperty("mjm.update.home");
+        }
+
+        String message = errors.toString(StandardCharsets.UTF_8);
+        assertEquals(0, exit, "the second, complete response is installed");
+        assertTrue(message.contains("download attempt 1 failed"),
+                "the retry is reported: " + message);
+        assertTrue(Files.exists(home.resolve(".mjm/marker")), "the upgrade landed");
+    }
+
+    @Test
+    void aPersistentlyTruncatedDownloadNamesPropagation(@TempDir Path home) throws Exception {
+        packageDist("0.1.99");
+        HttpServer server = serveLatest("v0.1.99", 3);
+        Path tmp = Path.of(System.getProperty("java.io.tmpdir"));
+        long leftoversBefore = countUpgradeTemps(tmp);
+
+        System.setProperty("mjm.update.api",
+                "http://localhost:" + server.getAddress().getPort()
+                        + "/repos/dzb/mjm-cargo/releases/latest");
+        System.setProperty("mjm.update.home", home.toString());
+        java.io.PrintStream original = System.err;
+        var errors = new ByteArrayOutputStream();
+        int exit;
+        try {
+            System.setErr(new PrintStream(errors, true, StandardCharsets.UTF_8));
+            exit = new UpdateCommand().execute(List.of());
+        } finally {
+            System.setErr(original);
+            server.stop(0);
+            System.clearProperty("mjm.update.api");
+            System.clearProperty("mjm.update.home");
+        }
+
+        String message = errors.toString(StandardCharsets.UTF_8);
+        assertEquals(1, exit);
+        assertTrue(message.contains("may not have propagated"),
+                "the next action is named: " + message);
+        assertFalse(Files.exists(home.resolve(".mjm/marker")),
+                "nothing was installed over the working one");
+        assertEquals(leftoversBefore, countUpgradeTemps(tmp),
+                "no mjm-upgrade-* temp file or directory survives the failure");
+    }
+
+    private static long countUpgradeTemps(Path tmp) throws IOException {
+        try (var entries = Files.list(tmp)) {
+            return entries.filter(path -> path.getFileName().toString()
+                    .startsWith("mjm-upgrade-")).count();
+        }
+    }
+
+    @Test
     void theCurrentVersionIsANoOp(@TempDir Path home) throws Exception {
         HttpServer server = serveLatest("v" + Mjm.VERSION);
 
@@ -122,6 +192,15 @@ class UpdateTest {
 
     /** Serves the releases API and the tar.gz asset on one loopback. */
     private HttpServer serveLatest(String tag) throws IOException {
+        return serveLatest(tag, 0);
+    }
+
+    /**
+     * The same, truncating the first {@code truncated} asset responses: the
+     * headers promise the full length, the body stops halfway — the CDN edge
+     * that was not ready yet.
+     */
+    private HttpServer serveLatest(String tag, int truncated) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         String json = "{\"tag_name\":\"" + tag + "\",\"assets\":[{"
                 + "\"name\":\"mjm-bin-" + tag.substring(1) + ".tar.gz\","
@@ -136,13 +215,26 @@ class UpdateTest {
                 out.write(body);
             }
         });
+        java.util.concurrent.atomic.AtomicInteger served =
+                new java.util.concurrent.atomic.AtomicInteger();
         server.createContext("/assets/", exchange -> {
             Path tar = dir.resolve(exchange.getRequestURI().getPath()
                     .replace("/assets/", ""));
             byte[] bytes = Files.readAllBytes(tar);
+            boolean cut = served.incrementAndGet() <= truncated;
             exchange.sendResponseHeaders(200, bytes.length);
             try (var out = exchange.getResponseBody()) {
-                out.write(bytes);
+                out.write(bytes, 0, cut ? bytes.length / 2 : bytes.length);
+                out.flush();
+                if (cut) {
+                    // let the headers and the half body reach the client before
+                    // the connection closes: that is the EOF the CDN edge gives
+                    try {
+                        Thread.sleep(200);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
             }
         });
         server.start();
