@@ -116,13 +116,16 @@ dev = "mjm run app.Main"
 | 值形态 | 物种 | 元数据 | 传递依赖 |
 |---|---|---|---|
 | `"1.2.3"` | Central | pom.xml(线路格式) | 有 |
+| `"corp:1.2.3"` | 命名仓库 | pom.xml(线路格式) | 有 |
 | `"gh:owner/repo@tag"` / `"gitee:owner/repo@tag"` | mjm 原生 | jar 旁的 `.mjm.toml` 描述符 | 有 |
 | `"https://.../x.jar"` | 裸 URL | 无 | 无(叶子) |
 
 - mjm 原生约定:artifact 名 = repo 名,版本 = tag;展开为
   `https://github.com/{owner}/{repo}/releases/download/{tag}/{artifact}-{version}.jar`
   (Gitee 同模式: `https://gitee.com/{owner}/{repo}/releases/download/...`)
-- `[deps.{repo}]` 节中的库只在对应仓库查找;`[deps]` 只查 Central
+- `"corp:1.2.3"` 与 `[deps.corp]` 是同一种语义:只在 `corp` 查找、互不回退;值里的仓库名必须已在
+  `[repos]` 声明(否则报错并列出可用仓库名),冒号前不像仓库名的值仍是 central 版本
+- `[deps.{repo}]` 分区写法保留可读,但已是 legacy(`mjm add` 只产生值形态)
 - 版本一律精确钉定,**不支持 version ranges**
 - V2 增强(GOPROXY 先例):`[repos]` 支持回退链与私库排除(排期见 §12"Go 吸收"行,语法届时补进 SPEC)
 

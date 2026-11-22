@@ -93,10 +93,16 @@ key = 坐标,value 形态决定物种:
 | 值形态 | 物种 | 要求 |
 |---|---|---|
 | `"1.2.3"` | central | 版本字符串非空、无空白;**禁止 version ranges**(`[1.0,2.0)`)。带 classifier 的依赖沿 pom 传递时,classifier 是身份的一部分(`group:artifact:classifier`),URL 为 `artifact-version-classifier.jar` |
+| `"corp:1.2.3"` | 命名仓库 | 只查 `corp` 这个仓库,**不回退**;`corp` 必须在 `[repos]` 里声明(否则报错并列出可用仓库名);版本规则与 central 相同(非空、无空白、禁 ranges/snapshot) |
 | `"gh:owner/repo@tag"` / `"gitee:owner/repo@tag"` | mjm 原生 | tag 为可选 `v` 前缀 + semver;展开规则见 §2.2 |
 | `"https://…/x.jar"` | 裸 URL(叶子) | 必须 https、以 `.jar` 结尾 |
 
-- 同一坐标同时出现在 `[deps]` 与任何 `[deps.{repo}]` → 报错
+**歧义规则**:值的冒号前若匹配 `^[a-z][a-z0-9-]*$` 且冒号后还有非空内容,按「命名仓库」解析
+(必须已在 `[repos]` 声明,否则报错——不要默默当成 central 版本);不匹配该形式的(例如 `1.2.3`)
+仍是 central 版本。
+
+- `[deps.{repo}]` 分区写法为 **legacy**:仍可读、语义与值形态完全相同,但 `mjm add` 不再产生它
+- 同一坐标同时出现在 `[deps]`、任何 `[deps.{repo}]`,或两种写法混用 → 报错(身份撞车)
 - `{repo}` 未在 `[repos]` 中声明 → 报错
 
 **[dev-deps] 与 [dev-deps.{repo}]** — 仅测试可见的依赖(Cargo `dev-dependencies`、uv `[dependency-groups]` 先例)

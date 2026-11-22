@@ -240,7 +240,7 @@ the next invocation.
 | | |
 |---|---|
 | `init` / `init --pom` | create a project, or migrate one from Maven |
-| `add` / `remove` | edit a declaration and re-lock |
+| `add` / `remove` | edit a declaration and re-lock. `add` writes the value shape (`1.2.3`, `corp:1.2.3`, `gh:owner/repo@tag`, or the shorthand `owner/repo@tag`) |
 | `lock` | resolve, download, pin |
 | `build` | compile against declared deps only |
 | `test` | forked JVM: `@MjmTest` + JUnit Jupiter |
