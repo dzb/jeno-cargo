@@ -1,187 +1,220 @@
-# 多模块设计草案（workspaces）
+# 多模块设计草案 v2（workspaces）
 
 状态:**草案,待评审,未实现**
-更新:2026-11-22
+更新:2026-11-22(首版被评审驳回 R35/R36/R40,本版重写)
+
+首版的前提「替换点只有一处」是错的:今天有**四个**独立的 classpath 装配点
+(`BuildCommand`、`TestCommand`、`RunCommand`、`ClasspathCommand`),另有两个打包
+路径(`package --uber`、`bundle`)直接读 store 里的 jar。本版按这个事实重写。
 
 ---
 
 ## 1. 问题
 
-mjm 今天只能处理一个模块。这在两种场景下不够用:
-
-**A. monorepo** —— 一个仓库里有多个模块,共享同一批依赖版本,一起构建。
-**B. 跨仓调试** —— 你依赖的库就在隔壁目录,想改一行立刻看到效果,而不是先发布
-一个版本再拉下来。
-
-DESIGN §8 早把模板记成了 `go.work`(本地覆盖文件,gitignore 不提交)。这份草案把它
-展开成可实现的语义。
+**A. monorepo** —— 一个仓库多个模块,共享依赖,一起构建。
+**B. 跨仓调试** —— 依赖的库就在隔壁,想改一行立刻看到效果。
 
 ## 2. 目标与非目标
 
 **目标**
 
-1. 一个模块能**被同目录树里的另一个模块替换**,不需要发布。
-2. 工作区根目录能一次跑完 `lock` / `build` / `test` / `clean`,按依赖顺序。
-3. **不改变任何现有文件格式**:`mjm.toml`、`mjm.lock`、描述符、`[repos]` 全部不动。
-4. 模块单独拿出来(离开工作区)仍然完全可用。
-5. `mjm.work.toml` 不提交时,CI 看到的一切与今天完全一致。
+1. 同目录树里的模块能被另一个模块**替换**,不需要发布。
+2. 工作区根目录能一次跑 `lock` / `build` / `test` / `clean`,按依赖顺序。
+3. **不改变任何现有文件格式**:`mjm.toml`、`mjm.lock`、描述符、`[repos]` 不动。
+4. 模块单独拿出去仍完全可用。
+5. 不设工作区时,CI 看到的一切与今天一致。
 
 **非目标**
 
-- 不做一个构建图引擎(Bazel 那套)。
-- 不做跨模块的版本仲裁(每个模块仍有自己的 `mjm.lock`)。
-- 不做"依赖继承/version catalog"——那是另一个问题(见 §9 Q4)。
+- 不做构建图引擎;不做跨模块版本仲裁;不做版本目录(§10 Q4)。
 
-## 3. 设计:替换发生在**装配 classpath 时**,不在解析时
+## 3. 核心决定:替换发生在装配 classpath 时,而且要先把装配收成一处
 
-这是整份草案最重要的一条。
+依赖 `com.acme:core:1.2.0`,工作区里 `libs/core` 产出它:
 
-一个模块依赖 `com.acme:core:1.2.0`。工作区里 `libs/core` 正好产出这个 id 与版本。
-mjm 的做法是:
+1. **照常解析、照常锁** —— 锁里写的就是仓库里的 `core:1.2.0`,不含任何本地路径。
+2. **装配 classpath 时,把那一行 jar 换成 `libs/core/target/classes`**。
 
-1. **照常解析与锁定** —— 完全按今天的方式从仓库解析出 `core:1.2.0` 及其传递依赖,
-   写进 `mjm.lock`。锁里不会有任何"本地路径"。
-2. **装配 classpath 时,把那一行 jar 换成 `libs/core/target/classes`** ——
-   仅此一步。
+换来四件事不变:锁格式、版本语义、严格可见性、深度预算。
 
-为什么这样做:
+**但这不是免费的。** 今天四个命令各自拼 classpath:
 
-- **锁与版本语义不变**。CI 不设工作区,拿到的 lock 与本地一模一样,不存在
-  "本地能跑、CI 版本不同"。
-- **不需要新的解析逻辑**。替换点就是今天拼 classpath 的那一处。
-- **严格可见性不变**。替换只改变"声明过的那个依赖的字节从哪来",不改变谁能被看见。
-- **传递依赖自然正确**。`core` 的传递依赖早已在消费者的锁里,照旧从 store 取。
+| 位置 | 拼的是什么 |
+|---|---|
+| `BuildCommand:95-102` | 编译 classpath(直接依赖的 jar) |
+| `TestCommand:113/119` | 测试编译 classpath + fork 的 runtime classpath |
+| `RunCommand:159` | runtime classpath |
+| `ClasspathCommand` | 导出的两条 classpath |
 
-代价:消费者看到的是**已编译的** `target/classes`,不是源码。所以替换前对方必须
-构建过,否则报错(见 §6)。
+实现的第一步是**抽出唯一的 `ClasspathAssembler`**,四个调用点全部改为经过它,
+替换只在这个 seam 里发生。没有这一步,工作区会以四种略微不同的方式生效——那比没有
+工作区更糟。
 
-## 4. 文件
+## 4. 命令 × 是否替换(实现前必须钉死的表)
+
+| 命令 | 替换? | 理由 |
+|---|---|---|
+| `build`(编译) | ✅ | 这就是工作区的意义 |
+| `test`(测试编译 + fork runtime) | ✅ | 否则测不到本地改动 |
+| `run`(runtime) | ✅ | 同上 |
+| `classpath`(两种) | ✅ | IDE 因此能看到兄弟模块的 classes |
+| `package`(普通 jar) | 无关 | 只含本项目 classes,不含依赖字节 |
+| `package --uber` | ❌ **拒绝** | uber 会把依赖字节嵌进去;嵌入未发布的本地 classes 就等于产出一个**不可分发**的 jar |
+| `bundle` | ❌ **拒绝** | 同理:发行目录里的 `lib/` 会带本地 classes,给别人就跑不起来或跑错 |
+| `publish` | ❌ **拒绝** | 描述符只能写已发布版本;发布本地字节等于撒谎 |
+| `info` / `tree` / `why` | 展示锁图 + 标记 | 它们答的是「锁里的图」,不是「本地字节」;命中替换的行加 `(local: <path>)` 标记 |
+| `lock` | 无关 | 替换不参与解析 |
+
+**拒绝的形态**:报错并说明——"`core` would come from libs/core, which is not a
+published artifact; `--uber`/`bundle`/`publish` embed or describe published bytes,
+so they refuse while a workspace override is active. Build and run the module
+instead, or drop `libs/core` from mjm.work.toml." 不给静默降级。
+
+## 5. 文件
 
 ```toml
-# mjm.work.toml —— 工作区根目录
+# mjm.work.toml —— 工作区根目录,建议 gitignore(跨仓调试)或提交(monorepo)
 [work]
-modules = [
-  "libs/core",
-  "libs/util",
-  "apps/web",
-  "tools/cli",
-]
+modules = ["libs/core", "libs/util", "apps/web", "tools/cli"]
+
+# 可选:允许本地版本与锁里的版本不一致(见 §6.2)。默认 false。
+allow-version-skew = false
 ```
 
-- 路径相对 `mjm.work.toml` 所在目录;必须是目录,且每个目录里有 `mjm.toml`。
-- **可以有组,没有别的字段**。工作区不携带规则(版本、仓库、覆盖),那些仍在各模块
-  的 `mjm.toml` 里——「规则只有一份」。
-- 查找方式:从当前目录向上找 `mjm.work.toml`,找到就用;没有就是单模块(今天的行为)。
-- **工作区根目录本身不能是模块**(不能同时有 `mjm.toml` 与 `mjm.work.toml`)。
-- 建议 gitignore(跨仓调试场景);monorepo 想提交也可以——它只是一个文件。
+- 路径相对工作区根;必须是目录且含 `mjm.toml`。
+- 查法:从当前目录向上找,取最近的一层;没有就是单模块(今天的行为)。
+- 工作区根目录**不能**同时是模块(既有 `mjm.toml` 又有 `mjm.work.toml` → 报错)。
+- 文件里除 `modules` 与 `allow-version-skew` 外**不携带任何规则**:版本、仓库、覆盖
+  仍在各模块 `mjm.toml`——「规则只有一份」。
 
-## 5. 语义
+## 6. 语义
 
-### 5.1 替换(sibling substitution)
+### 6.1 替换规则
 
-对每个工作区模块,建立 `id → 模块目录` 的映射:id 来自该模块 `mjm.toml` 的
-`[project].group` + `.name`(无 group 时为 `name`,与原生工件的既有约定一致)。
+模块 id 来自 `[project].group + .name`(无 group 时用 `name`,与原生工件约定一致)。
+消费者的某个工件命中映射时:
 
-消费者解析出的每一个工件,若 id 命中映射:
-
-| 检查 | 不通过时 |
+| 检查 | 不通过 |
 |---|---|
-| 本地模块的 `version` 与锁里那一行**完全相等** | 报错:两边的版本、各自的路径,以及"要么改版本、要么 `mjm lock`" |
-| 本地模块**构建过**(`target/classes` 存在) | 报错:`run mjm build in <path> first` |
-| 本地模块**比源码新**(可选,警告) | 警告:该模块的源码比 classes 新 —— 可能忘了重新构建 |
+| 锁里的版本 == 本地模块版本 | 见 §6.2 |
+| `target/classes` 存在 | 报错 `run mjm build in <path> first` |
+| `target/classes/META-INF/mjm/version.properties` 里的版本 == 本地模块版本 | 报错:classes 是旧版本构建的,提示重新 build |
 
-版本必须精确相等是刻意的:允许"本地版本更高"会让本地行为与 CI 分叉,而那正是
-mjm 想消灭的沉默。
+最后一条不需要额外的 stamp 文件:`mjm build` 本来就会往 `target/classes` 写
+`META-INF/mjm/version.properties`,读它即可。这比比 mtime 可靠得多(git checkout
+会把 mtime 全部刷新)。
 
-### 5.2 工作区根目录的命令
+### 6.2 版本不一致:默认拒绝,显式放宽
 
-在带 `mjm.work.toml` 的目录里:
+默认(以及 `allow-version-skew = false`)要求**精确相等**,否则报错——本地与 CI
+分叉是 mjm 要消灭的东西。
+
+但真实开发里"改进本地版本看效果"需要先改模块版本、再改所有消费者声明,那会让工作区
+从"方便"变成"负担"。所以给一个**显式、非默认**的逃生口:
+
+```toml
+[work]
+allow-version-skew = true
+```
+
+打开后允许本地版本 ≥ 锁里的版本,但**每次运行都打印一行警告**:
 
 ```
-mjm lock     依次 lock 每个模块(拓扑序)
-mjm build    依次 build(拓扑序;某模块失败即停)
-mjm test     依次 test
-mjm clean    依次 clean
+warning: core is 1.2.1 locally, 1.2.0 in the lock — CI will build against 1.2.0
 ```
 
-- 拓扑序由模块间依赖推出(模块 A 的 id 出现在模块 B 的声明里 → A 先)。
-  **环 = 错误**,报出环上的路径。
-- `--module <path>` 只处理一个(路径相对工作区根)。
-- 其他命令(`package`/`bundle`/`publish`/`run`/`add`/...)在根目录**不接受**工作区
-  编排:报错并要求进入模块目录。理由:这些命令一次只对"一个项目"有意义。
+**不允许静默**。若本地版本更低 → 仍然报错(那说明锁比本地新,替换没有意义)。
 
-### 5.3 在模块目录里
+### 6.3 工作区根目录的编排
 
-一切照旧,唯一区别是替换生效——包括 `mjm classpath`(IDE 因此也能看到兄弟模块的
-classes,这正是日常开发最需要的那一步)。
+```
+mjm lock     逐模块(拓扑序);遇错即停          ← 锁不一致比测试失败危险
+mjm build    逐模块;遇错即停,末尾 `built: X, failed: Y`
+mjm test     逐模块;遇错继续,末尾汇总          ← 与 CI 测试套件同构
+mjm clean    逐模块;遇错继续,汇总              ← 一个模块的挂载/权限问题不该让其余不清
+```
 
-### 5.4 发布时**不**替换
+- 拓扑序由模块间依赖推出;**环 = 错误**并列出环上的路径。
+- `--module <path>` 只处理一个(相对工作区根)。
+- **非事务**:`build` 中途失败时已成功的模块保留 `target/classes`;重跑会复用它们。
+  这不是 bug,但要写进输出(`built: X, failed: Y`)。
+- 这些根命令**不接受**替换以外的语义:例如 `lock` 不会因为兄弟模块而少解析。
 
-`mjm publish`(以及它生成的描述符)必须反映**已发布的版本**,不接受替换。
-若该模块有一条声明本会被替换,打一行警告说明"发布时锁的是仓库版本",然后照常发布。
+### 6.4 其他命令在根目录
 
-## 6. 错误与边界
+`add` / `remove` / `package` / `bundle` / `publish` / `run` / `info` / `tree` / `why` /
+`classpath` 在根目录**拒绝**执行,要求 `--module <path>` 或进入模块目录。
+`tree` / `why` / `info` / `classpath` 支持 `--module`。
+
+### 6.5 模块目录里
+
+一切照旧,唯一区别是替换生效。`mjm add` **不感知工作区**:它按仓库解析;若兄弟模块
+没有发布版本,报错并提示"先发布,或不要用 add 加这个依赖"。
+
+### 6.6 IDE 的使用规则(必须写进文档)
+
+- 只编辑一个模块时:用那个模块的 `mjm classpath`,兄弟模块的 `target/classes` 作为
+  外部库出现。
+- 想同时把两个模块当独立工程编辑时:各自用各自的 classpath,**不要**把替换后的
+  consumer classpath 再加到兄弟工程上——同一批 classes 会从两个来源出现。
+- 这不需要工具介入,但需要一句话说明,否则用户会自己撞上。
+
+## 7. 错误与边界
 
 | 情形 | 行为 |
 |---|---|
-| `modules` 里有不存在的目录 | 报错并列出 |
-| 目录里没有 `mjm.toml` | 报错 |
-| 两个模块产出同一个 id | 报错(不能靠顺序决定谁赢) |
+| `modules` 里路径不存在 / 没有 `mjm.toml` | 报错并列出 |
+| 两个模块产出同一个 id | 报错(不能让顺序决定胜负) |
+| 两个模块 realpath 相同(符号链接绕一圈) | 报错 |
 | 根目录同时有 `mjm.toml` 与 `mjm.work.toml` | 报错 |
-| 模块间有环 | 报错并给出环 |
-| 被替换的模块没构建 | 报错 + `run mjm build in <path> first` |
-| 版本不相等 | 报错(见 §5.1) |
-| 工作区里的模块自己有 `mjm.work.toml` | 忽略(只有最近的一层生效) |
-| 路径里有符号链接 | 用 realpath 去重与比较 |
+| 模块间成环 | 报错并给出环 |
+| 被替换模块未构建 | 报错 + `run mjm build in <path> first` |
+| classes 的版本戳与模块版本不一致 | 报错:旧版本构建产物,先 build |
+| 版本不等且未开 skew | 报错:双方版本 + 路径 + 两种解法 |
+| 版本更低(skew 开着) | 仍然报错 |
+| 嵌套 `mjm.work.toml` | 取最近的一层,忽略外层 |
+| 运行中 `mjm.work.toml` 变了 | 不缓存;每次运行重新读取并重算映射 |
+| 模块被移出 `modules` | 立即回到仓库版本;不改任何 lock;不警告(这是用户刚做的选择) |
+| 兄弟 `target/classes` 比源码旧 | 不检查 mtime(不可靠);版本戳是唯一依据 |
 
-## 7. 与既有机制的关系
+## 8. 与既有机制的关系
 
 | 机制 | 影响 |
 |---|---|
-| `mjm.lock` | **不变**。每模块一份,照旧提交 |
-| 项目锁 `~/.mjm/locks/<sha(realpath)>` | 不变。按模块目录各一把;根目录跑编排时逐模块取锁 |
+| `mjm.lock` | 不变,每模块一份,照旧提交 |
+| 项目锁 `~/.mjm/locks/<sha(realpath)>` | 不变;根目录编排时逐模块取锁 |
 | 严格可见性 | 不变(替换只改字节来源) |
-| `--offline` | 变得更宽松(兄弟模块不需要网络),但语义不变 |
-| `mjm cache` | 不变。工作区不产生新的全局目录 |
-| 深度预算 | **不变**,且不受替换影响:预算看的是锁里的图,跟字节从哪来无关 |
+| `--offline` | 语义不变;兄弟模块少一次网络需求 |
+| `mjm cache` | 不变;工作区不产生新的全局目录 |
+| 深度预算 | 不变;预算看锁里的图,与字节来源无关 |
+| `[scripts]` 的 `MJM_CLASSPATH` | 跟随替换(与 `run` 一致) |
 
-## 8. 为什么不是另外两种做法
+## 9. 为什么不是另外两种做法
 
-**Cargo 式:工作区一个共享锁** —— 语义更好(全工作区单版本),但改动面大:锁的粒度
-从"每项目"变成"每工作区",模块独立可用性下降(拿一个模块出去,锁怎么办),且与
-"锁随项目提交"的既有约定冲突。留作 V2 的可能。
+**Cargo 式:工作区共享一个锁** —— 语义更好(全工作区单版本),但锁的粒度从"每项目"
+变成"每工作区",模块独立可用性下降,改动面大。留作 V2。
 
-**把路径写进 `mjm.toml`(Cargo 的 `path = "../core"`)** —— 拒绝。`mjm.toml` 是提交
-进仓库的文件,写进去的路径会变成机器相关,这正是 F1(锁里绝对路径)刚修掉的病。
+**把 `path = "../core"` 写进 `mjm.toml`** —— 拒绝:`mjm.toml` 是提交进仓库的,
+路径会变成机器相关,正是 F1 刚修掉的病。
 
-## 9. 待定问题(需要维护者拍板)
+## 10. 待定问题(需要维护者拍板)
 
-**Q1 兄弟版本必须精确相等,还是要允许"本地更新"?**
-草案选"必须相等"。另一种做法是允许本地版本 ≥ 声明版本并给警告——更灵活,但本地与
-CI 会分叉。
+| # | 问题 | 建议 |
+|---|---|---|
+| Q1 | 版本相等要不要放宽 | 默认精确相等 + `allow-version-skew` 显式开关并每次警告(§6.2) |
+| Q2 | 根目录要不要编排 `package`/`bundle` | V1 不编排;两者在替换命中时**拒绝**。需要全量打包时再加显式命令 |
+| Q3 | `mjm.work.toml` 该不该提交 | 允许但不规定;monorepo 提交、跨仓调试 gitignore |
+| Q4 | 版本目录(`[workspace.dependencies]` 那套) | V1 不做;要做就单独一个文件,不塞进 `mjm.work.toml` |
 
-**Q2 根目录要不要编排 `package`/`bundle`?**
-草案说不要(只 `lock/build/test/clean`)。真实 monorepo 发版时可能想一次打包全部。
+## 11. 验收标准(实现时照此写测试)
 
-**Q3 `mjm.work.toml` 是否应该被提交?**
-草案允许但不鼓励。若确定 monorepo 是主场景,可以考虑改成"提交版"并加 `offline overlays`
-来解决跨仓调试——那是两套文件,更复杂。
-
-**Q4 要不要版本目录(version catalog)?**
-Cargo 的 `[workspace.dependencies]`、Gradle 的 `libs.versions.toml` 解决的是"同一批
-依赖版本写七遍"。这与本草案正交,可以单独做(但它会打破"规则只有一份"的叙述,
-需要新的说法)。
-
-## 10. 验收标准(实现时照此写测试)
-
-1. 两个模块 A→B,A 用 B 的 id 声明;B 构建后,在 A 里 `mjm classpath` 含
-   `B/target/classes` 而不是 store 里的 jar。
-2. B 未构建 → A 的 build 报 `run mjm build in <path> first`,exit 1。
-3. 版本不相等 → 报错,消息含双方版本与路径。
-4. 根目录 `mjm build` 按拓扑序构建;把依赖反过来写(声明在前、被依赖在后)仍得到
-   正确顺序。
-5. 模块间成环 → 报错并列出环。
-6. 两个模块同 id → 报错。
-7. 无 `mjm.work.toml` 时,上述所有命令的行为与本草案之前**逐字节一致**(lock 与
-   classpath 输出都不变)。
-8. 工作区里发布一个模块:描述符里写仓库版本,且有"发布不替换"的警告。
+1. A→B 声明;B 构建后,A 的 `mjm classpath` 含 `B/target/classes`,不含 store 里的 B jar。
+2. B 未构建 → A 的 `build` 报 `run mjm build in <path> first`,exit 1。
+3. B 的 `target/classes` 版本戳与 `mjm.toml` 不一致 → 报错(旧产物)。
+4. 版本不等且未开 skew → 报错;开了 skew → 成功 + 每次一行警告;本地版本更低 → 仍报错。
+5. 根目录 `build` 按拓扑序(声明顺序颠倒也一样);成环 → 报错并列出环。
+6. `package --uber` / `bundle` / `publish` 在替换命中时**拒绝**,消息含模块路径与三种解法。
+7. `tree` / `info` 对命中的行显示 `(local: <path>)` 标记。
+8. 根目录 `add` / `run` / `publish` → 拒绝;`--module` 可用。
+9. 无 `mjm.work.toml` 时,所有命令的 lock 与 classpath 输出与今天**逐字节一致**。
+10. `test` 在根目录:一个模块失败,其余仍跑完,汇总里能看出哪个失败。
