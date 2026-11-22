@@ -65,7 +65,12 @@ public final class ArtifactStore {
      * every pom even when the bytes are already on disk.
      */
     private final UrlIndex index;
+    // HTTP/1.1 on purpose: a store download is one file, so multiplexing buys
+    // nothing — and HTTP/2 was observed failing on GitHub release assets after
+    // the redirect (EOF while reading, then a connect timeout), while HTTP/1.1
+    // answered 200 on every attempt on the same machine and URL.
     private final HttpClient http = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
     /** The digests of everything this session downloaded — the lockfile's source of truth. */

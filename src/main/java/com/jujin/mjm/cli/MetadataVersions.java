@@ -39,7 +39,10 @@ final class MetadataVersions {
     private static final java.time.Duration CONNECT_TIMEOUT =
             java.time.Duration.ofSeconds(10);
 
+    // HTTP/1.1 on purpose: version lists are small single documents, and HTTP/2
+    // failed on the real network where HTTP/1.1 was stable on every attempt.
     private static final HttpClient HTTP = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
             .followRedirects(HttpClient.Redirect.NORMAL)
             .connectTimeout(CONNECT_TIMEOUT)
             .build();

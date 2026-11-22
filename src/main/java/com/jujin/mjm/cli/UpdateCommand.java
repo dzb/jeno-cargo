@@ -45,7 +45,11 @@ public final class UpdateCommand implements Command {
     private static final int DOWNLOAD_ATTEMPTS = 5;
     private static final long[] BACKOFF_MS = {500L, 2_000L, 4_000L, 8_000L};
 
+    // HTTP/1.1 on purpose: the update check reads one JSON document; HTTP/2's
+    // multiplexing buys nothing and it failed on this machine where HTTP/1.1
+    // succeeded on every attempt (the same GitHub release path the store hit).
     private final HttpClient http = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
 
