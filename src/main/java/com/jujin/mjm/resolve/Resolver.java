@@ -245,9 +245,12 @@ public final class Resolver {
                         yield new Metadata(edges, Map.of());
                     }
                     case GH, GITEE -> {
+                        // the same entry point jarUrl/metadataUrl use: a mirror
+                        // set through -Dmjm.{github,gitee}.host must cover the
+                        // descriptor fetch too, or it is not a mirror
                         String host = template.species() == Species.GH
-                                ? "https://github.com"
-                                : "https://gitee.com";
+                                ? ArtifactLocations.githubHost()
+                                : ArtifactLocations.giteeHost();
                         String url = ArtifactLocations.releaseFile(host, template.owner(),
                                 template.repo(), template.tag(), version, "mjm.toml");
                         String text = descriptorSource.descriptor(url);
