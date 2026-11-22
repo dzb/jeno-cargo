@@ -64,6 +64,10 @@ public final class WhyCommand implements Command {
             System.err.println("mjm: why needs an id — mjm why <group:artifact> (or a name)");
             return 2;
         }
+        if (args.size() > 1) {
+            System.err.println("mjm: why takes exactly one id — got '" + args.get(1) + "'");
+            return 2;
+        }
         String target = args.getFirst();
         MjProject project;
         try {

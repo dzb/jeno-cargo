@@ -87,6 +87,10 @@ public final class UpdateCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        if (!args.isEmpty()) {
+            System.err.println("mjm: update takes no arguments — got '" + args.getFirst() + "'");
+            return 2;
+        }
         String latest;
         String tarGzUrl = null;
         try {

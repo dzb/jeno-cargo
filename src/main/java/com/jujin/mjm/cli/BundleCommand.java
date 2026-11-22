@@ -151,6 +151,10 @@ public final class BundleCommand implements Command {
         if (workspace != null) {
             return workspace;
         }
+        if (!args.isEmpty()) {
+            System.err.println("mjm: bundle takes no arguments — got '" + args.getFirst() + "'");
+            return 2;
+        }
         // the whole assembly writes target/dist/: skeleton, toolchain, launcher, tar.gz
         return ProjectLock.with(projectDir, this::assemble);
     }

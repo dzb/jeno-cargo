@@ -71,6 +71,10 @@ public final class TestCommand implements Command {
         if (workspace != null) {
             return workspace;
         }
+        if (!args.isEmpty()) {
+            System.err.println("mjm: test takes no arguments — got '" + args.getFirst() + "'");
+            return 2;
+        }
         if (!Files.exists(projectDir.resolve("mjm.lock"))) {
             System.err.println("mjm: no mjm.lock in " + projectDir + " — run mjm lock first");
             return 1;

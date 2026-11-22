@@ -37,6 +37,15 @@ final class WorkspaceRun {
 
     /** The workspace if {@code projectDir} is its root, else null. */
     static Run root(Path projectDir, List<String> args) {
+        return root(projectDir, args, false);
+    }
+
+    /**
+     * @param stopAtFirstPositional for {@code run}: the first argument that is not
+     *        a flag is the target, and everything from it on belongs to the
+     *        program — a {@code --module} after it must not be consumed here.
+     */
+    static Run root(Path projectDir, List<String> args, boolean stopAtFirstPositional) {
         var workspace = Workspaces.rootAt(projectDir).orElse(null);
         if (workspace == null) {
             return null;
@@ -52,6 +61,9 @@ final class WorkspaceRun {
                 requested = args.get(++i);
             } else if (arg.startsWith("--module=")) {
                 requested = arg.substring("--module=".length());
+            } else if (stopAtFirstPositional && !arg.startsWith("-")) {
+                rest.addAll(args.subList(i, args.size()));
+                break;
             } else {
                 rest.add(arg);
             }
@@ -103,6 +115,10 @@ final class WorkspaceRun {
             return 1;
         }
         if (run == null) {
+            if (namesModule(args)) {
+                System.err.println("mjm: --module is only used at a workspace root");
+                return 2;
+            }
             return null;
         }
         List<Path> modules;
@@ -152,8 +168,12 @@ final class WorkspaceRun {
      * Returns null when this directory is not a workspace root.
      */
     static Integer requireModule(Path projectDir, List<String> args, Child child) {
-        boolean namesModule = args.stream()
-                .anyMatch(arg -> arg.equals("--module") || arg.startsWith("--module="));
+        return requireModule(projectDir, args, false, child);
+    }
+
+    static Integer requireModule(Path projectDir, List<String> args,
+                                 boolean stopAtFirstPositional, Child child) {
+        boolean namesModule = namesModuleInPrefix(args, stopAtFirstPositional);
         if (!namesModule && Workspaces.rootAt(projectDir).isEmpty()) {
             return null;  // ordinary single-project invocation
         }
@@ -164,7 +184,7 @@ final class WorkspaceRun {
         }
         Run run;
         try {
-            run = root(projectDir, args);
+            run = root(projectDir, args, stopAtFirstPositional);
         } catch (Workspaces.UsageException e) {
             return usage(e.getMessage());
         } catch (Workspaces.WorkspaceException e) {
@@ -176,6 +196,29 @@ final class WorkspaceRun {
             return 2;
         }
         return inModule(run.module(), () -> child.run(run.module(), run.args()));
+    }
+
+    /** Whether the argument list names a module at all ({@code --module} / {@code =}). */
+    private static boolean namesModule(List<String> args) {
+        return args.stream()
+                .anyMatch(arg -> arg.equals("--module") || arg.startsWith("--module="));
+    }
+
+    /**
+     * For {@code run}, only the prefix before the target is mjm's: a
+     * {@code --module} after the target belongs to the program.
+     */
+    private static boolean namesModuleInPrefix(List<String> args, boolean stopAtFirstPositional) {
+        for (int i = 0; i < args.size(); i++) {
+            String arg = args.get(i);
+            if (arg.equals("--module") || arg.startsWith("--module=")) {
+                return true;
+            }
+            if (stopAtFirstPositional && !arg.startsWith("-")) {
+                return false;
+            }
+        }
+        return false;
     }
 
     /**

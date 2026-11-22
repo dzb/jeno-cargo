@@ -84,6 +84,10 @@ public final class PublishCommand implements Command {
         if (workspace != null) {
             return workspace;
         }
+        if (args.size() > 1) {
+            System.err.println("mjm: publish takes at most one target — got '" + args.get(1) + "'");
+            return 2;
+        }
         // The upload reads the bytes in target/dist/, so the lock covers the network
         // phase too: locking only the write phase would let clean --dist pull a
         // jar out from under a running upload. The cost is that another writer
