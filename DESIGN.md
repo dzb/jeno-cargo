@@ -366,7 +366,7 @@ push tag v*  →  验证 + 发行
 | `mjm cache clean` | ✅ | 显式删除 store 与 sources 并报释放量;不动锁文件、不动项目、不改 `mjm.lock` |
 | `mjm clean [--target (default) \| --dist]` | ✅ | **默认整棵删 `target/`**(无参或 `--target`;Maven 惯例——交付物也在 `target/dist/`,所以一并清掉;里面只有可重建的 `classes`/`test-classes` 与可重发的 `target/dist`,依赖缓存在 XDG cache 的 `mjm/store` 不在此);`--dist` 只删 `target/dist/`(保留 classes,重发发行物不用重编译);两个都给就都清;**两个目标先全部探测,任一(含其内部嵌套)是挂载点则整次拒绝、一个字节不删**;**永不触碰 store**;旧的项目根 `dist/` 不再被读取(给一行迁移提示) |
 | `mjm outdated [--json]` | ✅ | 已钉版本 vs 仓库可用版本;只查 Central 与命名 https 仓库,`gh:`/`url`/`local:`/`mjm:` 列为"未检查";预发布默认不报(除非当前就是预发布);跨 major 单独一节;`--json` 输出 `upToDate`/`updates`/`notChecked`/`failures` |
-| `--offline` | ✅ | 禁止一切网络访问;store 有则用,缺则报错。`update`/`publish`/`outdated` 不适用 |
+| `-o`, `--offline` | ✅ | 禁止一切网络访问;store 有则用,缺则报错。`update`/`publish`/`outdated` 不适用 |
 | daemon 常驻 | **M6** | 已确认需要:常驻 JVM 热命令,mvnd 已验证可快 2–4 倍 |
 | workspaces/monorepo | V2 | 设计模板 = go.work 模式:`mjm.work.toml` 本地覆盖文件,gitignore 不提交 |
 | `mjm audit` | V2 | 依赖漏洞扫描,OSV.dev JSON API(commons 解析器现成);govulncheck 先例 |

@@ -44,9 +44,10 @@ public final class CommandRunner {
         // argument to it — the one convention every CLI shares.
         List<String> rest = List.of(args).subList(1, args.length);
 
-        // --offline is a property of the run, applied before the command sees
-        // its arguments: every store access below this point obeys it.
-        boolean offline = rest.contains("--offline");
+        // --offline/-o is a property of the run, applied before the command sees
+        // its arguments: every store access below this point obeys it. The two
+        // spellings are interchangeable and may repeat.
+        boolean offline = rest.contains("--offline") || rest.contains("-o");
         if (offline) {
             if (!command.supportsOffline()) {
                 System.err.println("mjm: " + command.name() + " needs the network by design — "
@@ -55,7 +56,7 @@ public final class CommandRunner {
             }
             com.jujin.mjm.store.ArtifactStore.goOffline();
             List<String> filtered = new java.util.ArrayList<>(rest);
-            filtered.remove("--offline");
+            filtered.removeIf(flag -> flag.equals("--offline") || flag.equals("-o"));
             rest = filtered;
         }
         if (rest.size() == 1 && (rest.getFirst().equals("--help") || rest.getFirst().equals("-h"))) {
@@ -91,7 +92,7 @@ public final class CommandRunner {
             System.out.println("  " + pad(label(command), column) + command.summary());
         }
         System.out.println();
-        System.out.println("  --offline            refuse all network access (store hits only; "
+        System.out.println("  -o, --offline        refuse all network access (store hits only; "
                 + "not for update/publish/outdated)");
         return 2;
     }

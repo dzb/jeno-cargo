@@ -260,7 +260,7 @@ the next invocation.
 | `outdated [--json]` | pinned dependencies with newer versions available; `--json` gives `upToDate`/`updates`/`notChecked`/`failures` |
 | `publish [target]` | the release triple; `gh:owner/repo`, `mjm:https://host/` (two levels, no group), or any `http(s)://` host (Maven layout over PUT, needs group) |
 | `update` / `upgrade` | self-upgrade from GitHub Releases |
-| `--offline` (flag) | refuse all network access — store hits only. Not for `update`/`publish`/`outdated`, which are network by nature |
+| `-o`, `--offline` (flag) | refuse all network access — store hits only. Not for `update`/`publish`/`outdated`, which are network by nature |
 | `mjm <command> --help` | that command's syntax and explanation (may run to several lines) |
 Deliverables moved: `dist/` is now `target/dist/` (it is build output, and
 `mjm clean` removes the whole `target/` tree). Scripts that read `dist/` need
