@@ -360,6 +360,7 @@ push tag v*  →  验证 + 发行
 | ~~`mjm release`~~ | **已删除** | 生命周期属于项目自己的 CI;mjm 只提供单步机制 |
 | `mjm init [--pom] [--force]` | ✅ | 骨架,或从 pom.xml 迁移(逐条报告不可表达的事实) |
 | `mjm remove <id>` | ✅ | 删除一行声明并重锁 |
+| `mjm classpath [--test] [--file <path>]` | ✅ | 给 IDE 的 classpath:**默认严格可见性的编译 classpath**(target/classes + 直接声明的 jar,不含传递依赖,避免“IDE 能编过、mjm build 又拒绝”),`--test` 为测试 classpath(test-classes + classes + MAIN/DEV 闭包);jar 用 store 的内容寻址路径,不拷贝不链接;输出仅供本机 IDE,不应提交 |
 | `mjm info <id> [--source]` | ✅ | 身份/来源/依赖/源码地址;`--source` 取源码树 |
 | `mjm cache dir | size | prune` | ✅ | 只看不删:`dir` 三个根、`size` 各自占用 + 合计、`prune` 只删可证明无用的东西(项目已消失的锁文件、`part-*.tmp` 残留、悬空索引条目);锁文件带 `project=` 侧车 |
 | `mjm cache clean` | ✅ | 显式删除 store 与 sources 并报释放量;不动锁文件、不动项目、不改 `mjm.lock` |

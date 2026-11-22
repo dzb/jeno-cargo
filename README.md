@@ -253,6 +253,7 @@ the next invocation.
 | `run` | run on the resolved closure |
 | `tree [--json]` / `why` | see the graph and every introduction path; `tree --json` is one machine-readable document (id-sorted artifacts, sorted children) |
 | `info [--source]` | everything about one dependency, including its source |
+| `classpath [--test] [--file <p>]` | the classpath an IDE should use. Default is the **compile** classpath under strict visibility — project classes plus the jars you declare directly, no transitive jars, so the IDE never accepts code `mjm build` rejects. `--test` widens it to the test classpath (test classes + main classes + full closure). Paths are the store's content-addressed jars; nothing is copied. Local-only: do not commit `--file` output |
 | `package [--uber]` | the jar. `--uber` merges the closure and writes `...-uber.jar`, so the two never overwrite each other |
 | `bundle` | an installable distribution (bin + lib + setup.sh + tar.gz), in `target/dist/` |
 | `clean [--target \| --dist]` | remove the whole `target/` by default (deliverables live in `target/dist/`); `--dist` removes only `target/dist/` and keeps classes; never the store |
