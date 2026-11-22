@@ -744,4 +744,197 @@ class PomsTest {
         // matters is that nothing external is fetched and the artifact is named.
         assertTrue(ex.getMessage().contains("org.example:evil:1.0.0"), "got: " + ex.getMessage());
     }
+
+    // ------------------------------------------------------------------
+    // dependencyManagement supplies the effective scope
+    // ------------------------------------------------------------------
+
+    /** A parent that manages one artifact with the given scope and extra XML. */
+    private static String parentWithManaged(String scope, String extra) {
+        return """
+            <project>
+              <groupId>com.example</groupId>
+              <artifactId>parent</artifactId>
+              <version>1.0.0</version>
+              <packaging>pom</packaging>
+              <dependencyManagement>
+                <dependencies>
+                  <dependency>
+                    <groupId>org.example</groupId>
+                    <artifactId>managed</artifactId>
+                    <version>3.0.0</version>
+                    %s
+                    %s
+                  </dependency>
+                </dependencies>
+              </dependencyManagement>
+            </project>
+            """.formatted(scope == null ? "" : "<scope>" + scope + "</scope>", extra);
+    }
+
+    private static String childWith(String declaredVersion, String declaredScope,
+                                    String exclusions) {
+        return """
+            <project>
+              <parent>
+                <groupId>com.example</groupId>
+                <artifactId>parent</artifactId>
+                <version>1.0.0</version>
+              </parent>
+              <artifactId>child</artifactId>
+              <dependencies>
+                <dependency>
+                  <groupId>org.example</groupId>
+                  <artifactId>managed</artifactId>
+                  %s
+                  %s
+                  %s
+                </dependency>
+              </dependencies>
+            </project>
+            """.formatted(declaredVersion == null ? "" : "<version>" + declaredVersion + "</version>",
+                declaredScope == null ? "" : "<scope>" + declaredScope + "</scope>",
+                exclusions == null ? "" : exclusions);
+    }
+
+    private static Pom decodeWithParent(String scope, String extra, String version,
+                                        String declaredScope, String exclusions) {
+        return Poms.decode("com.example", "child", "1.0.0",
+                "https://repo.maven.apache.org/maven2/",
+                source("com.example:parent:1.0.0", parentWithManaged(scope, extra),
+                        "com.example:child:1.0.0",
+                        childWith(version, declaredScope, exclusions)));
+    }
+
+    @Test
+    void aManagedTestScopeDropsTheDependency() {
+        // neither scope nor version declared: both came from the parent
+        Pom pom = decodeWithParent("test", "", null, null, null);
+
+        assertTrue(pom.dependencies().isEmpty(),
+                "test scope never propagates: " + pom.dependencies());
+    }
+
+    @Test
+    void aManagedTestScopeStillWinsWhenTheVersionIsDeclared() {
+        // the regression this fixes: a dependency that names a version skips
+        // the missing-version branch, so its managed scope used to be ignored
+        Pom pom = decodeWithParent("test", "", "3.0.0", null, null);
+
+        assertTrue(pom.dependencies().isEmpty(),
+                "a declared version must not hide the managed scope: " + pom.dependencies());
+    }
+
+    @Test
+    void aManagedRuntimeScopeIsKeptAsRuntime() {
+        Pom pom = decodeWithParent("runtime", "", "3.0.0", null, null);
+
+        assertEquals("runtime", dep(pom, "managed").scope());
+        assertEquals("3.0.0", dep(pom, "managed").version());
+    }
+
+    @Test
+    void managedExclusionsApplyEvenWhenTheVersionIsDeclared() {
+        Pom pom = decodeWithParent("compile", """
+                <exclusions>
+                  <exclusion>
+                    <groupId>org.example</groupId>
+                    <artifactId>noisy</artifactId>
+                  </exclusion>
+                </exclusions>
+                """, "3.0.0", null, null);
+
+        assertEquals(List.of(new PomDependency.Exclusion("org.example", "noisy")),
+                dep(pom, "managed").exclusions());
+    }
+
+    @Test
+    void withoutManagementTheScopeRulesAreUnchanged() {
+        Pom pom = Poms.decode("com.example", "plain", "1.0.0",
+                "https://repo.maven.apache.org/maven2/", source(
+                        "com.example:plain:1.0.0", """
+                        <project>
+                          <groupId>com.example</groupId>
+                          <artifactId>plain</artifactId>
+                          <version>1.0.0</version>
+                          <dependencies>
+                            <dependency>
+                              <groupId>org.example</groupId>
+                              <artifactId>one</artifactId>
+                              <version>1.0.0</version>
+                            </dependency>
+                            <dependency>
+                              <groupId>org.example</groupId>
+                              <artifactId>two</artifactId>
+                              <version>2.0.0</version>
+                              <scope>runtime</scope>
+                            </dependency>
+                            <dependency>
+                              <groupId>org.example</groupId>
+                              <artifactId>three</artifactId>
+                              <version>3.0.0</version>
+                              <scope>test</scope>
+                            </dependency>
+                          </dependencies>
+                        </project>
+                        """));
+
+        assertEquals("compile", dep(pom, "one").scope());
+        assertEquals("runtime", dep(pom, "two").scope());
+        assertTrue(pom.dependencies().stream().noneMatch(d -> d.artifactId().equals("three")),
+                "an explicit test scope is still dropped");
+    }
+
+    @Test
+    void managedEntriesKeyedByTypeAndClassifierDoNotCollide() {
+        // log4j's parent manages log4j-api twice: as a jar and as a test-jar.
+        // A coordinate-only key lets the test-jar entry answer for both, which
+        // silently drops the runtime dependency.
+        Pom pom = Poms.decode("com.example", "child", "1.0.0",
+                "https://repo.maven.apache.org/maven2/",
+                source("com.example:parent:1.0.0", """
+                        <project>
+                          <groupId>com.example</groupId>
+                          <artifactId>parent</artifactId>
+                          <version>1.0.0</version>
+                          <packaging>pom</packaging>
+                          <dependencyManagement>
+                            <dependencies>
+                              <dependency>
+                                <groupId>org.example</groupId>
+                                <artifactId>api</artifactId>
+                                <version>2.14.1</version>
+                              </dependency>
+                              <dependency>
+                                <groupId>org.example</groupId>
+                                <artifactId>api</artifactId>
+                                <version>2.14.1</version>
+                                <type>test-jar</type>
+                                <scope>test</scope>
+                              </dependency>
+                            </dependencies>
+                          </dependencyManagement>
+                        </project>
+                        """,
+                        "com.example:child:1.0.0", """
+                        <project>
+                          <parent>
+                            <groupId>com.example</groupId>
+                            <artifactId>parent</artifactId>
+                            <version>1.0.0</version>
+                          </parent>
+                          <artifactId>child</artifactId>
+                          <dependencies>
+                            <dependency>
+                              <groupId>org.example</groupId>
+                              <artifactId>api</artifactId>
+                            </dependency>
+                          </dependencies>
+                        </project>
+                        """));
+
+        assertEquals("2.14.1", dep(pom, "api").version());
+        assertEquals("compile", dep(pom, "api").scope(),
+                "the jar entry answers, not the test-jar one");
+    }
 }

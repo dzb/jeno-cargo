@@ -177,6 +177,7 @@ public final class Poms {
             String artifactId = requireField(entry.artifactId(), "a managed dependency", "artifactId");
             String scope = interpolate(entry.scope(), resolved);
             String type = interpolate(entry.type(), resolved);
+            String classifier = interpolate(entry.classifier(), resolved);
             String version = interpolate(entry.version(), resolved);
             if ("pom".equals(type) && "import".equals(scope)) {
                 requireConcrete(groupId, artifactId, version, "the imported BOM");
@@ -187,8 +188,12 @@ public final class Poms {
                             + " has no version");
                 }
                 requireConcrete(groupId, artifactId, version, "the managed dependency");
-                own.put(key(groupId, artifactId), new Managed(version, scope,
-                        exclusions(entry, resolved)));
+                // Maven keys a managed entry by group:artifact:type:classifier,
+                // not by coordinate alone: log4j's parent manages log4j-api
+                // (compile) and log4j-api as a test-jar in the same section,
+                // and collapsing them made the test entry win.
+                own.put(managedKey(groupId, artifactId, type, classifier),
+                        new Managed(version, scope, exclusions(entry, resolved)));
             }
         }
         managed.putAll(own);
@@ -218,42 +223,60 @@ public final class Poms {
                 continue;
             }
             String declaredScope = interpolate(raw.scope(), resolved);
+            // The managed lookup needs the type/classifier, but the type is only
+            // validated for dependencies that survive the scope filter: Maven
+            // poms (log4j's among them) declare provided/zip helper artifacts
+            // that mjm never follows, and rejecting their type would fail the
+            // whole pom for a dependency that was about to be dropped anyway.
+            String rawType = interpolate(raw.type(), resolved);
+            String classifier = blank(raw.classifier()) ? null : interpolate(raw.classifier(), resolved);
+            Managed byManagement = managed.get(managedKey(groupId, artifactId, rawType, classifier));
+
+            // The effective scope is decided before the version: a managed entry
+            // supplies the scope whenever the dependency omits it, whether or not
+            // it also supplied the version (Maven's rule). log4j-core 2.14.1 is
+            // the case that proved this — its junit-vintage-engine dependency
+            // names a version but no scope, and the parent manages it as "test".
+            String effectiveScope = declaredScope;
+            if (blank(effectiveScope) && byManagement != null
+                    && !blank(byManagement.scope())) {
+                effectiveScope = byManagement.scope();
+            }
             String scope;
-            if (blank(declaredScope)) {
+            if (blank(effectiveScope)) {
                 scope = "compile";
             } else {
-                scope = switch (declaredScope) {
-                    case "compile", "runtime" -> declaredScope;
+                scope = switch (effectiveScope) {
+                    case "compile", "runtime" -> effectiveScope;
                     // test/provided/system never propagate transitively; import
                     // belongs to dependency management, not dependencies.
                     case "test", "provided", "system", "import" -> null;
                     default -> throw new PomException("dependency " + key(groupId, artifactId)
-                            + " of " + self + " has unknown scope '" + declaredScope + "'");
+                            + " of " + self + " has unknown scope '" + effectiveScope + "'");
                 };
                 if (scope == null) {
                     continue;
                 }
             }
-            String type = normalizeType(interpolate(raw.type(), resolved), groupId, artifactId, self);
-            String classifier = blank(raw.classifier()) ? null : interpolate(raw.classifier(), resolved);
+            String type = normalizeType(rawType, groupId, artifactId, self);
             List<PomDependency.Exclusion> exclusions = exclusions(raw, resolved);
-
-            String version = interpolate(raw.version(), resolved);
-            if (blank(version)) {
-                Managed byManagement = managed.get(key(groupId, artifactId));
-                if (byManagement == null) {
-                    throw new PomException("dependency " + key(groupId, artifactId) + " of "
-                            + self + " has no version and none is managed");
-                }
-                version = byManagement.version();
-                if (blank(declaredScope) && !blank(byManagement.scope())) {
-                    scope = byManagement.scope();
-                }
+            if (byManagement != null) {
+                // managed exclusions apply whenever the entry matches, not only
+                // when it also supplied the version
                 List<PomDependency.Exclusion> merged = new ArrayList<>(exclusions);
                 byManagement.exclusions().stream()
                         .filter(e -> !merged.contains(e))
                         .forEach(merged::add);
                 exclusions = List.copyOf(merged);
+            }
+
+            String version = interpolate(raw.version(), resolved);
+            if (blank(version)) {
+                if (byManagement == null) {
+                    throw new PomException("dependency " + key(groupId, artifactId) + " of "
+                            + self + " has no version and none is managed");
+                }
+                version = byManagement.version();
             } else {
                 requireConcrete(groupId, artifactId, version, "the dependency");
             }
@@ -435,6 +458,17 @@ public final class Poms {
 
     private static String key(String groupId, String artifactId) {
         return groupId + ":" + artifactId;
+    }
+
+    /**
+     * Maven's managed-dependency key: {@code groupId:artifactId:type[:classifier]}.
+     * Defaults are jar and no classifier, and {@code bundle} packs as a jar.
+     */
+    private static String managedKey(String groupId, String artifactId, String type,
+                                     String classifier) {
+        String pack = blank(type) ? "jar" : ("bundle".equals(type) ? "jar" : type);
+        String suffix = blank(classifier) ? "" : ":" + classifier;
+        return groupId + ":" + artifactId + ":" + pack + suffix;
     }
 
     private static String key(String groupId, String artifactId, String version) {
