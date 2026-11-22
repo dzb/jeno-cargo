@@ -79,6 +79,48 @@ public record Repository(String name, Layout layout, Transport transport,
         return parse(null, declaration);
     }
 
+    /**
+     * The explicit form: {@code [repos.<name>] type = "maven"|"mjm", url = ...}.
+     * The type decides the layout — a static host can serve either one, so the
+     * protocol is a declared fact, never guessed from the URL. A url that starts
+     * with http is a network location; anything else is a directory ({@code ~}
+     * and project-relative paths allowed).
+     *
+     * <p>The declaration this builds is the canonical lock form, the same one
+     * the legacy string spellings produce, so the lockfile does not learn a new
+     * shape.
+     */
+    public static Repository of(String name, String type, String url) {
+        String kind = type == null || type.isBlank() ? "maven" : type.strip();
+        Layout layout = switch (kind) {
+            case "maven" -> Layout.MAVEN;
+            case "mjm" -> Layout.MJM;
+            default -> throw new IllegalArgumentException(
+                    "type must be \"maven\" or \"mjm\", got \"" + kind + "\"");
+        };
+        if (url == null || url.isBlank()) {
+            throw new IllegalArgumentException("a repository needs a url: https://… or a directory");
+        }
+        String location = url.strip();
+        boolean network = location.startsWith("https://") || loopback(location);
+        if (location.startsWith("http://") && !loopback(location)) {
+            throw new IllegalArgumentException(
+                    "url must be https://… (loopback http is for tests only) or a directory");
+        }
+        if (location.startsWith("mjm:") || location.startsWith("local:")) {
+            throw new IllegalArgumentException(
+                    "url is a location, not a type — write type = \"" + kind
+                    + "\" and url without the mjm:/local: prefix");
+        }
+        if (network) {
+            String declaration = (layout == Layout.MJM ? "mjm:" : "") + location;
+            return new Repository(name, layout, Transport.HTTPS, declaration, null,
+                    location.endsWith("/") ? location : location + "/");
+        }
+        String declaration = (layout == Layout.MJM ? "mjm:" : "") + "local:" + location;
+        return new Repository(name, layout, Transport.LOCAL, declaration, location, null);
+    }
+
     private static boolean loopback(String url) {
         return url.startsWith("http://localhost") || url.startsWith("http://127.0.0.1");
     }

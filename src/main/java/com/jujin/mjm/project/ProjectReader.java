@@ -137,14 +137,8 @@ public final class ProjectReader {
                             + "[repos]." + entry.getKey() + " is reserved for the "
                             + entry.getKey() + ": prefix — pick another name");
                 }
-                String declaration = requireString(reposSection, "repos", entry.getKey());
-                try {
-                    repos.put(entry.getKey(), Repository.parse(entry.getKey(), declaration));
-                } catch (IllegalArgumentException e) {
-                    throw new ProjectException(at(file, source.key("repos", entry.getKey()))
-                            + "[repos]." + entry.getKey() + " = \"" + declaration + "\" — "
-                            + e.getMessage());
-                }
+                repos.put(entry.getKey(), repository(entry.getKey(), entry.getValue(),
+                        reposSection, source, file));
             }
         }
 
@@ -331,6 +325,53 @@ public final class ProjectReader {
                     + "' is declared twice — an id may appear once across all [deps] sections");
         }
         out.add(requirement);
+    }
+
+    /**
+     * One {@code [repos]} entry: the explicit table ({@code type}/{@code url}) or
+     * the legacy string. Both produce the same {@link Repository}; this is the
+     * only place the two shapes are told apart.
+     */
+    private static Repository repository(String name, Object value,
+                                         Map<String, Object> reposSection,
+                                         SchemaSource source, String file) {
+        if (value instanceof String legacy) {
+            try {
+                return Repository.parse(name, legacy);
+            } catch (IllegalArgumentException e) {
+                throw new ProjectException(at(file, source.key("repos", name))
+                        + "[repos]." + name + " = \"" + legacy + "\" — " + e.getMessage());
+            }
+        }
+        if (!(value instanceof Map<?, ?> table)) {
+            throw new ProjectException(at(file, source.key("repos", name))
+                    + "[repos]." + name + " must be a table with type/url, or the legacy string");
+        }
+        for (Object key : table.keySet()) {
+            if (!key.equals("type") && !key.equals("url")) {
+                throw new ProjectException(at(file, source.key("repos." + name,
+                        String.valueOf(key)))
+                        + "[repos]." + name + "." + key
+                        + " is not a key — allowed: type, url");
+            }
+        }
+        Object typeValue = table.get("type");
+        if (typeValue != null && !(typeValue instanceof String)) {
+            throw new ProjectException(at(file, source.key("repos." + name, "type"))
+                    + "[repos]." + name + ".type must be \"maven\" or \"mjm\"");
+        }
+        String type = typeValue == null ? "maven" : (String) typeValue;
+        Object urlValue = table.get("url");
+        if (!(urlValue instanceof String url) || url.isBlank()) {
+            throw new ProjectException(at(file, source.section("repos." + name))
+                    + "[repos]." + name + " needs a url = \"https://…\" or a directory");
+        }
+        try {
+            return Repository.of(name, type, url);
+        } catch (IllegalArgumentException e) {
+            throw new ProjectException(at(file, source.key("repos." + name, "type"))
+                    + "[repos]." + name + " — " + e.getMessage());
+        }
     }
 
     /** One {@code key = value} entry, classified by the value's shape. */
