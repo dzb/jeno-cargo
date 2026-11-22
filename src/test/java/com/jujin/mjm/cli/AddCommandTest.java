@@ -16,8 +16,11 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -326,6 +329,40 @@ class AddCommandTest {
             assertFalse(files.anyMatch(path -> path.getFileName().toString().endsWith(".tmp")),
                     "and no temporary file is left behind");
         }
+    }
+
+    @Test
+    void aRewriteKeepsTheManifestsPermissions(@TempDir Path projectStore) throws Exception {
+        Path project = Files.createDirectories(dir.resolve("permissions"));
+        vendorProject(project);
+        Files.createDirectories(project.resolve("vendor/com/example/lib-b/1.0.0"));
+        Files.writeString(project.resolve("vendor/com/example/lib-b/1.0.0/lib-b-1.0.0.pom"),
+                LIB_A_POM.replace("lib-a", "lib-b"));
+        Files.write(project.resolve("vendor/com/example/lib-b/1.0.0/lib-b-1.0.0.jar"),
+                "lib-b".getBytes());
+        ArtifactLocations.useProjectRoot(project);
+        ArtifactStore store = new ArtifactStore(projectStore);
+        LockService lockService = new LockService(store, new StorePomSource(store),
+                new StoreDescriptorSource(store));
+        Set<PosixFilePermission> shared;
+        try {
+            lockService.refresh(project);
+            shared = PosixFilePermissions.fromString("rw-r--r--");
+            Files.setPosixFilePermissions(project.resolve("mjm.toml"), shared);
+            Files.setPosixFilePermissions(project.resolve("mjm.lock"), shared);
+
+            assertEquals(0, new AddCommand(lockService, store, project)
+                    .execute(List.of("com.example:lib-b", "vendor:1.0.0")));
+        } finally {
+            ArtifactLocations.useProjectRoot(Path.of("").toAbsolutePath());
+        }
+
+        // createTempFile makes an owner-only file; the manifest must not lose
+        // the access a plain write would have kept
+        assertEquals(shared, Files.getPosixFilePermissions(project.resolve("mjm.toml")),
+                "the manifest keeps its permissions across an atomic rewrite");
+        assertEquals(shared, Files.getPosixFilePermissions(project.resolve("mjm.lock")),
+                "and so does the lockfile");
     }
 
     @Test

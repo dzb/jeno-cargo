@@ -16,6 +16,7 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.PosixFilePermissions;
 
 /**
  * The lock flow shared by {@code mjm lock} and {@code mjm add}: resolve the
@@ -107,12 +108,21 @@ public final class LockService {
      * file or the new one and never a half-written manifest. Falls back to a
      * plain replace where atomic moves are unsupported (the same shape
      * {@code ArtifactStore} uses for its store files).
+     *
+     * <p>The temp file carries the target's own permissions: {@code
+     * createTempFile} makes it owner-only (0600), and a manifest that quietly
+     * loses group and world read access is a change nobody asked for — it
+     * breaks a checkout shared with a build user and surprises every tool that
+     * looks at the file. A target that does not exist yet gets the usual
+     * world-readable default instead.
      */
     private static void writeAtomically(Path target, String text) {
         Path temp = null;
         try {
+            boolean existed = Files.exists(target);
             temp = Files.createTempFile(target.getParent(),
                     target.getFileName().toString() + ".", ".tmp");
+            carryPermissions(temp, target, existed);
             Files.writeString(temp, text);
             try {
                 Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE);
@@ -131,6 +141,23 @@ public final class LockService {
                     // the temp file is already useless; a leftover is noise, not a fault
                 }
             }
+        }
+    }
+
+    /**
+     * Gives the temp file the target's own permissions — or, for a file that
+     * does not exist yet, the world-readable default a plain write would have
+     * produced. Silently does nothing where the platform has no POSIX
+     * attributes to set.
+     */
+    private static void carryPermissions(Path temp, Path target, boolean existed) {
+        try {
+            Files.setPosixFilePermissions(temp, existed
+                    ? Files.getPosixFilePermissions(target)
+                    : PosixFilePermissions.fromString("rw-r--r--"));
+        } catch (UnsupportedOperationException | IOException ignored) {
+            // no POSIX attributes here: the move still carries the bytes,
+            // which is what the command promised
         }
     }
 
