@@ -18,7 +18,9 @@ import java.util.Map;
 /**
  * {@code mjm run &lt;main-class&gt; [args...]} — runs the program on the full
  * resolved closure plus {@code target/classes}: the runtime side of strict
- * visibility (every transitively allowed jar is here, nothing more).
+ * visibility (every transitively allowed jar is here, nothing more). With no
+ * argument it runs {@code [project].main}, the same entry {@code package}
+ * writes into the manifest and {@code bundle} into the launcher.
  *
  * <p>{@code mjm run <script-name>} runs a {@code [scripts]} entry through the
  * system shell instead. A script inherits the same computed classpath as
@@ -68,14 +70,9 @@ public final class RunCommand implements Command {
         if (workspace != null) {
             return workspace;
         }
-        if (args.isEmpty()) {
-            System.err.println("mjm: run needs a main class or a script name — "
-                    + "mjm run <main-class> [args...] | mjm run <script-name>");
-            return 2;
-        }
-        String target = args.get(0);
-        List<String> rest = args.subList(1, args.size());
-
+        // The file is read first: in a directory with no mjm.toml, "no mjm.toml"
+        // is the real problem, with or without arguments — the usage hint would
+        // send the user looking for a main class that cannot exist yet.
         MjProject project;
         try {
             project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
@@ -83,6 +80,22 @@ public final class RunCommand implements Command {
             System.err.println("mjm: no mjm.toml in " + projectDir
                     + " — run mjm init to create one");
             return 1;
+        }
+
+        String target;
+        List<String> rest;
+        if (args.isEmpty()) {
+            target = project.main();
+            rest = List.of();
+            if (target == null || target.isBlank()) {
+                System.err.println("mjm: run needs a main class or a script name — "
+                        + "mjm run <main-class> [args...] | mjm run <script-name>, or set "
+                        + "[project].main in mjm.toml");
+                return 2;
+            }
+        } else {
+            target = args.get(0);
+            rest = args.subList(1, args.size());
         }
 
         // A [scripts] key wins over a main class name — scripts are the
@@ -104,7 +117,8 @@ public final class RunCommand implements Command {
         command.add("java");
         command.add("-cp");
         command.add(classpath);
-        command.addAll(args);
+        command.add(target);
+        command.addAll(rest);
         return exec(command, null, "mjm run");
     }
 

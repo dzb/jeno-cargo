@@ -250,7 +250,7 @@ the next invocation.
 | `lock [--check] [--refresh]` | resolve, download, pin. `--check` regenerates in memory and compares byte-for-byte with the lock on disk (Cargo's `--locked`); it fetches metadata, so it needs the network unless every byte is already in the store |
 | `build` | compile against declared deps only |
 | `test` | forked JVM: `@MjmTest` + JUnit Jupiter. Writes surefire-shaped XML to `target/test-results/` (one `TEST-<class>.xml` per class) |
-| `run` | run on the resolved closure |
+| `run` | run a main class, a `[scripts]` entry, or `[project].main` when given no argument |
 | `tree [--json]` / `why` | see the graph and every introduction path; `tree --json` is one machine-readable document (id-sorted artifacts, sorted children) |
 | `info [--source]` | everything about one dependency, including its source |
 | `classpath [--test] [--file <p>]` | the classpath an IDE should use. Default is the **compile** classpath under strict visibility — project classes plus the jars you declare directly, no transitive jars, so the IDE never accepts code `mjm build` rejects. `--test` widens it to the test classpath (test classes + main classes + full closure). Paths are the store's content-addressed jars; nothing is copied. Local-only: do not commit `--file` output |
