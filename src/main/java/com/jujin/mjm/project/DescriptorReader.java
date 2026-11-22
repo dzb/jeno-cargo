@@ -28,6 +28,15 @@ public final class DescriptorReader {
      * different ones is a mismatched or mislabeled file.
      */
     public static Descriptor parse(String text, String expectedName, String expectedVersion) {
+        return parse(text, expectedName, expectedVersion, null);
+    }
+
+    /**
+     * The full form: {@code siblingRepository} is the {@code mjm:} repository the
+     * descriptor came from, where a bare name means another artifact in it.
+     */
+    public static Descriptor parse(String text, String expectedName, String expectedVersion,
+                                   String siblingRepository) {
         Map<String, Object> root = TomlUtils.parse(text);
         SchemaSource source = SchemaSource.scan(text);
         String file = expectedName + "-" + expectedVersion + ".mjm.toml";
@@ -93,7 +102,8 @@ public final class DescriptorReader {
         List<Requirement> requirements = List.of();
         Map<String, Object> depsSection = optionalSection(root, "deps");
         if (depsSection != null) {
-            requirements = ProjectReader.extractDependencies(depsSection, null, "descriptor");
+            requirements = ProjectReader.extractDependencies(depsSection, null, "descriptor",
+                    siblingRepository);
         }
 
         Map<String, String> retract = new LinkedHashMap<>();

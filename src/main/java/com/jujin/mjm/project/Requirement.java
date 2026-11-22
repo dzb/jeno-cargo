@@ -10,6 +10,9 @@ package com.jujin.mjm.project;
  *       Maven Central when null)</li>
  *   <li>{@link Species#GH}: {@code owner} + {@code repo} + {@code tag} +
  *       {@code version} (the tag without its {@code v})</li>
+ *   <li>{@link Species#NAMED}: {@code version} + {@code repository} — a native
+ *       release in a named {@code mjm:} repository, whose layout has no group
+ *       and no tag: the artifact name is the id</li>
  *   <li>{@link Species#URL}: {@code url} only — a bare leaf, no metadata</li>
  * </ul>
  *

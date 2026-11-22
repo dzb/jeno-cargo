@@ -93,9 +93,16 @@ key = 坐标,value 形态决定物种:
 | 值形态 | 物种 | 要求 |
 |---|---|---|
 | `"1.2.3"` | central | 版本字符串非空、无空白;**禁止 version ranges**(`[1.0,2.0)`)。带 classifier 的依赖沿 pom 传递时,classifier 是身份的一部分(`group:artifact:classifier`),URL 为 `artifact-version-classifier.jar` |
-| `"corp:1.2.3"` | 命名仓库 | 只查 `corp` 这个仓库,**不回退**;`corp` 必须在 `[repos]` 里声明(否则报错并列出可用仓库名);版本规则与 central 相同(非空、无空白、禁 ranges/snapshot) |
+| `"corp:1.2.3"` | 命名仓库 | 只查 `corp` 这个仓库,**不回退**;`corp` 必须在 `[repos]` 里声明(否则报错并列出可用仓库名);版本规则与 central 相同(非空、无空白、禁 ranges/snapshot)。若 `corp` 是 Maven 布局 → 读 pom;若是 `mjm:` 仓库 → 读描述符(见下) |
 | `"gh:owner/repo@tag"` | mjm 原生 | tag 为可选 `v` 前缀 + semver;展开规则见 §2.2 |
 | `"https://…/x.jar"` | 裸 URL(叶子) | 必须 https、以 `.jar` 结尾 |
+
+**`mjm:` 仓库**(`[repos] mine = "mjm:https://repo.example/"`):mjm 自己的两层布局,发布物三件套
+平铺在 `<base>/<name>/<version>/` 下(`<name>` = 发布方 `[project].name`),**不需要 `[project].group`**。
+依赖写成 `"<name>" = "mine:<semver>"`(或 legacy `[deps.mine] "<name>" = "<semver>"`);元数据取自同目录的
+`.mjm.toml` 描述符,`[project].name` 必须与 key 一致(由 `DescriptorReader` 校验)。描述符里的裸名+裸版本
+指向同一仓库的兄弟工件(描述符只写事实,不写仓库规则)。`mjm:` 只支持 `https://`(loopback `http://` 仅供
+测试);store 索引与 `--offline` 行为不变。
 
 **歧义规则**(无例外):
 
@@ -288,7 +295,7 @@ version = 21              # 可选;语义同 §2.1 [java]
 id = "com.example:foo"    # central: "group:artifact";mjm 原生: repo 名
 version = "1.2.3"
 source = "central"        # "central" / "gh:owner/repo" / "url"
-                          # / 命名仓库的 base 原文(如 "local:vendor")
+                          # / 命名仓库的 base 原文(如 "local:vendor"、"mjm:https://repo.example/")
 url = "https://…"         # 实际下载 URL。local: 仓库写为相对项目根的 file: 形式
                           # (如 file:vendor/com/…/x.jar),读取时按项目根展开;
                           # 路径落在项目根之外(如 local:/opt/repo)仍写绝对 file:///…;

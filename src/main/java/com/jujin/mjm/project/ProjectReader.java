@@ -139,10 +139,21 @@ public final class ProjectReader {
                 String baseUrl = requireString(reposSection, "repos", entry.getKey());
                 boolean remote = baseUrl.startsWith("https://");
                 boolean local = baseUrl.startsWith("local:");
-                if (!remote && !local) {
+                boolean mjm = baseUrl.startsWith("mjm:");
+                if (mjm) {
+                    String host = baseUrl.substring("mjm:".length());
+                    boolean loopback = host.startsWith("http://localhost")
+                            || host.startsWith("http://127.0.0.1");
+                    if (!host.startsWith("https://") && !loopback) {
+                        throw new ProjectException(at(file, source.key("repos", entry.getKey()))
+                                + "[repos]." + entry.getKey() + " = \"" + baseUrl
+                                + "\" — a mjm: repository is https-only (mjm:https://…)");
+                    }
+                }
+                if (!remote && !local && !mjm) {
                     throw new ProjectException("[repos]." + entry.getKey()
-                            + " must be an https URL or a local: directory — repository "
-                            + "selection belongs to mjm.toml alone");
+                            + " must be an https URL, a local: directory, or an mjm:https:// "
+                            + "repository — repository selection belongs to mjm.toml alone");
                 }
                 repos.put(entry.getKey(), baseUrl);
             }
@@ -292,6 +303,12 @@ public final class ProjectReader {
      */
     static List<Requirement> extractDependencies(
             Map<String, Object> deps, Map<String, String> repos, String where) {
+        return extractDependencies(deps, repos, where, null);
+    }
+
+    /** The full form: {@code sibling} is set when the file came from an mjm: repository. */
+    static List<Requirement> extractDependencies(
+            Map<String, Object> deps, Map<String, String> repos, String where, String sibling) {
 
         List<Requirement> requirements = new ArrayList<>();
         Set<String> ids = new LinkedHashSet<>();
@@ -309,12 +326,12 @@ public final class ProjectReader {
                 }
                 for (Map.Entry<String, Object> grouped : asStringKeyed(group).entrySet()) {
                     add(requirements, ids, requirement(grouped.getKey(), grouped.getValue(),
-                            key, where, repos, true), where);
+                            key, where, repos, true, sibling), where);
                 }
                 continue;
             }
-            add(requirements, ids, requirement(key, entry.getValue(), null, where, repos, true),
-                    where);
+            add(requirements, ids, requirement(key, entry.getValue(), null, where, repos, true,
+                    sibling), where);
         }
         return List.copyOf(requirements);
     }
@@ -330,6 +347,27 @@ public final class ProjectReader {
     /** One {@code key = value} entry, classified by the value's shape. */
     static Requirement requirement(String key, Object value, String repository, String where,
                                    Map<String, String> repos, boolean checkRepos) {
+        return requirement(key, value, repository, where, repos, checkRepos, null);
+    }
+
+    /**
+     * The full form. {@code sibling} is the {@code mjm:} repository a descriptor
+     * was fetched from: a bare name there addresses another artifact in that same
+     * repository — a descriptor cannot name repositories (they are rules), but it
+     * can say "the sibling called gadget, version 0.9.0".
+     */
+    static Requirement requirement(String key, Object value, String repository, String where,
+                                   Map<String, String> repos, boolean checkRepos, String sibling) {
+        if (repository == null && sibling != null && value instanceof String raw
+                && !raw.isBlank() && !raw.startsWith("gh:") && !raw.startsWith("https://")
+                && !raw.contains(":") && !key.contains(":")) {
+            return nativeInNamedRepository(key, raw, sibling, where);
+        }
+        // [deps.mine] where mine is an mjm: repository: the native layout, no group
+        if (repository != null && repos != null
+                && com.jujin.mjm.resolve.ArtifactLocations.isMjmRepository(repos.get(repository))) {
+            return nativeInNamedRepository(key, (String) value, repository, where);
+        }
         if (key.isBlank() || key.contains(" ") || key.contains("\t")) {
             throw new ProjectException("[" + where + "] dependency name '" + key
                     + "' must not be blank or contain whitespace");
@@ -391,6 +429,12 @@ public final class ProjectReader {
                             + "\"' — descriptors cannot declare repositories; rules live only "
                             + "in the consumer's mjm.toml (SPEC.md §3.2)");
                 }
+                boolean namedMjm = repos != null && checkRepos
+                        && com.jujin.mjm.resolve.ArtifactLocations.isMjmRepository(repos.get(name));
+                if (namedMjm || (!checkRepos && !key.contains(":"))) {
+                    // "name:version": a named mjm: repository, keyed by artifact name
+                    return nativeInNamedRepository(key, version, name, where);
+                }
                 if (checkRepos && !repos.containsKey(name)) {
                     throw new ProjectException("[" + where + "] '" + key + " = \"" + raw
                             + "\"' names repository '" + name + "' which is not declared in "
@@ -421,6 +465,32 @@ public final class ProjectReader {
         int colon = key.indexOf(':');
         return new Requirement(key, Species.CENTRAL, key.substring(0, colon),
                 key.substring(colon + 1), raw, repository, null, null, null, null);
+    }
+
+    /**
+     * A dependency on a native release inside an {@code mjm:} repository: the key
+     * is the artifact name (the layout has no group), the version is semver, and
+     * metadata comes from the descriptor beside the jar — the same parse path as
+     * gh:.
+     */
+    private static Requirement nativeInNamedRepository(String key, String version,
+                                                       String repository, String where) {
+        if (key.contains(":")) {
+            throw new ProjectException("[" + where + "] '" + key + "' — a dependency from a "
+                    + "mjm: repository is addressed by its artifact name (no group:artifact)");
+        }
+        if (!NAME.matcher(key).matches()) {
+            throw new ProjectException("[" + where + "] dependency name '" + key
+                    + "' must match [a-z][a-z0-9-]* for a mjm: repository");
+        }
+        String stripped = version == null ? "" : version.strip();
+        Matcher tag = TAG.matcher(stripped);
+        if (!tag.matches()) {
+            throw new ProjectException("[" + where + "] '" + key + "' uses version '"
+                    + stripped + "' — a mjm: repository holds semver releases (1.2.3, 1.2.3-rc1)");
+        }
+        return new Requirement(key, Species.NAMED, null, null, tag.group(1), repository,
+                null, null, null, null);
     }
 
     private static void requireConcreteVersion(String key, String version, String where) {

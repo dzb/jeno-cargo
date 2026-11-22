@@ -12,5 +12,7 @@ package com.jujin.mjm.project;
 public enum Species {
     CENTRAL,
     GH,
+    /** A native release served by a named {@code mjm:} repository (name/version layout). */
+    NAMED,
     URL
 }

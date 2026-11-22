@@ -100,6 +100,11 @@ public final class OutdatedCommand implements Command {
                 unchecked.add(artifact.id() + " (local repository: no version listing)");
                 continue;
             }
+            if (source.startsWith("mjm:")) {
+                unchecked.add(artifact.id()
+                        + " (mjm: repository: the layout has no version index)");
+                continue;
+            }
 
             List<String> available;
             try {

@@ -106,11 +106,11 @@ public final class PublishCommand implements Command {
         }
 
         for (var requirement : project.requirements()) {
-            if (requirement.species() == Species.CENTRAL && requirement.repository() != null) {
+            if (requirement.repository() != null) {
                 System.err.println("mjm: '" + requirement.id() + "' is bound to repository '"
                         + requirement.repository() + "' — descriptors carry Central, gh: "
-                        + "and URL dependencies only; publish that dependency to the same host "
-                        + "as this library, or drop it");
+                        + "and URL dependencies only (a named repository is a rule, not a fact); "
+                        + "publish that dependency to Central or GitHub, or drop it");
                 return 1;
             }
         }
@@ -163,12 +163,15 @@ public final class PublishCommand implements Command {
 
         // target given — attempt native upload
         String target = args.getFirst();
+        if (target.startsWith("mjm:")) {
+            return uploadToMjmRepository(target, project, dist, jarName, descriptorName, shaName);
+        }
         if (target.startsWith("https://") || target.startsWith("http://")) {
             return uploadToHost(target, project, dist, jarName, descriptorName, shaName);
         }
         if (!target.startsWith("gh:")) {
             System.err.println("mjm: unknown publish target '" + target
-                    + "' — use gh:owner/repo or an http(s) base URL");
+                    + "' — use gh:owner/repo, mjm:https://host/, or an http(s) base URL");
             return 1;
         }
 
@@ -238,6 +241,40 @@ public final class PublishCommand implements Command {
         System.out.println("  [deps.mine]");
         System.out.println("  \"" + project.group() + ":" + project.name() + "\" = \""
                 + project.version() + "\"");
+        return 0;
+    }
+
+    /**
+     * Publishes to an {@code mjm:} repository — two levels, no group:
+     * {@code <base>/<name>/<version>/<name>-<version>.{jar,mjm.toml,sha256}}.
+     * No {@code [project].group} is needed: that is the point of the layout.
+     */
+    private int uploadToMjmRepository(String target, MjProject project, Path dist,
+                                      String jarName, String descriptorName, String shaName) {
+        String root = ArtifactLocations.baseUrl(target.substring("mjm:".length()));
+        String directory = project.name() + "/" + project.version() + "/";
+
+        List<Path> files = List.of(
+                dist.resolve(jarName),
+                dist.resolve(descriptorName),
+                dist.resolve(shaName));
+        for (Path file : files) {
+            String url = root + directory + file.getFileName();
+            try {
+                put(url, Files.readAllBytes(file));
+            } catch (IOException | InterruptedException e) {
+                System.err.println("mjm: PUT " + url + " failed — " + e.getMessage());
+                System.err.println("  the host must accept HTTP PUT (WebDAV); a plain static "
+                        + "server rejects it");
+                return 1;
+            }
+            System.out.println("  PUT " + url);
+        }
+
+        System.out.println("published to " + target + " — consume it with:");
+        System.out.println("  [repos]");
+        System.out.println("  mine = \"" + target + "\"");
+        System.out.println("  \"" + project.name() + "\" = \"mine:" + project.version() + "\"");
         return 0;
     }
 
@@ -435,6 +472,8 @@ public final class PublishCommand implements Command {
             case CENTRAL -> requirement.version();
             case GH -> requirement.origin() + "@" + requirement.tag();
             case URL -> requirement.url();
+            case NAMED -> throw new IllegalStateException(
+                    "a repo-bound dependency never reaches a published descriptor");
         };
     }
 

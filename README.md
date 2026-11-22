@@ -147,11 +147,15 @@ mylib-1.2.0.sha256
 |---|---|---|
 | GitHub Releases | `gh:owner/repo@v1.2.3` | `mjm publish gh:owner/repo` |
 | ~~Gitee Releases~~ | 已移除:附件匿名下载需令牌,违反零配置;用裸 URL 或自建主机 | — |
-| **your own host** (any http/https, LAN included) | `[repos] corp = …` + `"com.corp:lib" = "corp:1.2.3"` | `mjm publish https://my.host/repo/` — Maven layout, HTTP PUT |
+| **your own host** — mjm layout | `[repos] mine = "mjm:https://my.host/"` + `"com.corp:lib" = "mine:1.2.3"` | `mjm publish mjm:https://my.host/` — two levels, no `group` needed |
+| **your own host** — Maven layout (legacy) | `[repos] corp = …` + `"com.corp:lib" = "corp:1.2.3"` | `mjm publish https://my.host/repo/` — needs `[project].group` |
 | a local directory | `local:/path` | `cp dist/* …` (mjm reads it; nothing to upload) |
 | any static server | a bare `https://…/x.jar` leaf | upload the jar your way |
 
-The http(s) path is the general one: `mjm publish https://my.host/repo/` writes
+The `mjm:` layout is the shortest one: `mjm publish mjm:https://my.host/` writes
+`<name>/<version>/<name>-<version>.{jar,mjm.toml,sha256}` and needs no `[project].group`
+on either side. The Maven path is still there for existing hosts:
+`mjm publish https://my.host/repo/` writes
 `group/path/artifact/version/artifact-version.{jar,mjm.toml,sha256}` — the same
 layout `[repos]` already reads — and PUTs each file. A dependency names its
 repository in the value (`corp:1.2.3`); the older `[deps.corp]` table form is

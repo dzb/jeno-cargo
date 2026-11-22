@@ -121,6 +121,21 @@ public final class ArtifactLocations {
         return url.endsWith("/") ? url : url + "/";
     }
 
+    /** Whether a declared base is an {@code mjm:} repository (the native layout). */
+    public static boolean isMjmRepository(String base) {
+        return base != null && base.startsWith("mjm:");
+    }
+
+    /**
+     * The mjm repository layout: {@code <base>/<name>/<version>/<name>-<version>.<ext>} —
+     * two levels, no group. {@code base} is the declaration, {@code mjm:https://…},
+     * whose prefix is stripped here.
+     */
+    public static String mjmFile(String base, String name, String version, String extension) {
+        String root = baseUrl(base.substring("mjm:".length()));
+        return root + name + "/" + version + "/" + name + "-" + version + "." + extension;
+    }
+
     private static String file(String base, String path) {
         if (!base.startsWith("local:")) {
             return (base.endsWith("/") ? base : base + "/") + path;

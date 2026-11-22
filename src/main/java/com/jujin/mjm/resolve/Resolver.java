@@ -265,6 +265,23 @@ public final class Resolver {
                                 .toList();
                         yield new Metadata(edges, descriptor.retract());
                     }
+                    case NAMED -> {
+                        String base = ArtifactLocations.repositoryBase(project.repos(),
+                                template.repository());
+                        String url = ArtifactLocations.mjmFile(base, template.id(), version,
+                                "mjm.toml");
+                        String text = descriptorSource.descriptor(url);
+                        if (text == null || text.isBlank()) {
+                            throw new ProjectException("no descriptor at " + url);
+                        }
+                        Descriptor descriptor = DescriptorReader.parse(text, template.id(), version,
+                                template.repository());
+                        List<Edge> edges = descriptor.requirements().stream()
+                                .map(requirement -> new Edge(requirement,
+                                        Set.<PomDependency.Exclusion>of()))
+                                .toList();
+                        yield new Metadata(edges, descriptor.retract());
+                    }
                     case URL -> new Metadata(List.of(), Map.of());  // a bare leaf
                 };
             } catch (PomException | ProjectException e) {
@@ -395,7 +412,8 @@ public final class Resolver {
         }
 
         private void requireShape(String id, String version, Species species) {
-            if (species == Species.GH && !Versions.isNativeSemver(version)) {
+            if ((species == Species.GH || species == Species.NAMED)
+                    && !Versions.isNativeSemver(version)) {
                 throw new ResolveException("[overrides]." + id + " = \"" + version
                         + "\" — an mj-native override must be semver (1.2.3, 1.2.3-rc1)");
             }
@@ -472,6 +490,7 @@ public final class Resolver {
                             ? "central"
                             : project.repos().get(template.repository());
                     case GH -> originById.get(id);
+                    case NAMED -> project.repos().get(template.repository());
                     case URL -> "url";
                 };
                 artifacts.add(new ResolvedGraph.ResolvedArtifact(id, version, species, source,
@@ -516,6 +535,7 @@ public final class Resolver {
                         template.artifactId(), version, template.classifier(), "jar");
                 case GH -> ArtifactLocations.releaseFile(ArtifactLocations.githubHost(),
                         template.owner(), template.repo(), template.tag(), version, "jar");
+                case NAMED -> ArtifactLocations.mjmFile(base, template.id(), version, "jar");
                 case URL -> template.url();
             };
         }
@@ -527,6 +547,7 @@ public final class Resolver {
                         template.artifactId(), version, "pom");
                 case GH -> ArtifactLocations.releaseFile(ArtifactLocations.githubHost(),
                         template.owner(), template.repo(), template.tag(), version, "mjm.toml");
+                case NAMED -> ArtifactLocations.mjmFile(base, template.id(), version, "mjm.toml");
                 case URL -> null;  // a bare leaf has no metadata
             };
         }

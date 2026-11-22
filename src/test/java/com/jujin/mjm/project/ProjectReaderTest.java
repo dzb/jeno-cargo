@@ -173,6 +173,73 @@ class ProjectReaderTest {
     }
 
     @Test
+    void aMjmRepositoryHoldsNativeReleasesByName() {
+        MjProject project = ProjectReader.parse("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [repos]
+            mine = "mjm:https://repo.example/"
+
+            [deps]
+            "widget" = "mine:1.2.3"
+
+            [deps.mine]
+            "gadget" = "0.9.0"
+            """);
+
+        Requirement widget = project.requirements().get(0);
+        assertEquals(Species.NAMED, widget.species());
+        assertEquals("mine", widget.repository());
+        assertEquals("1.2.3", widget.version());
+        assertEquals("widget", widget.id());
+
+        Requirement gadget = project.requirements().get(1);
+        assertEquals(Species.NAMED, gadget.species());
+        assertEquals("gadget", gadget.id(), "the table form is addressed by name too");
+    }
+
+    @Test
+    void aMjmRepositoryDependencyIsAddressedByArtifactName() {
+        ProjectException error = assertThrows(ProjectException.class,
+            () -> ProjectReader.parse("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+
+                [repos]
+                mine = "mjm:https://repo.example/"
+
+                [deps]
+                "com.corp:lib" = "mine:1.0.0"
+                """));
+        assertTrue(error.getMessage().contains("addressed by its artifact name"),
+                error.getMessage());
+    }
+
+    @Test
+    void aMjmRepositoryIsHttpsOnly() {
+        assertRejects("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [repos]
+            mine = "mjm:local:/tmp/repo"
+            """, "mjm: repository is https-only");
+
+        assertRejects("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [repos]
+            mine = "mjm:http://repo.example/"
+            """, "mjm: repository is https-only");
+    }
+
+    @Test
     void aValueNamingAnUndeclaredRepositoryIsAnErrorListingTheDeclaredOnes() {
         ProjectException error = assertThrows(ProjectException.class,
             () -> ProjectReader.parse("""

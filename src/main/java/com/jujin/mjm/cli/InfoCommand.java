@@ -191,6 +191,11 @@ public final class InfoCommand implements Command {
                     + "carries no tag, so there is no source tree to fetch");
             return 1;
         }
+        if (artifact.source().startsWith("mjm:")) {
+            System.err.println("mjm: '" + artifact.id() + "' comes from an mjm: repository — "
+                    + "this origin has no source tree (it publishes jars only)");
+            return 1;
+        }
         return fetchCentralSources(artifact, target);
     }
 

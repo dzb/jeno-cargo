@@ -275,6 +275,26 @@ class CleanOutdatedTest {
     // ------------------------------------------------------------------
 
     @Test
+    void anMjmRepositoryIsNotCheckedAndSaysWhy() throws Exception {
+        projectWithLock("""
+            [[artifacts]]
+            id = "widget"
+            version = "1.0.0"
+            source = "mjm:https://repo.example/"
+            url = "https://repo.example/widget/1.0.0/widget-1.0.0.jar"
+            sha256 = "%s"
+            meta-sha256 = "%s"
+            depth = 1
+            """.formatted(SHA, SHA));
+
+        String out = runOutdated(0);
+
+        assertTrue(out.contains("not checked"), out);
+        assertTrue(out.contains("the layout has no version index"), out);
+        assertFalse(out.contains("everything is up to date"), out);
+    }
+
+    @Test
     void nothingCheckedMeansNoUpToDateClaim() throws Exception {
         projectWithLock("""
             [[artifacts]]

@@ -164,6 +164,35 @@ class InfoCommandTest {
     }
 
     @Test
+    void anMjmRepositoryHasNoSourceTree(@TempDir Path storeDir) throws Exception {
+        Files.writeString(dir.resolve("mjm.lock"), """
+            [[artifacts]]
+            id = "widget"
+            version = "1.0.0"
+            source = "mjm:https://repo.example/"
+            url = "https://repo.example/widget/1.0.0/widget-1.0.0.jar"
+            sha256 = "%s"
+            meta-sha256 = "%s"
+            depth = 1
+            """.formatted("d".repeat(64), "e".repeat(64)));
+
+        java.io.PrintStream original = System.err;
+        var errors = new java.io.ByteArrayOutputStream();
+        int exit;
+        try {
+            System.setErr(new java.io.PrintStream(errors, true, StandardCharsets.UTF_8));
+            exit = new InfoCommand(new ArtifactStore(storeDir), dir)
+                    .execute(List.of("widget", "--source"));
+        } finally {
+            System.setErr(original);
+        }
+
+        assertEquals(1, exit);
+        assertTrue(errors.toString(StandardCharsets.UTF_8).contains("this origin has no source tree"),
+                errors.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
     void aUrlLeafIsExplicitAboutHavingNoSource(@TempDir Path storeDir) throws Exception {
         Files.writeString(dir.resolve("mjm.lock"), """
             [[artifacts]]
