@@ -13,6 +13,7 @@ import com.jujin.mjm.store.ArtifactStore;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -22,7 +23,13 @@ import java.util.Set;
  * {@code mjm tree}: the resolved graph from the declared roots down, each node
  * with its depth — the visible shape of the dependency budget (DESIGN.md
  * §4.2). Diagnosing re-resolves (idempotent; the lockfile stays the build's
- * input). A node shown twice prints a marker instead of its subtree.
+ * input).
+ *
+ * <p>Two blocks: the declarations first, one line per root and no markers, so
+ * every root is listed exactly once and never looks like a repeated node; then
+ * one subtree per root, drawn with {@code ├─}/{@code └─} and indentation. A
+ * node met again inside a subtree prints {@code (*) above} instead of a second
+ * copy, and its subtree is not walked twice.
  */
 public final class TreeCommand implements Command {
 
@@ -69,37 +76,57 @@ public final class TreeCommand implements Command {
 
         System.out.println(project.name() + "@" + project.version()
                 + " (budget " + project.maxDepth() + ")");
-        Set<String> shown = new HashSet<>();
-        for (Requirement requirement : project.requirements()) {
-            render(byId.get(requirement.id()), graph, "", true, shown, project);
+
+        List<Requirement> requirements = new ArrayList<>(project.requirements());
+        requirements.addAll(project.devRequirements());
+
+        // The declaration block: every root once, in declaration order, with
+        // no repeated-node marker — a root is not "above" anything.
+        Set<String> printed = new HashSet<>();
+        List<ResolvedGraph.ResolvedArtifact> roots = new ArrayList<>();
+        for (Requirement requirement : requirements) {
+            ResolvedGraph.ResolvedArtifact root = byId.get(requirement.id());
+            if (printed.add(root.id())) {
+                System.out.println(line(root, ""));
+                roots.add(root);
+            }
         }
-        for (Requirement requirement : project.devRequirements()) {
-            render(byId.get(requirement.id()), graph, "", true, shown, project);
+
+        // The subtrees: one per root, prefix grown by "├─ "/"└─ " and the
+        // continuation columns. `printed` already holds the roots, so a child
+        // that is also a root prints the marker and is not expanded here.
+        Set<String> expanded = new HashSet<>();
+        for (ResolvedGraph.ResolvedArtifact root : roots) {
+            if (!expanded.contains(root.id())) {
+                expand(root, "", graph, printed, expanded);
+            }
         }
         return 0;
     }
 
-    private void render(ResolvedGraph.ResolvedArtifact artifact, ResolvedGraph graph,
-                        String prefix, boolean last, Set<String> shown, MjProject project) {
-        String connector = prefix.isEmpty() ? "" : (last ? "└─ " : "├─ ");
-        String marker = shown.contains(artifact.id()) ? "  (*) above" : "";
-        System.out.println(prefix + connector + artifact.id() + "@" + artifact.version()
+    private void expand(ResolvedGraph.ResolvedArtifact artifact, String prefix,
+                        ResolvedGraph graph, Set<String> printed, Set<String> expanded) {
+        expanded.add(artifact.id());
+        List<String> children = graph.edges().getOrDefault(artifact.id(), List.of());
+        for (int i = 0; i < children.size(); i++) {
+            boolean last = i == children.size() - 1;
+            ResolvedGraph.ResolvedArtifact child = byId(graph, children.get(i));
+            boolean repeat = !printed.add(child.id());
+            System.out.println(prefix + (last ? "└─ " : "├─ ")
+                    + line(child, repeat ? "  (*) above" : ""));
+            if (repeat) {
+                continue;  // the subtree is printed above; do not walk it twice
+            }
+            expand(child, prefix + (last ? "   " : "│  "), graph, printed, expanded);
+        }
+    }
+
+    private static String line(ResolvedGraph.ResolvedArtifact artifact, String suffix) {
+        return artifact.id() + "@" + artifact.version()
                 + "  [depth " + artifact.depth()
                 + (artifact.declared() ? ", declared" : "")
                 + (artifact.scope() == com.jujin.mjm.resolve.Scope.DEV ? ", dev" : "")
-                + "]" + marker);
-        boolean fresh = shown.add(artifact.id());
-        if (!fresh) {
-            return;  // the subtree is printed above; do not walk it twice
-        }
-        List<String> children = graph.edges().getOrDefault(artifact.id(), List.of());
-        for (int i = 0; i < children.size(); i++) {
-            boolean childLast = i == children.size() - 1;
-            String childPrefix = prefix.isEmpty()
-                    ? ""
-                    : prefix + (last ? "   " : "│  ");
-            render(byId(graph, children.get(i)), graph, childPrefix, childLast, shown, project);
-        }
+                + "]" + suffix;
     }
 
     private static ResolvedGraph.ResolvedArtifact byId(ResolvedGraph graph, String id) {

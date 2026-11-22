@@ -78,15 +78,7 @@ class TreeWhyTest {
             "com.example:lib-d" = "1.0.0"
             """.formatted(fixRepo));
 
-        PomSource pomSource = (g, a, v, base) -> {
-            String path = base.substring("local:".length()) + "/" + g.replace('.', '/')
-                    + "/" + a + "/" + v + "/" + a + "-" + v + ".pom";
-            try {
-                return Files.readString(Path.of(path));
-            } catch (IOException e) {
-                throw new IllegalStateException("cannot read fixture pom " + path, e);
-            }
-        };
+        PomSource pomSource = localPomSource();
 
         TreeCommand tree = new TreeCommand(new ArtifactStore(dir.resolve("store")),
                 pomSource, text -> { throw new IllegalStateException("no natives here"); },
@@ -97,6 +89,26 @@ class TreeWhyTest {
         String banner = readConsole();
         assertTrue(banner.contains("lib-a@1.0.0  [depth 1, declared]"), "got: " + banner);
         assertTrue(banner.contains("lib-c@2.0.0  [depth 3]"), "got: " + banner);
+
+        // a root is declared once, and only once — no second copy as a child
+        assertEquals(1, count(banner, "com.example:lib-a@1.0.0"),
+                "a root appears exactly once, got: " + banner);
+        assertEquals(1, count(banner, "com.example:lib-d@1.0.0"),
+                "a root appears exactly once, got: " + banner);
+
+        // the subtrees are drawn with connectors and indentation
+        assertTrue(banner.contains("└─ com.example:lib-b@1.1.0  [depth 2]"),
+                "a child hangs off its root, got: " + banner);
+        assertTrue(banner.contains("   └─ com.example:lib-c@2.0.0  [depth 3]"),
+                "a grandchild is indented one more level, got: " + banner);
+
+        // the second introduction of lib-c is a marker, not a second subtree
+        assertTrue(banner.contains("└─ com.example:lib-c@2.0.0  [depth 3]  (*) above"),
+                "a repeated node is marked, got: " + banner);
+        assertEquals(1, count(banner, "(*) above"),
+                "exactly one repeat marker, got: " + banner);
+        assertFalse(banner.contains("      └─ "),
+                "the repeated subtree was not walked twice, got: " + banner);
 
         WhyCommand why = new WhyCommand(new ArtifactStore(dir.resolve("store")),
                 pomSource, text -> { throw new IllegalStateException("no natives here"); },
@@ -144,6 +156,65 @@ class TreeWhyTest {
     @org.junit.jupiter.api.AfterEach
     void restoreOut() {
         System.setOut(realOut);
+    }
+
+    @Test
+    void treeMarksDevRootsAndTheirSubtrees() throws Exception {
+        Path repo = dir.resolve("fix-repo");
+        pom(repo, "com/example/lib-b/1.1.0", "lib-b", "1.1.0", """
+            <dependencies>
+              <dependency>
+                <groupId>com.example</groupId>
+                <artifactId>lib-c</artifactId>
+                <version>2.0.0</version>
+              </dependency>
+            </dependencies>
+            """);
+        pom(repo, "com/example/lib-c/2.0.0", "lib-c", "2.0.0", "");
+        Files.writeString(dir.resolve("mjm.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [repos]
+            fix = "local:%s"
+
+            [dev-deps.fix]
+            "com.example:lib-b" = "1.1.0"
+            """.formatted(repo));
+
+        TreeCommand tree = new TreeCommand(new ArtifactStore(dir.resolve("store")),
+                localPomSource(), text -> { throw new IllegalStateException("no natives here"); },
+                dir);
+        assertEquals(0, tree.execute(List.of()));
+
+        String out = readConsole();
+        assertTrue(out.contains("com.example:lib-b@1.1.0  [depth 1, declared, dev]"),
+                "a dev root is marked, got: " + out);
+        assertTrue(out.contains("└─ com.example:lib-c@2.0.0  [depth 2, dev]"),
+                "its subtree is dev and drawn below it, got: " + out);
+    }
+
+    /** The fixture repositories are {@code local:} directories of hand-written poms. */
+    private static PomSource localPomSource() {
+        return (g, a, v, base) -> {
+            String path = base.substring("local:".length()) + "/" + g.replace('.', '/')
+                    + "/" + a + "/" + v + "/" + a + "-" + v + ".pom";
+            try {
+                return Files.readString(Path.of(path));
+            } catch (IOException e) {
+                throw new IllegalStateException("cannot read fixture pom " + path, e);
+            }
+        };
+    }
+
+    private static int count(String haystack, String needle) {        int total = 0;
+        int from = 0;
+        while ((from = haystack.indexOf(needle, from)) >= 0) {
+            total++;
+            from += needle.length();
+        }
+        return total;
     }
 
     private void pom(Path repo, String layout, String artifactId, String version,
