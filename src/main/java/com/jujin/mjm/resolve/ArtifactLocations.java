@@ -151,6 +151,35 @@ public final class ArtifactLocations {
      * slash. No redirects, no DNS — two spellings of one base compare equal,
      * anything that could reach a different server does not.
      */
+    /**
+     * Where a repository actually is, comparable across spellings: HTTPS keeps
+     * {@link #canonicalBase}'s normalization; a local directory becomes its
+     * real path, so {@code ../vendor} from one module and an absolute
+     * {@code /abs/…/vendor} name the same location — which is exactly the
+     * question publish asks when deciding whether a dependency is a sibling.
+     */
+    public static String canonicalLocation(Repository repository) {
+        if (!repository.isLocal()) {
+            return canonicalBase(repository);
+        }
+        Path absolute = repository.directory(projectRoot).toAbsolutePath().normalize();
+        try {
+            return absolute.toRealPath().toString();
+        } catch (java.io.IOException e) {
+            // the directory may not exist yet (a publish target creates it):
+            // resolve the parent when possible so a symlinked parent still matches
+            Path parent = absolute.getParent();
+            if (parent != null) {
+                try {
+                    return parent.toRealPath().resolve(absolute.getFileName()).toString();
+                } catch (java.io.IOException ignored) {
+                    // fall through to the normalized path
+                }
+            }
+            return absolute.toString();
+        }
+    }
+
     public static String canonicalBase(Repository repository) {
         return canonicalBaseOf(repository.networkBase());
     }

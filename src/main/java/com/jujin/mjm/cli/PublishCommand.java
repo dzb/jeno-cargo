@@ -124,18 +124,15 @@ public final class PublishCommand implements Command {
             }
         }
         String publishBase = publishTarget != null && publishTarget.isMjmLayout()
-                && !publishTarget.isLocal()
-                ? ArtifactLocations.canonicalBase(publishTarget) : null;
+                ? ArtifactLocations.canonicalLocation(publishTarget) : null;
         java.util.Set<String> siblings = new java.util.HashSet<>();
         for (var requirement : project.requirements()) {
             if (requirement.repository() == null) {
                 continue;
             }
             Repository declared = project.repos().get(requirement.repository());
-            String where = declared.isLocal()
-                    ? declared.declaration()
-                    : ArtifactLocations.canonicalBase(declared);
-            if (publishBase != null && !declared.isLocal() && publishBase.equals(where)) {
+            String where = ArtifactLocations.canonicalLocation(declared);
+            if (publishBase != null && publishBase.equals(where)) {
                 siblings.add(requirement.id());
                 continue;
             }
