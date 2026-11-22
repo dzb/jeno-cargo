@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -77,6 +78,23 @@ class ArtifactLocationsTest {
         assertEquals("https://github.com/acme/mylib/releases/download/v1.2.0/mylib-1.2.0.mjm.toml",
                 ArtifactLocations.releaseFile("https://github.com", "acme", "mylib",
                         "v1.2.0", "1.2.0", "mjm.toml"), "the descriptor travels next to the jar");
+    }
+
+    @Test
+    void canonicalBaseSeesThroughSpellingOnly() {
+        assertEquals(ArtifactLocations.canonicalBase("mjm:https://host/repo/"),
+                ArtifactLocations.canonicalBase("mjm:https://HOST/repo"),
+                "host case and the trailing slash are spelling");
+        assertEquals(ArtifactLocations.canonicalBase("mjm:https://host/repo/"),
+                ArtifactLocations.canonicalBase("mjm:https://host:443/repo/"),
+                "the default port is spelling");
+
+        assertNotEquals(ArtifactLocations.canonicalBase("mjm:https://host/repo/"),
+                ArtifactLocations.canonicalBase("mjm:http://host/repo/"),
+                "http and https can reach different servers");
+        assertNotEquals(ArtifactLocations.canonicalBase("mjm:https://host/repo/"),
+                ArtifactLocations.canonicalBase("mjm:https://host/other/"),
+                "a different path is a different repository");
     }
 
     @Test

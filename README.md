@@ -147,7 +147,7 @@ mylib-1.2.0.sha256
 |---|---|---|
 | GitHub Releases | `gh:owner/repo@v1.2.3` | `mjm publish gh:owner/repo` |
 | ~~Gitee Releases~~ | 已移除:附件匿名下载需令牌,违反零配置;用裸 URL 或自建主机 | — |
-| **your own host** — mjm layout | `[repos] mine = "mjm:https://my.host/"` + `"com.corp:lib" = "mine:1.2.3"` | `mjm publish mjm:https://my.host/` — two levels, no `group` needed |
+| **your own host** — mjm layout | `[repos] mine = "mjm:https://my.host/"` + `"lib" = "mine:1.2.3"` | `mjm publish mjm:https://my.host/` — two levels, no `group` needed |
 | **your own host** — Maven layout (legacy) | `[repos] corp = …` + `"com.corp:lib" = "corp:1.2.3"` | `mjm publish https://my.host/repo/` — needs `[project].group` |
 | a local directory | `local:/path` | `cp dist/* …` (mjm reads it; nothing to upload) |
 | any static server | a bare `https://…/x.jar` leaf | upload the jar your way |
@@ -257,7 +257,7 @@ the next invocation.
 | `bundle` | an installable distribution (bin + lib + setup.sh + tar.gz) |
 | `clean [--target] [--dist]` | remove `target/` by default; `--dist` also removes `dist/`; never the store |
 | `outdated` | pinned dependencies with newer versions available |
-| `publish [target]` | the release triple; `gh:`, `gitee:`, or any `http(s)://` host (Maven layout over PUT) |
+| `publish [target]` | the release triple; `gh:owner/repo`, `mjm:https://host/` (two levels, no group), or any `http(s)://` host (Maven layout over PUT, needs group) |
 | `update` / `upgrade` | self-upgrade from GitHub Releases |
 | `--offline` (flag) | refuse all network access — store hits only. Not for `update`/`publish`/`outdated`, which are network by nature |
 | `mjm <command> --help` | that command's syntax and explanation (may run to several lines) |

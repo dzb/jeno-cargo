@@ -112,13 +112,14 @@ public final class PublishCommand implements Command {
         // back as another artifact in that same repository. Anything bound to a
         // different repository stays a rule, and rules do not travel.
         String publishBase = target != null && target.startsWith("mjm:")
-                ? mjmBase(target) : null;
+                ? ArtifactLocations.canonicalBase(target) : null;
         java.util.Set<String> siblings = new java.util.HashSet<>();
         for (var requirement : project.requirements()) {
             if (requirement.repository() == null) {
                 continue;
             }
-            String where = mjmBase(project.repos().get(requirement.repository()));
+            String where = ArtifactLocations.canonicalBase(
+                    project.repos().get(requirement.repository()));
             if (publishBase != null && publishBase.equals(where)) {
                 siblings.add(requirement.id());
                 continue;

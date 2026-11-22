@@ -52,8 +52,17 @@ public final class LockFileReader {
                             + "' in the row for '" + fields.get("id") + "'");
                 }
             }
+            String source = string(fields, "source");
+            if (source.startsWith("gitee:")) {
+                // every reader of a lock gets the same sentence: build, info, test,
+                // outdated — the species is gone, the row has to be re-declared
+                throw new StoreException("this mjm.lock pins gitee: artifacts, and the "
+                        + "gitee: species was removed (its release assets need a token to "
+                        + "read) — give '" + fields.get("id") + "' a release jar URL or a "
+                        + "[repos] entry in mjm.toml, then run mjm lock");
+            }
             LockedArtifact artifact = new LockedArtifact(
-                    string(fields, "id"), string(fields, "version"), string(fields, "source"),
+                    string(fields, "id"), string(fields, "version"), source,
                     string(fields, "url"), string(fields, "sha256"),
                     fields.containsKey("meta-sha256") ? string(fields, "meta-sha256") : null,
                     depth(fields), scope(fields));

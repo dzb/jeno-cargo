@@ -121,6 +121,41 @@ public final class ArtifactLocations {
         return url.endsWith("/") ? url : url + "/";
     }
 
+    /**
+     * A repository base normalized for <em>comparison</em>: scheme and host
+     * lowercased, the scheme's default port dropped, the path closed with a
+     * slash. No redirects, no DNS — two spellings of one base compare equal,
+     * anything that could reach a different server does not.
+     */
+    public static String canonicalBase(String declaration) {
+        String host = declaration != null && declaration.startsWith("mjm:")
+                ? declaration.substring("mjm:".length())
+                : declaration;
+        if (host == null) {
+            return "";
+        }
+        try {
+            java.net.URI uri = java.net.URI.create(host);
+            String scheme = uri.getScheme() == null ? ""
+                    : uri.getScheme().toLowerCase(java.util.Locale.ROOT);
+            String authority = uri.getHost() == null ? ""
+                    : uri.getHost().toLowerCase(java.util.Locale.ROOT);
+            int port = uri.getPort();
+            if (("https".equals(scheme) && port == 443)
+                    || ("http".equals(scheme) && port == 80)) {
+                port = -1;
+            }
+            String path = uri.getPath() == null ? "/" : uri.getPath();
+            if (!path.endsWith("/")) {
+                path = path + "/";
+            }
+            return scheme + "://" + authority + (port >= 0 ? ":" + port : "") + path;
+        } catch (IllegalArgumentException notAUrl) {
+            // compare the text as-is rather than pretending to understand it
+            return host;
+        }
+    }
+
     /** Whether a declared base is an {@code mjm:} repository (the native layout). */
     public static boolean isMjmRepository(String base) {
         return base != null && base.startsWith("mjm:");

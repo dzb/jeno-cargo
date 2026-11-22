@@ -71,7 +71,7 @@ string-array  = "[" ws basic-string *( "," ws basic-string ) [","] ws "]"
 | 字段 | 类型 | 必填 | 规则 |
 |---|---|---|---|
 | `name` | 字符串 | 是 | `^[a-z][a-z0-9-]*$`(用作 mjm 原生发布的 artifact 名) |
-| `group` | 字符串 | 否 | 反向域名 id(`com.jujin8.mjm`)。发布到 http(s) 主机的 **Maven 布局必需**(路径按 group 展开),并写入描述符供消费方以 `group:artifact` 引用 |
+| `group` | 字符串 | 否 | 反向域名 id(`com.jujin8.mjm`)。发布到 Maven 布局主机的 **路径必需**(路径按 group 展开);写入描述符时它只是**标识事实**(`mjm info` 展示)。原生工件一律用工件名寻址,不存在 `group:artifact` 的形式 |
 | `version` | 字符串 | 是 | mjm 原生发布时必须 semver(§2.4) |
 | `main` | 字符串 | 否 | 主类全名。`mjm run` 缺参时的入口;`mjm package` 写进 MANIFEST 的 `Main-Class`;`mjm bundle` 写进 launcher |
 | `summary` | 字符串 | 否 | 一句话说明。写入发布描述符,由 `mjm info` 展示 |
@@ -101,7 +101,8 @@ key = 坐标,value 形态决定物种:
 平铺在 `<base>/<name>/<version>/` 下(`<name>` = 发布方 `[project].name`),**不需要 `[project].group`**。
 依赖写成 `"<name>" = "mine:<semver>"`(或 legacy `[deps.mine] "<name>" = "<semver>"`);元数据取自同目录的
 `.mjm.toml` 描述符,`[project].name` 必须与 key 一致(由 `DescriptorReader` 校验)。描述符里的裸名+裸版本
-指向同一仓库的兄弟工件(描述符只写事实,不写仓库规则)。`mjm:` 只支持 `https://`(loopback `http://` 仅供
+指向同一仓库的兄弟工件(描述符只写事实,不写仓库规则)——**这条兄弟规则仅适用于从 `mjm:` 仓库取到的
+描述符**;从 `gh:` 取到的描述符里写裸名不会变成同仓库,仍按 Central 坐标报错。`mjm:` 只支持 `https://`(loopback `http://` 仅供
 测试);store 索引与 `--offline` 行为不变。
 
 **歧义规则**(无例外):
@@ -111,7 +112,8 @@ key = 坐标,value 形态决定物种:
    或名字未声明 → 报错并列出可用仓库名(不默默当成 central 版本)。不匹配仓库名形式的(例如
    `1.2.3`)仍是 central 版本。
 
-`gh` 是保留的仓库名:`[repos] gh = …` 直接报错(它会和物种前缀撞车),换一个名字。
+`gh` 与 `gitee` 是保留的仓库名:`[repos] gh = …` / `[repos] gitee = …` 直接报错。
+`gh:` 是物种前缀;`gitee:` 虽已移除,但它的值必须继续产出迁移错误,不能被一个同名仓库静默接管。
 `local` / `http` / `https` / `file` 不保留。
 
 > **`gitee:` 已移除(2026-11-22)**:Gitee 的 release 附件即使匿名下载也要令牌,违反“零配置”原则。
@@ -246,7 +248,7 @@ gh:{owner}/{repo}@{tag}
 ```toml
 [project]
 name = "mylib"            # 必填;必须与文件名 artifact 段一致,否则报错
-group = "com.example"     # 可选;发布者声明的 group,消费方据此以 group:artifact 引用
+group = "com.example"     # 可选;标识事实,由 mjm info 展示;原生工件用工件名寻址,无 group:artifact
 version = "1.2.0"         # 必填;必须与文件名 version 段一致,否则报错
 summary = "..."           # 可选;一句话说明这个库是做什么的(供 mjm info 展示)
 homepage = "https://..."  # 可选;必须 https;项目主页

@@ -1,6 +1,8 @@
 package com.jujin.mjm.resolve;
 
 import com.jujin.mjm.project.Species;
+import com.jujin.mjm.store.LockFileReader;
+import com.jujin.mjm.store.StoreException;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -8,6 +10,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -31,6 +34,26 @@ class LockFileTest {
                 "https://repo.maven.apache.org/maven2/" + groupPath + "/" + version + "/"
                         + artifactId + "-" + version + ".pom",
                 depth, declared);
+    }
+
+    @Test
+    void aGiteeRowExplainsItsMigration() {
+        String lock = """
+            [[artifacts]]
+            id = "acme:lib"
+            version = "1.0.0"
+            source = "gitee:acme/lib"
+            url = "https://gitee.com/acme/lib/releases/download/v1.0.0/lib-1.0.0.jar"
+            sha256 = "%s"
+            depth = 1
+            """.formatted("a".repeat(64));
+
+        StoreException error = assertThrows(StoreException.class,
+                () -> LockFileReader.read(lock));
+
+        assertTrue(error.getMessage().contains("gitee: species was removed"),
+                error.getMessage());
+        assertTrue(error.getMessage().contains("run mjm lock"), error.getMessage());
     }
 
     @Test

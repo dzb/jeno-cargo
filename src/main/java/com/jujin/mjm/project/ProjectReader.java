@@ -132,9 +132,10 @@ public final class ProjectReader {
                 // Letting [repos] take that name would make "gh:owner/repo@v1"
                 // silently mean a repository named gh — a dependency that can
                 // never resolve as itself.
-                if (entry.getKey().equals("gh")) {
+                if (entry.getKey().equals("gh") || entry.getKey().equals("gitee")) {
                     throw new ProjectException(at(file, source.key("repos", entry.getKey()))
-                            + "[repos].gh is reserved for the gh: species — pick another name");
+                            + "[repos]." + entry.getKey() + " is reserved for the "
+                            + entry.getKey() + ": prefix — pick another name");
                 }
                 String baseUrl = requireString(reposSection, "repos", entry.getKey());
                 boolean remote = baseUrl.startsWith("https://");

@@ -126,11 +126,26 @@ class ProjectReaderTest {
                 [deps]
                 "com.example:lib" = "1.0.0"
                 """));
-        assertTrue(gh.getMessage().contains("[repos].gh is reserved for the gh: species"),
+        assertTrue(gh.getMessage().contains("[repos].gh is reserved for the gh: prefix"),
                 gh.getMessage());
         assertTrue(gh.getMessage().contains("mjm.toml:6:1"),
                 "the position is named like every other schema error: " + gh.getMessage());
 
+    }
+
+    @Test
+    void giteeIsStillReservedSoItsPrefixKeepsItsMigrationError() {
+        ProjectException error = assertThrows(ProjectException.class,
+            () -> ProjectReader.parse("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+
+                [repos]
+                gitee = "https://mirror.example.com/gitee/"
+                """));
+        assertTrue(error.getMessage().contains("[repos].gitee is reserved"),
+                error.getMessage());
     }
 
     @Test
