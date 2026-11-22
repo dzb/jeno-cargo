@@ -332,5 +332,5 @@ scope = "dev"             # 可选:[dev-deps] 可达的工件。缺省 = main
 
 ## 6. 本 spec 未决项
 
-- `[repos]` 回退链语法与 `mjm.w.toml` 本地覆盖(V2 workspaces 设计时补入)
+- `[repos]` 回退链语法与 `mjm.ws.toml` 本地覆盖(V2 workspaces 设计时补入)
 - `mjm jdk` toolchain 管理(V2,方向已定:Temurin → `~/.mjm/jdks`)

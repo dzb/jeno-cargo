@@ -245,7 +245,7 @@ the next invocation.
 
 | | |
 |---|---|
-| `init` / `init --pom` / `init --w` | create a project, migrate one from Maven, or write `mjm.w.toml` for a local workspace (`--w [paths] [--force]`) |
+| `init` / `init --pom` / `init --ws` | create a project, migrate one from Maven, or write `mjm.ws.toml` for a local workspace (`--ws [paths] [--force]`) |
 | `add` / `remove` | edit a declaration and re-lock. `add` writes the value shape (`1.2.3`, `corp:1.2.3`, `gh:owner/repo@tag`, or the shorthand `owner/repo@tag`) |
 | `lock [--check] [--refresh]` | resolve, download, pin. `--check` regenerates in memory and compares byte-for-byte with the lock on disk (Cargo's `--locked`); it fetches metadata, so it needs the network unless every byte is already in the store |
 | `build` | compile against declared deps only |

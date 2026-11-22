@@ -137,7 +137,7 @@ uv 的 `.python-version` 本质是「工具链版本进仓库」;mjm 的 `[java]
 | 可见性 | 传递可见 | 传递可见 | 传递可见 | 严格(`.pnpm` 隔离) | 严格(显式 deps) | `api`/`implementation` | **严格(只直接依赖)** |
 | 缓存 | registry + 源码 | module cache + build cache | 全局 CAS | store + 硬链 | action cache | caches/modules-2 | **全局 CAS,classpath 直指** |
 | 工具链 | `rust-toolchain.toml` | `GOTOOLCHAIN` | `uv python install` | 无 | 自带 JDK 管理 | toolchains 自动下载 | `[java].version`(只校验,不下载——2026-11-22 明确放弃 `mjm jdk`) |
-| 工作区 | `[workspace]` 继承 | `go.work`(不提交) | `uv workspace` | `pnpm-workspace.yaml` | 天然 | `settings.gradle` | V2(`mjm.w.toml`,学 `go.work`) |
+| 工作区 | `[workspace]` 继承 | `go.work`(不提交) | `uv workspace` | `pnpm-workspace.yaml` | 天然 | `settings.gradle` | V2(`mjm.ws.toml`,学 `go.work`) |
 | 发布 | crates.io + `registry` 属性 | **无**(tag 即发布) | PyPI + index | npm registry | — | maven-publish | **去中心化**(`gh:` / `mjm:` / http PUT) |
 | 机器接口 | `cargo metadata` | `go list -json` | `uv export` | `pnpm ls --json` | `query --output=json` | `dependencies` | **无** |
 
@@ -223,7 +223,7 @@ uv 的 `.python-version` 本质是「工具链版本进仓库」;mjm 的 `[java]
 ### A7 ★ 工作区(已在 V2 排期,此处只确认模板)
 
 `go.work`(不提交的本地覆盖文件)优于 cargo 的 `[workspace]` 清单继承:前者只是本机组合,
-后者要求把 monorepo 关系固化进仓库。mjm 的 V2 计划(`mjm.w.toml`,gitignore 不提交)已经是后者,
+后者要求把 monorepo 关系固化进仓库。mjm 的 V2 计划(`mjm.ws.toml`,gitignore 不提交)已经是后者,
 保持。
 
 ---
@@ -254,7 +254,7 @@ uv 的 `.python-version` 本质是「工具链版本进仓库」;mjm 的 `[java]
 | A4 缓存目录带格式版本号 | ⏸ 暂缓 | 等真要改 store 布局时再做,现在记着 |
 | A5 `lock --check` | ✅ 已实施 | 0.2.5 |
 | A6 `tree/outdated --json` | ✅ 已实施 | 0.2.5 |
-| A7 工作区 | ⏸ V2 | 模板已定:`go.work` 式的 `mjm.w.toml`,不提交 |
+| A7 工作区 | ⏸ V2 | 模板已定:`go.work` 式的 `mjm.ws.toml`,不提交 |
 
 ### 实施后再看:哪里比预期好,哪里比预期差
 

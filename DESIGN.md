@@ -358,7 +358,7 @@ push tag v*  →  验证 + 发行
 | `mjm publish` | ✅ | 三件套(`target/dist/`);`gh:` 原生上传;**任意 http(s) 主机 → Maven 布局 + HTTP PUT**;描述符只含 MAIN 依赖 |
 | `mjm update` / `mjm upgrade` | ✅ | 自升级(alias 同一实现) |
 | ~~`mjm release`~~ | **已删除** | 生命周期属于项目自己的 CI;mjm 只提供单步机制 |
-| `mjm init [--pom] [--w] [--force]` | ✅ | 骨架,或从 pom.xml 迁移(逐条报告不可表达的事实) |
+| `mjm init [--pom] [--ws] [--force]` | ✅ | 骨架,或从 pom.xml 迁移(逐条报告不可表达的事实) |
 | `mjm remove <id>` | ✅ | 删除一行声明并重锁 |
 | `mjm classpath [--test] [--file <path>]` | ✅ | 给 IDE 的 classpath:**默认严格可见性的编译 classpath**(target/classes + 直接声明的 jar,不含传递依赖,避免“IDE 能编过、mjm build 又拒绝”),`--test` 为测试 classpath(test-classes + classes + MAIN/DEV 闭包);jar 用 store 的内容寻址路径,不拷贝不链接;输出仅供本机 IDE,不应提交 |
 | `mjm info <id> [--source]` | ✅ | 身份/来源/依赖/源码地址;`--source` 取源码树 |
@@ -368,7 +368,7 @@ push tag v*  →  验证 + 发行
 | `mjm outdated [--json]` | ✅ | 已钉版本 vs 仓库可用版本;只查 Central 与命名 https 仓库,`gh:`/`url`/`local:`/`mjm:` 列为"未检查";预发布默认不报(除非当前就是预发布);跨 major 单独一节;`--json` 输出 `upToDate`/`updates`/`notChecked`/`failures` |
 | `-o`, `--offline` | ✅ | 禁止一切网络访问;store 有则用,缺则报错。`update`/`publish`/`outdated` 不适用 |
 | daemon 常驻 | **M6** | 已确认需要:常驻 JVM 热命令,mvnd 已验证可快 2–4 倍 |
-| workspaces/monorepo | V2 | 设计模板 = go.work 模式:`mjm.w.toml`(表名 `[w]`,旗标 `init --w`)本地文件,gitignore 不提交 |
+| workspaces/monorepo | V2 | 设计模板 = go.work 模式:`mjm.ws.toml`(表名 `[ws]`,旗标 `init --ws`)本地文件,gitignore 不提交 |
 | `mjm audit` | V2 | 依赖漏洞扫描,OSV.dev JSON API(commons 解析器现成);govulncheck 先例 |
 | ~~`mjm jdk`~~ | **不做** | toolchain 管理:2026-11-22 决定不做。现状已足够:JDK major 不符时报错并说明怎么办;新增它会引入下载通道、平台矩阵、外部二进制的校验信任、以及 build 里的第二个 JVM(子进程 javac),换来的只是省一次手工装 JDK |
 
@@ -435,7 +435,7 @@ IoC 接缝(未来扩展点,不引入插件机制):
 | Q5 | ✅ 定为「只校验、不管理」的终态(2026-11-22 修订):JDK major 不符即报错并给出下一步,编译走 `--release`。原计划的 V2 `mjm jdk`(Temurin 下载)**放弃**,理由见 §8 命令表 |
 | Q6 | daemon 确认要做,列为 **M6** |
 | Q7 | token 环境变量定为 `MJM_GITHUB_TOKEN` / `MJM_GITEE_TOKEN` |
-| Go 吸收 | 1–3 定稿进 SPEC:跨 major 硬冲突(D4 升级)、mjm.lock 双钉、描述符 [retract];4–7 进排期:[repos] 回退链、mjm.w.toml 模板、store 只读+文件锁、build-info 嵌入、mjm audit(`mjm jdk` 已于 2026-11-22 取消,见 §8)|
+| Go 吸收 | 1–3 定稿进 SPEC:跨 major 硬冲突(D4 升级)、mjm.lock 双钉、描述符 [retract];4–7 进排期:[repos] 回退链、mjm.ws.toml 模板、store 只读+文件锁、build-info 嵌入、mjm audit(`mjm jdk` 已于 2026-11-22 取消,见 §8)|
 | Q2 | `[overrides]` 进 V1:同 id 全图钉定(MVS 之上);URL 物种不适用;跨 major 硬冲突的合法出口;闭包无此 id → 告警;`mjm tree/why` 强制标注。SPEC §2.1 已定稿 |
 
 ### 待定
@@ -494,4 +494,4 @@ Gradle 9 / Maven 4 后,尚未覆盖的场景按下表排期。
 ### 已在既有排期(本次探查确认方向一致)
 
 `mjm audit`(OSV.dev,= cargo audit/npm audit)、
-`mjm.w.toml`(= workspaces)、M6 daemon、`[repos]` 回退链。
+`mjm.ws.toml`(= workspaces)、M6 daemon、`[repos]` 回退链。
