@@ -243,8 +243,7 @@ git commit ... && git push ... && git tag vX && git push --tags
 只是输出噪音——`mjm test` 与 `mjm build` 的数字（87）因此不能当作"零警告"。
 
 **成因**:junit 的 class 文件带 `@API(...)` 注解，注解的枚举来自
-`org.apiguardian.api`。`vendor/` 是手工裁剪的 Maven 布局仓库（只有 freeway 三件 +
-junit 六件的 pom/jar，pom 是无 parent 链的独立清单），**没有 `org.apiguardian.api` 的
+`org.apiguardian.api`。`vendor/` 是手工裁剪的 Maven 布局仓库（只有 2 个 freeway 件(commons/ioc)+ `slf4j-api` + 6 个 junit 件的 pom/jar，pom 是无 parent 链的独立清单），**没有 `org.apiguardian.api` 的
 jar 也没有它的 pom**。javac 在编译消费者的源码时看到注解里引用了找不到的枚举，就逐处警告。
 
 **为什么现在可接受**:

@@ -18,8 +18,9 @@
   而是"锁文件记的是另一个目录的绝对位置"。
 - 同一台机器 `git clone` 到 `/tmp/x` 后 `mjm lock` 是**成功**的：`local:vendor` 按新的工作目录
   解析，9 个工件都在新 checkout 里。真正的破坏是下面四条，都只在"换目录/换机器"时出现：
-  1. **冷 store + committed lock**：`mjm build` 先从 store 找字节，找不到就按锁里的 URL 取；
-     `/home/dzb/Projects/mjm-cargo/vendor` 不在锁里，命中的是另一份 checkout 的路径。
+  1. **冷 store + committed lock**：`mjm build` 只走 `verifiedJars`（纯 store 查询），缺件就报
+     `run mjm lock`；按锁里的 URL 取字节的是 `mjm lock` 自己。committed lock 指向另一份 checkout，
+     所以冷 store 的新 clone 在 build 这一步就停住，重锁又会把 9 行 URL 改写成当前目录。
      实测新 clone + 空 store（`-Duser.home=/tmp/empty`）→
      `mjm: com.jujin8.freeway:freeway-commons@2.0.2 is not in the store — run mjm lock`。
      换到一台没有 `/home/dzb/Projects/mj` 的机器，锁里的 URL 直接无处可取。
@@ -96,8 +97,9 @@
 1. 读 mjm.toml，算出新文本，`ProjectReader.parse(updated)` 校验（纯内存，不写盘）；
 2. 用 `ProjectReader.parse(updated)` 的结果做一次**完整 resolve**（纯内存，不写 mjm.lock）；
 3. 按 resolve 结果 `store.ensure` 每一个工件（下载/校验字节；失败则中止，磁盘无改动）；
-4. 最后才提交：写 mjm.toml，再写 mjm.lock（同一个提交点，顺序固定）；
-5. 任一步失败：什么都不写；若第 4 步的前一半写完而 mjm.lock 写失败，用第 6 步兜底。
+4. 提交：写 mjm.toml，再写 mjm.lock（同一个提交点，顺序固定）；
+5. 失败处理：第 1–3 步任一步失败 —— 磁盘无改动，直接退出；第 4 步若 mjm.toml 已写而 mjm.lock
+   写失败 —— 立即写回旧 mjm.toml（第 2 步已把它的字节留在内存里），再退出。
 
 **改动面**：`LockService` 拆成 `prepare(projectDir, text)`（返回图 + 字节都已就位）与
 `commit(projectDir, text, graph)`（写 mjm.toml + lock）；`AddCommand`/`RemoveCommand` 改调两者；

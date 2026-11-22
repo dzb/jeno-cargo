@@ -195,7 +195,8 @@ gitee:{owner}/{repo}@{tag}
 
 ### 2.3 深度预算(语义,细节见 DESIGN.md §4.2)
 
-- compile/runtime 闭包计入,test-scope 不计
+- compile/runtime 闭包计入预算；`test-scope` 指 **Maven pom 的 test/provided/system scope**(解码时即丢弃,不进图)
+  mjm 自己的 `[dev-deps]` **同等计入预算**(它就是 `[deps]` 的另一个可见性分组,不是 scope 豁免)——见 §2.1 对照表
 - MVS 收敛后的最终图上计数;**深度 = 从声明根出发的最长引入路径**(预算的真意是暴露最深的链——最短路径会被旁路掩盖);**依赖环 = 硬错误**(环让"最深链"无定义,与根治依赖地狱同向)
 - 超限 → 硬错误;出口 = 替换库 / exclude / 调大 max-depth;**无豁免机制**
 
