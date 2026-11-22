@@ -109,7 +109,7 @@ class VersionTest {
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
         assertEquals(0, new BundleCommand(store, dir).execute(List.of()));
 
-        Path jar = dir.resolve("dist/demo-4.5.6/lib/demo-4.5.6.jar");
+        Path jar = dir.resolve("target/dist/demo-4.5.6/lib/demo-4.5.6.jar");
         assertTrue(Files.exists(jar), "the dist jar was written");
         try (var zip = new java.util.zip.ZipFile(jar.toFile())) {
             var manifestEntry = zip.getEntry("META-INF/MANIFEST.MF");

@@ -86,7 +86,7 @@ class DistLayoutTest {
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
         assertEquals(0, new BundleCommand(store, dir).execute(List.of()));
 
-        Path lib = dir.resolve("dist/demo-1.0.0/lib");
+        Path lib = dir.resolve("target/dist/demo-1.0.0/lib");
         List<Path> topLevel;
         try (var stream = Files.list(lib)) {
             topLevel = stream.toList();
@@ -124,7 +124,7 @@ class DistLayoutTest {
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
         assertEquals(0, new BundleCommand(store, dir).execute(List.of()));
 
-        String launcher = Files.readString(dir.resolve("dist/demo-1.0.0/bin/demo"));
+        String launcher = Files.readString(dir.resolve("target/dist/demo-1.0.0/bin/demo"));
         assertTrue(launcher.contains("-cp \"$MJM_HOME/lib/*\""),
                 "one classpath wildcard, no toolchain: " + launcher);
         String execLine = launcher.lines()
@@ -151,24 +151,25 @@ class DistLayoutTest {
         assertEquals(0, new BundleCommand(store, dir).execute(List.of()));
         assertEquals(0, new PackageCommand(store, dir).execute(List.of("--uber")));
 
-        // the agreement: target/ is disposable intermediates only, so
-        // `rm -rf target` stays the safe, familiar gesture
+        // everything the build produces lives under target/, deliverables
+        // included — `rm -rf target` is still the one safe gesture
         assertTrue(Files.isDirectory(dir.resolve("target/classes")),
                 "compiled classes stay in target/");
         try (var stream = Files.list(dir.resolve("target"))) {
             for (Path entry : stream.toList()) {
                 String name = entry.getFileName().toString();
-                assertTrue(name.equals("classes") || name.equals("test-classes"),
-                        "target/ holds intermediates only, found: " + name);
+                assertTrue(name.equals("classes") || name.equals("test-classes")
+                                || name.equals("dist"),
+                        "target/ holds build output only, found: " + name);
             }
         }
 
-        // every deliverable is under dist/
-        assertTrue(Files.exists(dir.resolve("dist/demo-1.0.0.tar.gz")),
+        // every deliverable is under target/dist/
+        assertTrue(Files.exists(dir.resolve("target/dist/demo-1.0.0.tar.gz")),
                 "the tool distribution archive is a deliverable");
-        assertTrue(Files.isDirectory(dir.resolve("dist/demo-1.0.0")),
+        assertTrue(Files.isDirectory(dir.resolve("target/dist/demo-1.0.0")),
                 "the tool distribution directory is a deliverable");
-        assertTrue(Files.exists(dir.resolve("dist/demo-1.0.0-uber.jar")),
+        assertTrue(Files.exists(dir.resolve("target/dist/demo-1.0.0-uber.jar")),
                 "the packaged jar is a deliverable");
     }
 

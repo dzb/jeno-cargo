@@ -156,7 +156,7 @@ uv 的 `.python-version` 本质是「工具链版本进仓库」;mjm 的 `[java]
 
 排序依据是**「它能删掉多少东西」**,不是「它能加多少功能」。
 
-### A1 ★★★ 把 `dist/` 并进 `target/`
+### A1 ★★★ 把 `dist/` 并进 `target/` — **已实施**
 
 - **吸收谁**:cargo(`target/package/`)、gradle(`build/libs/`)、maven(`target/*.jar`)——可发布产物就在构建树里
 - **删掉什么**:`clean` 的两个旗标、clean 的默认值争议、`DistOutput.clear` 的双语义注释、

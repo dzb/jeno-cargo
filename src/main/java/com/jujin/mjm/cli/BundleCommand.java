@@ -30,7 +30,7 @@ import java.util.stream.Stream;
  * consumer; any CLI project can use it. A library never needs it.
  *
  * <pre>
- *   dist/{name}-{version}/
+ *   target/dist/{name}-{version}/
  *   ├── bin/{name}                POSIX launcher (main class from mjm.toml)
  *   ├── lib/
  *   │   ├── {name}-{version}.jar  one jar: project + skeleton merged
@@ -146,11 +146,12 @@ public final class BundleCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
-        // the whole assembly writes dist/: skeleton, toolchain, launcher, tar.gz
+        // the whole assembly writes target/dist/: skeleton, toolchain, launcher, tar.gz
         return ProjectLock.with(projectDir, this::assemble);
     }
 
     private int assemble() {
+        DistOutput.warnLegacy(projectDir);
         MjProject project;
         List<LockedArtifact> locked;
         Map<String, Path> jars;
@@ -172,7 +173,13 @@ public final class BundleCommand implements Command {
 
         String name = project.name();
         String version = project.version();
-        Path dist = projectDir.resolve("dist/" + name + "-" + version);
+        Path dist;
+        try {
+            dist = DistOutput.dist(projectDir).resolve(name + "-" + version);
+        } catch (IOException e) {
+            System.err.println("mjm: cannot prepare target/dist/ — " + e.getMessage());
+            return 1;
+        }
         Path lib = dist.resolve("lib");
         Path bin = dist.resolve("bin");
 
@@ -180,7 +187,7 @@ public final class BundleCommand implements Command {
         // both are this version's outputs, so both are cleared first
         try {
             DistOutput.clear(dist);
-            DistOutput.clear(projectDir.resolve("dist/" + name + "-" + version + ".tar.gz"));
+            DistOutput.clear(dist.resolveSibling(name + "-" + version + ".tar.gz"));
         } catch (IOException e) {
             System.err.println("mjm: cannot clean the previous output: " + e.getMessage());
             return 1;
@@ -263,7 +270,7 @@ public final class BundleCommand implements Command {
             Files.writeString(dist.resolve("SHA256SUMS"), sums.toString());
 
             // tar.gz — the release artifact
-            Path tarGz = projectDir.resolve("dist/" + name + "-" + version + ".tar.gz");
+            Path tarGz = dist.resolveSibling(name + "-" + version + ".tar.gz");
             Process tar = new ProcessBuilder("tar", "-czf", tarGz.toString(),
                     "-C", dist.getParent().toString(), dist.getFileName().toString())
                     .inheritIO().start();

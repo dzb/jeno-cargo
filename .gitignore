@@ -1,7 +1,8 @@
 # build output — disposable intermediates
 target/
 
-# deliverables — dist directories, jars, tar.gz, publish triples
+# legacy deliverable directory (before target/dist); kept ignored so an old
+# checkout cannot commit it by accident
 dist/
 
 # IDE

@@ -149,7 +149,7 @@ mylib-1.2.0.sha256
 | ~~Gitee Releases~~ | 已移除:附件匿名下载需令牌,违反零配置;用裸 URL 或自建主机 | — |
 | **your own host** — mjm layout | `[repos] mine = "mjm:https://my.host/"` + `"lib" = "mine:1.2.3"` | `mjm publish mjm:https://my.host/` — two levels, no `group` needed |
 | **your own host** — Maven layout (legacy) | `[repos] corp = …` + `"com.corp:lib" = "corp:1.2.3"` | `mjm publish https://my.host/repo/` — needs `[project].group` |
-| a local directory | `local:/path` | `cp dist/* …` (mjm reads it; nothing to upload) |
+| a local directory | `local:/path` | `cp target/dist/* …` (mjm reads it; nothing to upload) |
 | any static server | a bare `https://…/x.jar` leaf | upload the jar your way |
 
 The `mjm:` layout is the shortest one: `mjm publish mjm:https://my.host/` writes
@@ -254,13 +254,17 @@ the next invocation.
 | `tree [--json]` / `why` | see the graph and every introduction path; `tree --json` is one machine-readable document (id-sorted artifacts, sorted children) |
 | `info [--source]` | everything about one dependency, including its source |
 | `package [--uber]` | the jar. `--uber` merges the closure and writes `...-uber.jar`, so the two never overwrite each other |
-| `bundle` | an installable distribution (bin + lib + setup.sh + tar.gz) |
-| `clean [--target] [--dist]` | remove `target/` by default; `--dist` also removes `dist/`; never the store |
+| `bundle` | an installable distribution (bin + lib + setup.sh + tar.gz), in `target/dist/` |
+| `clean [--target \| --dist]` | remove the whole `target/` by default (deliverables live in `target/dist/`); `--dist` removes only `target/dist/` and keeps classes; never the store |
 | `outdated [--json]` | pinned dependencies with newer versions available; `--json` gives `upToDate`/`updates`/`notChecked`/`failures` |
 | `publish [target]` | the release triple; `gh:owner/repo`, `mjm:https://host/` (two levels, no group), or any `http(s)://` host (Maven layout over PUT, needs group) |
 | `update` / `upgrade` | self-upgrade from GitHub Releases |
 | `--offline` (flag) | refuse all network access — store hits only. Not for `update`/`publish`/`outdated`, which are network by nature |
 | `mjm <command> --help` | that command's syntax and explanation (may run to several lines) |
+Deliverables moved: `dist/` is now `target/dist/` (it is build output, and
+`mjm clean` removes the whole `target/` tree). Scripts that read `dist/` need
+one edit; an existing `dist/` is no longer read and `publish` tells you so.
+
 
 ## Design notes
 

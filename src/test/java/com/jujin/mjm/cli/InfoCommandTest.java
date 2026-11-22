@@ -240,7 +240,7 @@ class InfoCommandTest {
                 .execute(List.of()));
         new PublishCommand(dir).execute(List.of());
 
-        String descriptor = Files.readString(dir.resolve("dist/widget-1.2.0.mjm.toml"));
+        String descriptor = Files.readString(dir.resolve("target/dist/widget-1.2.0.mjm.toml"));
         assertTrue(descriptor.contains("summary = \"A tiny reactive widget toolkit\""), descriptor);
         assertTrue(descriptor.contains("homepage = \"https://github.com/acme/widget\""), descriptor);
         assertTrue(descriptor.contains("license = \"Apache-2.0\""), descriptor);

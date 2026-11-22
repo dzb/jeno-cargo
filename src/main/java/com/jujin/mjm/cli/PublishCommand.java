@@ -26,14 +26,14 @@ import java.util.Map;
 /**
  * {@code mjm publish [target]} — the decentralized release (DESIGN.md §7.2).
  *
- * <p>Generates the three-piece artifact into dist/, then — when a target is
+ * <p>Generates the three-piece artifact into target/dist/, then — when a target is
  * given — uploads it via the platform's release API:
  *
  * <pre>
- *   mjm publish                    → dist/ + upload hint
- *   mjm publish gh:owner/repo     → dist/ + GitHub native upload
- *   mjm publish mjm:https://host/ → dist/ + mjm layout PUT (no group needed)
- *   mjm publish https://host/     → dist/ + Maven layout PUT (needs [project].group)
+ *   mjm publish                    → target/dist/ + upload hint
+ *   mjm publish gh:owner/repo     → target/dist/ + GitHub native upload
+ *   mjm publish mjm:https://host/ → target/dist/ + mjm layout PUT (no group needed)
+ *   mjm publish https://host/     → target/dist/ + Maven layout PUT (needs [project].group)
  * </pre>
  *
  * <p>Authentication: {@code MJM_GITHUB_TOKEN} for gh: targets, and
@@ -77,7 +77,7 @@ public final class PublishCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
-        // The upload reads the bytes in dist/, so the lock covers the network
+        // The upload reads the bytes in target/dist/, so the lock covers the network
         // phase too: locking only the write phase would let clean --dist pull a
         // jar out from under a running upload. The cost is that another writer
         // waits for the upload — on purpose (REMINDS 13).
@@ -133,6 +133,13 @@ public final class PublishCommand implements Command {
             return 1;
         }
 
+        if (!Files.isDirectory(projectDir.resolve("target/dist"))
+                && DistOutput.legacyPresent(projectDir)) {
+            System.err.println("mjm: deliverables moved to target/dist — the old dist/ is "
+                    + "no longer read; rerun mjm package (or bundle) to write the new location");
+            return 1;
+        }
+
         Path dist;
         try {
             dist = DistOutput.dist(projectDir);
@@ -143,7 +150,7 @@ public final class PublishCommand implements Command {
                 DistOutput.clear(dist.resolve(file));
             }
         } catch (IOException e) {
-            System.err.println("mjm: cannot prepare dist/: " + e.getMessage());
+            System.err.println("mjm: cannot prepare target/dist/: " + e.getMessage());
             return 1;
         }
 
@@ -163,11 +170,11 @@ public final class PublishCommand implements Command {
             Files.writeString(dist.resolve(shaName),
                     ArtifactStore.sha256(jarFile) + "\n");
         } catch (IOException e) {
-            System.err.println("mjm: cannot write the descriptor or sha256 into dist/");
+            System.err.println("mjm: cannot write the descriptor or sha256 into target/dist/");
             return 1;
         }
 
-        System.out.println("published the release triple into dist/:");
+        System.out.println("published the release triple into target/dist/:");
         System.out.println("  " + jarFile);
         System.out.println("  " + dist.resolve(descriptorName));
         System.out.println("  " + dist.resolve(shaName));

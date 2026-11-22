@@ -12,13 +12,13 @@ import java.util.stream.Stream;
  * {@code mjm clean} — remove this project's build output.
  *
  * <pre>
- *   mjm clean                only target/ (the default)
- *   mjm clean --target       only target/ (the same, spelled out for scripts)
- *   mjm clean --dist         only dist/
- *   mjm clean --target --dist  both
+ *   mjm clean                the whole target/ (the default)
+ *   mjm clean --target       the same, spelled out for scripts
+ *   mjm clean --dist         only target/dist/ (the deliverables; classes stay)
+ *   mjm clean --target --dist  the whole target/ either way
  * </pre>
  *
- * <p>Cleaning a build means removing intermediates. {@code dist/} holds what
+ * <p>Cleaning a build means removing build output. {@code target/dist/} holds what
  * is about to ship — the release triple, a bundle — possibly for several
  * versions at once, so deleting it is a separate, explicit request
  * ({@code --dist}) and never a side effect of "clean".
@@ -30,7 +30,7 @@ import java.util.stream.Stream;
  *
  * <p>The split between the two directories is the one established earlier:
  * {@code target/} holds intermediates that {@code rm -rf} is safe on, and
- * {@code dist/} holds deliverables — which is why the default stops at
+ * {@code target/dist/} holds deliverables — which is why {@code --dist} exists
  * {@code target/} and {@code --dist} has to be asked for.
  */
 public final class CleanCommand implements Command {
@@ -48,13 +48,13 @@ public final class CleanCommand implements Command {
 
     @Override
     public String usage() {
-        return "[--target] [--dist]";
+        return "[--target (default) | --dist]";
     }
 
     @Override
     public String summary() {
-        return "remove build output (target/ by default; --dist also removes the "
-                + "deliverables; the store is never touched)";
+        return "remove build output (whole target/ by default; --dist removes only "
+                + "target/dist and keeps classes; the store is never touched)";
     }
 
     @Override
@@ -91,7 +91,7 @@ public final class CleanCommand implements Command {
             requested.add(projectDir.resolve("target"));
         }
         if (dist) {
-            requested.add(projectDir.resolve("dist"));
+            requested.add(projectDir.resolve("target/dist"));
         }
 
         // Look before deleting: a mount anywhere in either requested tree
@@ -114,11 +114,12 @@ public final class CleanCommand implements Command {
         boolean removedTarget = false;
         boolean removedSomething = false;
         if (target) {
+            // the whole build output, deliverables included
             removedTarget = remove(projectDir.resolve("target"), "target/");
             removedSomething = removedTarget;
-        }
-        if (dist) {
-            removedSomething |= remove(projectDir.resolve("dist"), "dist/");
+        } else if (dist) {
+            // only the deliverables: a rebuilt bundle does not need a recompile
+            removedSomething = remove(projectDir.resolve("target/dist"), "target/dist/");
         }
 
         if (!removedSomething) {
@@ -246,7 +247,7 @@ public final class CleanCommand implements Command {
         }
     }
 
-    /** {@code target/, dist/} — for messages. */
+    /** {@code target/}, {@code target/dist/} — for messages. */
     private static String describe(List<Path> paths) {
         return paths.stream().map(Path::toString)
                 .collect(java.util.stream.Collectors.joining(", "));

@@ -47,65 +47,66 @@ class CleanOutdatedTest {
     // ------------------------------------------------------------------
 
     @Test
-    void cleanOnlyRemovesTargetByDefault() throws Exception {
+    void cleanRemovesTheWholeTargetTreeByDefault() throws Exception {
         Files.createDirectories(dir.resolve("target/classes/demo"));
-        Files.createDirectories(dir.resolve("dist/demo-1.0.0/lib"));
+        Files.createDirectories(dir.resolve("target/dist/demo-1.0.0/lib"));
         Files.writeString(dir.resolve("target/classes/demo/A.class"), "x");
-        Files.writeString(dir.resolve("dist/demo-1.0.0.tar.gz"), "y");
+        Files.writeString(dir.resolve("target/dist/demo-1.0.0.tar.gz"), "y");
 
         assertEquals(0, new CleanCommand(dir).execute(List.of()));
 
-        assertFalse(Files.exists(dir.resolve("target")), "target/ is gone");
-        assertTrue(Files.exists(dir.resolve("dist/demo-1.0.0.tar.gz")),
-                "dist/ holds what is about to ship — cleaning a build must not delete it");
+        assertFalse(Files.exists(dir.resolve("target")),
+                "the whole build output, deliverables included");
     }
 
     @Test
-    void cleanTargetKeepsDeliverables() throws Exception {
+    void cleanTargetIsTheSameAsNoFlag() throws Exception {
         Files.createDirectories(dir.resolve("target/classes"));
-        Files.createDirectories(dir.resolve("dist"));
-        Files.writeString(dir.resolve("dist/demo-1.0.0.jar"), "ship me");
+        Files.createDirectories(dir.resolve("target/dist"));
+        Files.writeString(dir.resolve("target/dist/demo-1.0.0.jar"), "ship me");
 
         assertEquals(0, new CleanCommand(dir).execute(List.of("--target")));
 
-        assertFalse(Files.exists(dir.resolve("target")));
-        assertTrue(Files.exists(dir.resolve("dist/demo-1.0.0.jar")),
-                "--target exists so a build can be cleaned without losing what you ship");
+        assertFalse(Files.exists(dir.resolve("target")),
+                "--target is the default, spelled out for scripts");
     }
 
     @Test
     void cleanDistKeepsTheBuild() throws Exception {
         Files.createDirectories(dir.resolve("target/classes"));
-        Files.createDirectories(dir.resolve("dist"));
+        Files.createDirectories(dir.resolve("target/dist"));
 
         assertEquals(0, new CleanCommand(dir).execute(List.of("--dist")));
 
         assertTrue(Files.isDirectory(dir.resolve("target/classes")));
-        assertFalse(Files.exists(dir.resolve("dist")));
+        assertFalse(Files.exists(dir.resolve("target/dist")));
     }
 
     @Test
     void bothFlagsRemoveBothDirectories() throws Exception {
         Files.createDirectories(dir.resolve("target/classes"));
-        Files.createDirectories(dir.resolve("dist"));
+        Files.createDirectories(dir.resolve("target/dist"));
 
         assertEquals(0, new CleanCommand(dir).execute(List.of("--target", "--dist")));
 
         assertFalse(Files.exists(dir.resolve("target")), "target/ is gone");
-        assertFalse(Files.exists(dir.resolve("dist")), "--dist said so explicitly");
+        assertFalse(Files.exists(dir.resolve("target/dist")), "--dist said so explicitly");
     }
 
     @Test
-    void cleanRemovesASymlinkInsteadOfLeavingItDangling() throws Exception {
+    void cleanDistRemovesTheSymlinkNotItsTarget() throws Exception {
         Files.createDirectories(dir.resolve("target/classes"));
-        Files.createSymbolicLink(dir.resolve("dist"), dir.resolve("target"));
+        Path victim = Files.createDirectories(dir.resolve("victim"));
+        Files.writeString(victim.resolve("keep.txt"), "keep");
+        Files.createSymbolicLink(dir.resolve("target/dist"), victim);
 
-        // both flags: target/ goes first, which turns dist into a dangling link
-        assertEquals(0, new CleanCommand(dir).execute(List.of("--target", "--dist")));
+        assertEquals(0, new CleanCommand(dir).execute(List.of("--dist")));
 
-        assertFalse(Files.exists(dir.resolve("target")), "target/ is gone");
-        assertFalse(Files.exists(dir.resolve("dist"), LinkOption.NOFOLLOW_LINKS),
-                "dist became a dangling link when target/ went; it must be removed too");
+        assertFalse(Files.exists(dir.resolve("target/dist"), LinkOption.NOFOLLOW_LINKS),
+                "the link itself is removed");
+        assertTrue(Files.exists(victim.resolve("keep.txt")),
+                "what it pointed at is not ours to delete");
+        assertTrue(Files.isDirectory(dir.resolve("target/classes")), "classes are kept");
     }
 
     @Test
@@ -125,7 +126,7 @@ class CleanOutdatedTest {
     @Test
     void aMountInEitherRequestedTreeRefusesTheWholeRun() throws Exception {
         Files.createDirectories(dir.resolve("target/classes"));
-        Files.createDirectories(dir.resolve("dist"));
+        Files.createDirectories(dir.resolve("target/dist"));
         Files.writeString(dir.resolve("target/classes/A.class"), "x");
         CleanCommand.useMountDetector(tree ->
                 tree.getFileName().toString().equals("dist") ? List.of(tree) : List.of());
@@ -150,14 +151,14 @@ class CleanOutdatedTest {
     @Test
     void aMountInATreeNobodyAskedForDoesNotBlock() throws Exception {
         Files.createDirectories(dir.resolve("target/classes"));
-        Files.createDirectories(dir.resolve("dist"));
+        Files.createDirectories(dir.resolve("target/dist"));
         // target/ is a mount, but only --dist was requested
         CleanCommand.useMountDetector(tree ->
                 tree.getFileName().toString().equals("target") ? List.of(tree) : List.of());
 
         assertEquals(0, new CleanCommand(dir).execute(List.of("--dist")));
 
-        assertFalse(Files.exists(dir.resolve("dist")), "the requested tree is removed");
+        assertFalse(Files.exists(dir.resolve("target/dist")), "the requested tree is removed");
         assertTrue(Files.isDirectory(dir.resolve("target/classes")),
                 "an unrequested tree is not inspected, so a mount there blocks nothing");
     }

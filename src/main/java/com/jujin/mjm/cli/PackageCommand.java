@@ -32,7 +32,7 @@ import java.util.stream.Stream;
  *       services combined, signatures dropped. One file, easy to share.</li>
  * </ul>
  *
- * <p>Both write to {@code dist/} — the one directory that holds
+ * <p>Both write to {@code target/dist/} — the one directory that holds
  * deliverables. {@code target/} keeps only disposable build intermediates
  * ({@code classes}, {@code test-classes}), so {@code rm -rf target} stays the
  * safe, familiar gesture. The dist directory additionally produces
@@ -88,7 +88,7 @@ public final class PackageCommand implements Command {
             }
         }
 
-        // package writes dist/; clean --dist and the other writers take the
+        // package writes target/dist/; clean --dist and the other writers take the
         // same project lock, so a deliverable is never deleted mid-write
         boolean uberJar = uber;
         String requestedMain = mainClass;
@@ -96,6 +96,7 @@ public final class PackageCommand implements Command {
     }
 
     private int write(String mainClass, boolean uber) {
+        DistOutput.warnLegacy(projectDir);
         MjProject project;
         List<LockedArtifact> locked;
         Map<String, Path> jars;
@@ -140,7 +141,13 @@ public final class PackageCommand implements Command {
     private int plainJar(MjProject project, String mainClass) {
         String name = project.name();
         String version = project.version();
-        Path output = projectDir.resolve("dist/" + name + "-" + version + ".jar");
+        Path output;
+        try {
+            output = DistOutput.dist(projectDir).resolve(name + "-" + version + ".jar");
+        } catch (IOException e) {
+            System.err.println("mjm: cannot prepare target/dist/ — " + e.getMessage());
+            return 1;
+        }
         Path classes = projectDir.resolve(CLASSES);
 
         if (!Files.isDirectory(classes)) {
@@ -191,7 +198,13 @@ public final class PackageCommand implements Command {
         // distinct from the plain jar: the two carry different bytes, and one
         // silently overwriting the other means a release ships whichever ran
         // last. The classifier convention is Maven's (-uber), not a new one.
-        Path output = projectDir.resolve("dist/" + name + "-" + version + "-uber.jar");
+        Path output;
+        try {
+            output = DistOutput.dist(projectDir).resolve(name + "-" + version + "-uber.jar");
+        } catch (IOException e) {
+            System.err.println("mjm: cannot prepare target/dist/ — " + e.getMessage());
+            return 1;
+        }
         Path classes = projectDir.resolve(CLASSES);
 
         if (!Files.isDirectory(classes)) {

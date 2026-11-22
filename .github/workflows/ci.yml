@@ -110,7 +110,7 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           mkdir dist-release
-          cp "dist/mjm-$VERSION.tar.gz" "dist-release/mjm-bin-$VERSION.tar.gz"
+          cp "target/dist/mjm-$VERSION.tar.gz" "dist-release/mjm-bin-$VERSION.tar.gz"
 
       # 重发安全:先删同 tag 的旧 release(保留 tag),规避附件 CDN 缓存。
       - name: create the GitHub release

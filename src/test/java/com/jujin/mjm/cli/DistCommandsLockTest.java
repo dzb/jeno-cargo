@@ -47,7 +47,7 @@ class DistCommandsLockTest {
 
         assertWaitsThenRuns(() -> new PackageCommand(new ArtifactStore(dir.resolve("store")), dir)
                 .execute(List.of()));
-        assertTrue(Files.isDirectory(dir.resolve("dist")), "the jar landed after the wait");
+        assertTrue(Files.isDirectory(dir.resolve("target/dist")), "the jar landed after the wait");
     }
 
     @Test
@@ -57,7 +57,7 @@ class DistCommandsLockTest {
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
 
         assertWaitsThenRuns(() -> new BundleCommand(store, dir).execute(List.of()));
-        assertTrue(Files.exists(dir.resolve("dist/demo-0.1.0.tar.gz")),
+        assertTrue(Files.exists(dir.resolve("target/dist/demo-0.1.0.tar.gz")),
                 "the archive landed whole after the wait");
     }
 

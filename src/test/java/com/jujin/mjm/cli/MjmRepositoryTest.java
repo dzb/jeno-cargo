@@ -162,7 +162,7 @@ class MjmRepositoryTest {
         int exit = new PublishCommand(project).execute(List.of("mjm:" + base + "/"));
 
         assertEquals(0, exit);
-        String descriptor = Files.readString(project.resolve("dist/demo-0.1.0.mjm.toml"));
+        String descriptor = Files.readString(project.resolve("target/dist/demo-0.1.0.mjm.toml"));
         assertTrue(descriptor.contains("\"gadget\" = \"0.9.0\""),
                 "a sibling is a fact: bare name and version, got:\n" + descriptor);
         assertTrue(!descriptor.contains("mine:"), descriptor);

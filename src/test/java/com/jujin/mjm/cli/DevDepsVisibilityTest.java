@@ -125,7 +125,7 @@ class DevDepsVisibilityTest {
                 .execute(List.of()));
         new PublishCommand(dir).execute(List.of());
 
-        Path descriptor = dir.resolve("dist/demo-0.1.0.mjm.toml");
+        Path descriptor = dir.resolve("target/dist/demo-0.1.0.mjm.toml");
         assertTrue(Files.exists(descriptor), "the descriptor was written");
         String text = Files.readString(descriptor);
         assertTrue(text.contains("com.example:main-lib"), "the main dependency is published");

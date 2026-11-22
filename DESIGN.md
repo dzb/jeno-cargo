@@ -354,9 +354,9 @@ push tag v*  →  验证 + 发行
 | `mjm build` | ✅ | javac 编译(严格可见性 classpath —— 只含 MAIN 声明);`--release N` 目标化字节码;`-processorpath` 注入处理器;`src/main/resources` 拷入产物 |
 | `mjm run <main>` / scripts | ✅ | runtime classpath 运行(排除 dev) |
 | `mjm test` | ✅ | fork JVM runner:`@MjmTest` + JUnit Platform;classpath 含 MAIN + dev;`[test]` include/exclude 过滤源 |
-| `mjm package` | ✅ | 纯 jar;`--uber` 合并闭包(排除 dev)并输出 `dist/<name>-<ver>-uber.jar`——与普通 jar 不同名,互不覆盖 |
-| `mjm bundle` | ✅ | 发行目录 + setup.sh + tar.gz,输出 `dist/`(应用自用;库不需要) |
-| `mjm publish` | ✅ | 三件套(dist/);`gh:` 原生上传;**任意 http(s) 主机 → Maven 布局 + HTTP PUT**;描述符只含 MAIN 依赖 |
+| `mjm package` | ✅ | 纯 jar;`--uber` 合并闭包(排除 dev)并输出 `target/dist/<name>-<ver>-uber.jar`——与普通 jar 不同名,互不覆盖 |
+| `mjm bundle` | ✅ | 发行目录 + setup.sh + tar.gz,输出 `target/dist/`(应用自用;库不需要) |
+| `mjm publish` | ✅ | 三件套(`target/dist/`);`gh:` 原生上传;**任意 http(s) 主机 → Maven 布局 + HTTP PUT**;描述符只含 MAIN 依赖 |
 | `mjm update` / `mjm upgrade` | ✅ | 自升级(alias 同一实现) |
 | ~~`mjm release`~~ | **已删除** | 生命周期属于项目自己的 CI;mjm 只提供单步机制 |
 | `mjm init [--pom] [--force]` | ✅ | 骨架,或从 pom.xml 迁移(逐条报告不可表达的事实) |
@@ -364,7 +364,7 @@ push tag v*  →  验证 + 发行
 | `mjm info <id> [--source]` | ✅ | 身份/来源/依赖/源码地址;`--source` 取源码树 |
 | `mjm cache dir | size | prune` | ✅ | 只看不删:`dir` 三个根、`size` 各自占用 + 合计、`prune` 只删可证明无用的东西(项目已消失的锁文件、`part-*.tmp` 残留、悬空索引条目);锁文件带 `project=` 侧车 |
 | `mjm cache clean` | ✅ | 显式删除 store 与 sources 并报释放量;不动锁文件、不动项目、不改 `mjm.lock` |
-| `mjm clean [--target] [--dist]` | ✅ | **默认整棵删 `target/`**(无参或 `--target`;Maven 惯例——包括你自己放进 `target/` 的东西;里面只有可重建的 `classes`/`test-classes`,依赖缓存在 XDG cache 的 `mjm/store` 不在此);`--dist` 才清 `dist/`(交付物,可能含其他版本的产物,所以是显式要求);两个都给就都清;**两个目标先全部探测,任一(含其内部嵌套)是挂载点则整次拒绝、一个字节不删**;**永不触碰 store** |
+| `mjm clean [--target (default) \| --dist]` | ✅ | **默认整棵删 `target/`**(无参或 `--target`;Maven 惯例——交付物也在 `target/dist/`,所以一并清掉;里面只有可重建的 `classes`/`test-classes` 与可重发的 `target/dist`,依赖缓存在 XDG cache 的 `mjm/store` 不在此);`--dist` 只删 `target/dist/`(保留 classes,重发发行物不用重编译);两个都给就都清;**两个目标先全部探测,任一(含其内部嵌套)是挂载点则整次拒绝、一个字节不删**;**永不触碰 store**;旧的项目根 `dist/` 不再被读取(给一行迁移提示) |
 | `mjm outdated [--json]` | ✅ | 已钉版本 vs 仓库可用版本;只查 Central 与命名 https 仓库,`gh:`/`url`/`local:`/`mjm:` 列为"未检查";预发布默认不报(除非当前就是预发布);跨 major 单独一节;`--json` 输出 `upToDate`/`updates`/`notChecked`/`failures` |
 | `--offline` | ✅ | 禁止一切网络访问;store 有则用,缺则报错。`update`/`publish`/`outdated` 不适用 |
 | daemon 常驻 | **M6** | 已确认需要:常驻 JVM 热命令,mvnd 已验证可快 2–4 倍 |
