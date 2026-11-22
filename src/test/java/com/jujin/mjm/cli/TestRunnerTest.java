@@ -9,8 +9,10 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -168,6 +170,79 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         assertTrue(error.getMessage().contains("cannot read"),
                 "a broken manifest must not silently run every test, got: "
                         + error.getMessage());
+    }
+
+    @Test
+    void twoRunsInTheSameProjectDoNotOverlap(@TempDir Path storeDir) throws Exception {
+        project();
+        Path marker = dir.resolve("marker.txt");
+        Files.writeString(dir.resolve("src/test/java/demo/Tests.java"), """
+            package demo;
+
+            import com.jujin.mjm.test.MjmTest;
+
+            public class Tests {
+                @MjmTest
+                void ok() throws Exception {
+                    String marker = System.getProperty("probe.marker");
+                    try (var out = new java.io.FileOutputStream(marker, true)) {
+                        out.write((System.currentTimeMillis() + " start\\n").getBytes());
+                        out.flush();
+                        Thread.sleep(1200);
+                        out.write((System.currentTimeMillis() + " end\\n").getBytes());
+                    }
+                }
+            }
+            """);
+        lock();
+
+        String java = Path.of(System.getProperty("java.home"), "bin", "java").toString();
+        String classpath = System.getProperty("java.class.path");
+        try (var central = VendoredToolchain.start()) {
+            String base = System.getProperty("mjm.central.base");
+            Process first = run(dir, java, classpath, base, marker, dir.resolve("first.log"));
+            Process second = run(dir, java, classpath, base, marker, dir.resolve("second.log"));
+
+            int firstExit = first.waitFor();
+            int secondExit = second.waitFor();
+            assertEquals(0, firstExit, "first run exit " + firstExit + ":\n"
+                    + read(dir.resolve("first.log")));
+            assertEquals(0, secondExit, "second run exit " + secondExit + ":\n"
+                    + read(dir.resolve("second.log")));
+        }
+
+        // two runs, each writing a start/end pair; serialized runs never overlap
+        List<long[]> intervals = new ArrayList<>();
+        long start = -1;
+        for (String line : Files.readAllLines(marker)) {
+            String[] parts = line.strip().split(" ");
+            long at = Long.parseLong(parts[0]);
+            if (parts[1].equals("start")) {
+                start = at;
+            } else {
+                intervals.add(new long[]{start, at});
+            }
+        }
+        assertEquals(2, intervals.size(), "both runs reached the fork: " + Files.readString(marker));
+        long[] a = intervals.get(0);
+        long[] b = intervals.get(1);
+        assertTrue(a[1] <= b[0] || b[1] <= a[0],
+                "the runs must not execute at the same time: " + Files.readString(marker));
+    }
+
+    private static Process run(Path projectDir, String java, String classpath, String centralBase,
+                               Path marker, Path log) throws IOException {
+        ProcessBuilder builder = new ProcessBuilder(java, "-cp", classpath,
+                "-Dmjm.central.base=" + centralBase, "com.jujin.mjm.cli.Mjm", "test");
+        builder.directory(projectDir.toFile());
+        builder.environment().put("JAVA_TOOL_OPTIONS", "-Dprobe.marker=" + marker.toAbsolutePath());
+        return builder.redirectErrorStream(true)
+                .redirectOutput(log.toFile())
+                .start();
+    }
+
+    private static String read(Path log) throws IOException {
+        return Files.exists(log) ? Files.readString(log) : "(no log)";
     }
 
     private void project() throws IOException {
