@@ -55,12 +55,13 @@ public final class RunCommand implements Command {
 
     @Override
     public String usage() {
-        return "<main-class | script> [args...]";
+        return "[<main-class | script> [args...]]";
     }
 
     @Override
     public String summary() {
-        return "run a main class or a [scripts] entry on the resolved closure";
+        return "run a main class or a [scripts] entry, or [project].main when no"
+                + " argument is given";
     }
 
     @Override

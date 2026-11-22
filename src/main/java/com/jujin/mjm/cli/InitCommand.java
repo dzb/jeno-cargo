@@ -62,7 +62,7 @@ public final class InitCommand implements Command {
                 default -> {
                     if (arg.startsWith("-")) {
                         System.err.println("mjm: unknown init option '" + arg + "'"
-                                + " — use --pom, --wss or --force");
+                                + " — use --pom, --ws or --force");
                         return 2;
                     }
                     paths.add(arg);

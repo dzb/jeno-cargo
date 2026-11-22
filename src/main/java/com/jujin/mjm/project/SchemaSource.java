@@ -14,15 +14,15 @@ import java.util.Map;
  * string array, comments, blanks. A quoted key ({@code "group:artifact"}) is
  * unwrapped, so lookups use the same keys the parser produced.
  */
-final class SchemaSource {
+public final class SchemaSource {
 
     /** A 1-based position in the source text. */
-    record Site(int line, int column) {}
+    public record Site(int line, int column) {}
 
     private final Map<String, Site> sections = new LinkedHashMap<>();
     private final Map<String, Map<String, Site>> keys = new LinkedHashMap<>();
 
-    static SchemaSource scan(String text) {
+    public static SchemaSource scan(String text) {
         SchemaSource source = new SchemaSource();
         String currentSection = "";
         int lineNumber = 0;
@@ -93,12 +93,12 @@ final class SchemaSource {
     }
 
     /** The header line of a section, or null when it is absent. */
-    Site section(String name) {
+    public Site section(String name) {
         return sections.get(name);
     }
 
     /** The line of one key inside a section, or null when the scan missed it. */
-    Site key(String section, String key) {
+    public Site key(String section, String key) {
         Map<String, Site> inSection = keys.get(section);
         return inSection == null ? null : inSection.get(key);
     }

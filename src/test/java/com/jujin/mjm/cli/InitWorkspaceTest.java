@@ -126,11 +126,13 @@ class InitWorkspaceTest {
     private void module(String relative) throws IOException {
         Path module = relative.isEmpty() ? dir : dir.resolve(relative);
         Files.createDirectories(module);
+        String name = relative.isEmpty() ? "root"
+                : relative.replaceAll("[^a-z0-9]+", "-");
         Files.writeString(module.resolve("mjm.toml"), """
             [project]
-            name = "m"
+            name = "%s"
             version = "0.1.0"
-            """);
+            """.formatted(name));
         if (relative.isEmpty()) {
             Files.deleteIfExists(dir.resolve("mjm.ws.toml"));
         }

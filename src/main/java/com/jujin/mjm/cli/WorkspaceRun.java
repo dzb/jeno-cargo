@@ -47,7 +47,7 @@ final class WorkspaceRun {
             String arg = args.get(i);
             if (arg.equals("--module")) {
                 if (i + 1 >= args.size()) {
-                    throw new Workspaces.WorkspaceException("--module needs a module path");
+                    throw new Workspaces.UsageException("--module needs a module path");
                 }
                 requested = args.get(++i);
             } else if (arg.startsWith("--module=")) {
@@ -67,7 +67,7 @@ final class WorkspaceRun {
         try {
             real = candidate.toRealPath();
         } catch (java.io.IOException e) {
-            throw new Workspaces.WorkspaceException("'" + requested + "' is not a module of this"
+            throw new Workspaces.UsageException("'" + requested + "' is not a module of this"
                     + " workspace — known: " + known(workspace));
         }
         for (Path module : workspace.modules()) {
@@ -75,7 +75,7 @@ final class WorkspaceRun {
                 return module;
             }
         }
-        throw new Workspaces.WorkspaceException("'" + requested + "' is not a module of this"
+        throw new Workspaces.UsageException("'" + requested + "' is not a module of this"
                 + " workspace — known: " + known(workspace));
     }
 
@@ -96,8 +96,11 @@ final class WorkspaceRun {
         Run run;
         try {
             run = root(projectDir, args);
-        } catch (Workspaces.WorkspaceException e) {
+        } catch (Workspaces.UsageException e) {
             return usage(e.getMessage());
+        } catch (Workspaces.WorkspaceException e) {
+            System.err.println("mjm: " + e.getMessage());
+            return 1;
         }
         if (run == null) {
             return null;
@@ -161,8 +164,11 @@ final class WorkspaceRun {
         Run run;
         try {
             run = root(projectDir, args);
-        } catch (Workspaces.WorkspaceException e) {
+        } catch (Workspaces.UsageException e) {
             return usage(e.getMessage());
+        } catch (Workspaces.WorkspaceException e) {
+            System.err.println("mjm: " + e.getMessage());
+            return 1;
         }
         if (run == null) {
             System.err.println("mjm: --module is only used at a workspace root");

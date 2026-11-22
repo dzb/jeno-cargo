@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import com.jujin.mjm.project.MjProject;
 import com.jujin.mjm.project.ProjectReader;
 import com.jujin.mjm.project.Requirement;
+import com.jujin.mjm.project.SchemaSource;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -173,12 +174,22 @@ public final class Workspaces {
     }
 
     private static MjProject readProject(Path module, Workspace workspace) {
+        return readProject(workspace.root(), module);
+    }
+
+    private static MjProject readProject(Path root, Path module) {
         try {
             return ProjectReader.parse(Files.readString(module.resolve("mjm.toml")));
         } catch (IOException | RuntimeException e) {
-            throw new WorkspaceException("cannot read " + display(workspace.root(), module)
+            throw new WorkspaceException("cannot read " + display(root, module)
                     + "/mjm.toml — " + e.getMessage());
         }
+    }
+
+    /** {@code file:line:column: } — the prefix every workspace schema error carries. */
+    private static String at(Path file, SchemaSource.Site site) {
+        return site == null ? file + ": "
+                : file + ":" + site.line() + ":" + site.column() + ": ";
     }
 
     /** A module path as the workspace file spells it: relative, forward slashes. */
@@ -188,34 +199,41 @@ public final class Workspaces {
 
     /** Parses one file; {@code root} is the directory it lives in. */
     public static Workspace parse(Path root, Path file) {
-        Map<String, Object> document;
+        String text;
         try {
-            document = TomlUtils.parse(Files.readString(file));
+            text = Files.readString(file);
         } catch (IOException e) {
             throw new WorkspaceException("cannot read " + file + " — " + e.getMessage());
-        } catch (RuntimeException e) {
-            throw new WorkspaceException(file + ": " + e.getMessage());
         }
+        Map<String, Object> document;
+        try {
+            document = TomlUtils.parse(text);
+        } catch (RuntimeException e) {
+            throw new WorkspaceException(at(file, null) + e.getMessage());
+        }
+        SchemaSource source = SchemaSource.scan(text);
 
         for (String section : document.keySet()) {
             if (!section.equals("ws")) {
-                throw new WorkspaceException(file + ": unknown section [" + section
-                        + "] — a workspace file holds [ws] only");
+                throw new WorkspaceException(at(file, source.section(section))
+                        + "unknown section [" + section + "] — a workspace file holds [ws] only");
             }
         }
         Object section = document.get("ws");
         if (!(section instanceof Map<?, ?> table)) {
-            throw new WorkspaceException(file + ": [ws] is required");
+            throw new WorkspaceException(at(file, null) + "[ws] is required");
         }
         for (Object key : table.keySet()) {
             if (!key.equals("modules")) {
-                throw new WorkspaceException(file + ": [ws]." + key
-                        + " is not a key — allowed: modules");
+                throw new WorkspaceException(at(file, source.key("ws", String.valueOf(key)))
+                        + "[ws]." + key + " is not a key — allowed: modules");
             }
         }
+        SchemaSource.Site modulesSite = source.key("ws", "modules");
         Object listed = table.get("modules");
         if (!(listed instanceof List<?> entries)) {
-            throw new WorkspaceException(file + ": [ws].modules must be an array of paths");
+            throw new WorkspaceException(at(file, modulesSite)
+                    + "[ws].modules must be an array of paths");
         }
 
         Path rootReal;
@@ -233,35 +251,60 @@ public final class Workspaces {
         List<Path> modules = new ArrayList<>();
         List<String> declared = new ArrayList<>();
         for (Object entry : entries) {
-            if (!(entry instanceof String text) || text.isBlank()) {
-                throw new WorkspaceException(file + ": [ws].modules entries must be non-blank strings");
+            if (!(entry instanceof String modulePath) || modulePath.isBlank()) {
+                throw new WorkspaceException(at(file, modulesSite)
+                        + "[ws].modules entries must be non-blank strings");
             }
-            declared.add(text);
-            Path module = root.resolve(text).normalize();
+            declared.add(modulePath);
+            Path module = root.resolve(modulePath).normalize();
             if (!Files.isDirectory(module)) {
-                throw new WorkspaceException("module '" + text + "' does not exist under " + root);
+                throw new WorkspaceException(at(file, modulesSite)
+                        + "module '" + modulePath + "' does not exist under " + root);
             }
             if (!Files.isRegularFile(module.resolve("mjm.toml"))) {
-                throw new WorkspaceException("module '" + text + "' has no mjm.toml");
+                throw new WorkspaceException(at(file, modulesSite)
+                        + "module '" + modulePath + "' has no mjm.toml");
             }
             Path real;
             try {
                 real = module.toRealPath();
             } catch (IOException e) {
-                throw new WorkspaceException("module '" + text + "' cannot be resolved");
+                throw new WorkspaceException(at(file, modulesSite)
+                        + "module '" + modulePath + "' cannot be resolved");
             }
             if (!seen.add(real)) {
-                throw new WorkspaceException("modules " + declared + " name the same directory twice ("
-                        + real + ")");
+                throw new WorkspaceException(at(file, modulesSite)
+                        + "modules " + declared + " name the same directory twice (" + real + ")");
             }
             modules.add(real);
+        }
+
+        // Two modules claiming one id make every replacement and every root
+        // orchestration ambiguous, so the file is rejected the moment it is read
+        // — not only when a classpath happens to ask about that id.
+        Map<String, Path> byId = new java.util.LinkedHashMap<>();
+        for (Path module : modules) {
+            String id = moduleId(readProject(rootReal, module));
+            Path previous = byId.putIfAbsent(id, module);
+            if (previous != null) {
+                throw new WorkspaceException(at(file, modulesSite) + "two modules claim '"
+                        + id + "': " + display(rootReal, previous) + " and "
+                        + display(rootReal, module));
+            }
         }
         return new Workspace(rootReal, file, List.copyOf(modules));
     }
 
     /** A workspace file that cannot be read or does not make sense. */
-    public static final class WorkspaceException extends RuntimeException {
+    public static class WorkspaceException extends RuntimeException {
         WorkspaceException(String message) {
+            super(message);
+        }
+    }
+
+    /** A {@code --module} argument the user has to fix — a usage error, not a file error. */
+    public static final class UsageException extends WorkspaceException {
+        UsageException(String message) {
             super(message);
         }
     }

@@ -93,7 +93,7 @@ public final class CommandRunner {
         }
         System.out.println();
         System.out.println("  -o, --offline        refuse all network access (store hits only; "
-                + "not for update/publish/outdated)");
+                + "not for update/publish/outdated/audit)");
         return 2;
     }
 
