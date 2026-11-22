@@ -121,10 +121,10 @@ jobs:
           TAG="$GITHUB_REF_NAME"
           ASSET="dist-release/mjm-bin-${TAG#v}.tar.gz"
           gh release view "$TAG" >/dev/null 2>&1 && gh release delete "$TAG" --yes || true
+          # The annotated tag message becomes the release notes, so what a
+          # release changed lives with the tag that made it — one place to
+          # read, and no second copy to drift.
           gh release create "$TAG" "$ASSET" \
             --target "$GITHUB_SHA" \
             --title "mjm $TAG" \
-            --notes "modern java manager
-
-          install:  curl -fsSL https://raw.githubusercontent.com/dzb/mjm-cargo/master/setup.sh | bash
-          upgrade:  mjm update"
+            --notes-from-tag
