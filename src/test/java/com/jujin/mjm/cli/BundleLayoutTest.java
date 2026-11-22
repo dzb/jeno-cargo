@@ -26,6 +26,16 @@ class DistLayoutTest {
     @TempDir
     Path dir;
 
+    @org.junit.jupiter.api.BeforeEach
+    void isolateProjectLocks() {
+        ProjectLock.useRoot(dir.resolve(".locks"));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreProjectLocks() {
+        ProjectLock.useUserRoot();
+    }
+
     @Test
     void distShipsOneJarPlusTheToolchainDirectory(@TempDir Path storeDir) throws Exception {
         Files.createDirectories(dir.resolve("src/main/java/demo"));

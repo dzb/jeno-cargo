@@ -34,6 +34,13 @@ final class ProjectLock {
     private static final ConcurrentHashMap<String, ReentrantLock> IN_PROCESS =
             new ConcurrentHashMap<>();
 
+    /**
+     * Where lock files live. The default is the user's {@code ~/.mjm/locks};
+     * tests point it at a scratch directory so a suite run does not litter the
+     * real home with one empty file per fixture project.
+     */
+    private static Path root = ArtifactStore.home().resolve("locks");
+
     private ProjectLock() {}
 
     /**
@@ -42,8 +49,17 @@ final class ProjectLock {
      */
     static Path lockFile(Path projectDir) {
         String key = canonical(projectDir).toString();
-        return ArtifactStore.home().resolve("locks")
-                .resolve(ArtifactStore.sha256(key.getBytes(StandardCharsets.UTF_8)) + ".lock");
+        return root.resolve(ArtifactStore.sha256(key.getBytes(StandardCharsets.UTF_8)) + ".lock");
+    }
+
+    /** Tests only: keep lock files in a scratch directory. */
+    static void useRoot(Path lockRoot) {
+        root = lockRoot.toAbsolutePath().normalize();
+    }
+
+    /** Back to {@code ~/.mjm/locks}. */
+    static void useUserRoot() {
+        root = ArtifactStore.home().resolve("locks");
     }
 
     /** The project's real path, so aliases of one project share a lock. */

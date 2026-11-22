@@ -23,6 +23,16 @@ class BuildRunTest {
     @TempDir
     Path dir;
 
+    @org.junit.jupiter.api.BeforeEach
+    void isolateProjectLocks() {
+        ProjectLock.useRoot(dir.resolve(".locks"));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreProjectLocks() {
+        ProjectLock.useUserRoot();
+    }
+
     @Test
     void buildCompilesAndRunExecutes(@TempDir Path storeDir) throws Exception {
         writeProject(dir);

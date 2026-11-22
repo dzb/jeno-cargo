@@ -28,6 +28,16 @@ class TestRunnerTest {
     @TempDir
     Path dir;
 
+    @org.junit.jupiter.api.BeforeEach
+    void isolateProjectLocks() {
+        ProjectLock.useRoot(dir.resolve(".locks"));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreProjectLocks() {
+        ProjectLock.useUserRoot();
+    }
+
     @Test
     void failuresFailAndPassesPass(@TempDir Path storeDir) throws Exception {
         project();
@@ -233,7 +243,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     private static Process run(Path projectDir, String java, String classpath, String centralBase,
                                Path marker, Path log) throws IOException {
         ProcessBuilder builder = new ProcessBuilder(java, "-cp", classpath,
-                "-Dmjm.central.base=" + centralBase, "com.jujin.mjm.cli.Mjm", "test");
+                "-Dmjm.central.base=" + centralBase,
+                // a scratch home: the child's store and lock files stay out of
+                // the real ~/.mjm
+                "-Duser.home=" + projectDir.resolve(".home"),
+                "com.jujin.mjm.cli.Mjm", "test");
         builder.directory(projectDir.toFile());
         builder.environment().put("JAVA_TOOL_OPTIONS", "-Dprobe.marker=" + marker.toAbsolutePath());
         return builder.redirectErrorStream(true)

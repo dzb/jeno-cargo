@@ -24,15 +24,30 @@ class ProjectLockTest {
     @TempDir
     Path dir;
 
-    @Test
-    void theLockLivesOutsideTheProject() {
-        Path lock = ProjectLock.lockFile(dir);
+    @org.junit.jupiter.api.BeforeEach
+    void isolateProjectLocks() {
+        ProjectLock.useRoot(dir.resolve(".locks"));
+    }
 
-        assertFalse(lock.startsWith(dir.toAbsolutePath().normalize()),
-                "clean removes target/; the lock must not be inside the project");
-        assertEquals(Path.of(System.getProperty("user.home"), ".mjm", "locks"),
-                lock.getParent());
-        assertTrue(lock.getFileName().toString().endsWith(".lock"));
+    @org.junit.jupiter.api.AfterEach
+    void restoreProjectLocks() {
+        ProjectLock.useUserRoot();
+    }
+
+    @Test
+    void theLockLivesOutsideTheProject() throws Exception {
+        Path root = Files.createTempDirectory("mjm-locks-test");
+        try {
+            ProjectLock.useRoot(root);
+            Path lock = ProjectLock.lockFile(dir);
+
+            assertEquals(root, lock.getParent());
+            assertFalse(lock.startsWith(dir.toAbsolutePath().normalize()),
+                    "clean removes target/; the lock must not be inside the project");
+            assertTrue(lock.getFileName().toString().endsWith(".lock"));
+        } finally {
+            Files.deleteIfExists(root);
+        }
     }
 
     @Test

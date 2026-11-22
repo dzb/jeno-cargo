@@ -26,6 +26,16 @@ class PublishToHostTest {
     @TempDir
     Path dir;
 
+    @org.junit.jupiter.api.BeforeEach
+    void isolateProjectLocks() {
+        ProjectLock.useRoot(dir.resolve(".locks"));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreProjectLocks() {
+        ProjectLock.useUserRoot();
+    }
+
     @Test
     void theTripleLandsInMavenLayoutOverPut() throws Exception {
         Map<String, byte[]> received = new ConcurrentHashMap<>();

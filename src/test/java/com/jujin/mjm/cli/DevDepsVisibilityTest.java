@@ -29,6 +29,16 @@ class DevDepsVisibilityTest {
     @TempDir
     Path dir;
 
+    @org.junit.jupiter.api.BeforeEach
+    void isolateProjectLocks() {
+        ProjectLock.useRoot(dir.resolve(".locks"));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreProjectLocks() {
+        ProjectLock.useUserRoot();
+    }
+
     @Test
     void aDevDependencyNeverReachesTheCompileClasspath(@TempDir Path storeDir) throws Exception {
         // The source imports something only a dev dependency could provide:
