@@ -24,7 +24,7 @@ import java.util.stream.Stream;
  * <p>{@code mjm upgrade} is an alias — both verbs dispatch here.
  *
  * <p>The running process cannot replace its own jar — the upgrade takes
- * effect on the next {@code mj} invocation. This is standard behavior
+ * effect on the next {@code mjm} invocation. This is standard behavior
  * (same as rustup, gh, npm -g).
  */
 public final class UpdateCommand implements Command {
@@ -157,7 +157,7 @@ public final class UpdateCommand implements Command {
                 return 1;
             }
             System.out.println("upgraded to mjm " + latestVersion
-                    + " — takes effect on the next mj invocation");
+                    + " — takes effect on the next mjm invocation");
             return 0;
         } catch (IOException | InterruptedException e) {
             System.err.println("mjm: upgrade failed: " + e.getMessage());

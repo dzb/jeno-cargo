@@ -70,8 +70,8 @@ public final class BuildCommand implements Command {
             int running = Runtime.version().feature();
             if (running < project.javaVersion()) {
                 System.err.println("mjm: this project targets Java "
-                        + project.javaVersion() + " but mj runs on Java " + running
-                        + " — run mj on a newer JDK, or lower [java].version");
+                        + project.javaVersion() + " but mjm runs on Java " + running
+                        + " — run mjm on a newer JDK, or lower [java].version");
                 return 1;
             }
         }

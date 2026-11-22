@@ -8,7 +8,7 @@ import java.io.OutputStream;
 import java.io.PrintStream;
 
 /**
- * mj's entry point: one container per invocation, one command run inside it,
+ * mjm's entry point: one container per invocation, one command run inside it,
  * a plain exit code out. Failures print their message — the resolver, decoder
  * and store all speak in next-action errors, not stack traces.
  *
