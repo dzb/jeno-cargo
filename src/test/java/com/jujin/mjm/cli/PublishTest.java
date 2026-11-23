@@ -119,6 +119,20 @@ class PublishTest {
     }
 
     @Test
+    void jsonDryRunPlanFailureCarriesDryRunTrue() throws Exception {
+        writeProject(dir);
+
+        Result result = publishJson("--json", "--dry-run",
+                "mjm:local:" + dir.resolve("repo"));
+
+        assertEquals(1, result.exit());
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(result.out());
+        assertEquals(true, json.getBoolean("dryRun"));
+        assertEquals("PUBLISH_PLAN_FAILED",
+                json.getArray("diagnostics").getObject(0).getString("code"));
+    }
+
+    @Test
     void jsonPrivateLanDryRunCarriesThePlainHttpWarning() throws Exception {
         writeProject(dir);
         Files.createDirectories(dir.resolve("target/classes/demo"));

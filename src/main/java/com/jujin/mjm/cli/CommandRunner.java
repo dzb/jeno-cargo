@@ -82,7 +82,8 @@ public final class CommandRunner {
                     return 0;  // a request for the listing is not an error
                 }
                 CommandCatalog.printError("", 2, "MISSING_COMMAND",
-                        "no command given; use --json --help for the catalog");
+                        "no command given; use --json --help for the catalog",
+                        List.of(args));
                 return 2;
             }
             return usage(help ? 0 : 2);
@@ -93,7 +94,7 @@ public final class CommandRunner {
         if (command == null) {
             if (json) {
                 CommandCatalog.printError(commandName, 2, "UNKNOWN_COMMAND",
-                        "unknown command '" + commandName + "'");
+                        "unknown command '" + commandName + "'", List.of(args));
                 return 2;
             }
             System.err.println(Ui.error("unknown command '" + commandName + "'"));
@@ -128,7 +129,8 @@ public final class CommandRunner {
         if (json && !command.capabilities().supportsJson()) {
             CommandCatalog.printError(command.name(), 2, "JSON_UNSUPPORTED",
                     "command '" + command.name() + "' does not declare JSON output yet; "
-                    + "use `mjm --json " + command.name() + " --help` for its descriptor");
+                    + "use `mjm --json " + command.name() + " --help` for its descriptor",
+                    List.of(args));
             return 2;
         }
         if (json) {
@@ -156,7 +158,8 @@ public final class CommandRunner {
                 String message = command.name() + " needs the network by design — "
                         + "--offline does not apply";
                 if (json) {
-                    CommandCatalog.printError(command.name(), 2, "OFFLINE_FORBIDDEN", message);
+                    CommandCatalog.printError(command.name(), 2, "OFFLINE_FORBIDDEN", message,
+                            List.of(args));
                 } else {
                     System.err.println(Ui.error(message));
                 }

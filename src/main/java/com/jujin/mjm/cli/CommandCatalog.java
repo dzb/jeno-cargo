@@ -1,6 +1,7 @@
 package com.jujin.mjm.cli;
 
 import com.jujin.freeway.commons.json.JsonUtils;
+import com.jujin.mjm.store.ArtifactStore;
 
 import java.util.Comparator;
 import java.util.List;
@@ -79,13 +80,30 @@ final class CommandCatalog {
     }
 
     /** Minimal structured error for failures that happen before a command runs. */
-    static void printError(String command, int exitCode, String code, String message) {
+    static void printError(String command, int exitCode, String code, String message,
+                           List<String> argv) {
+        boolean dryRun = false;
+        boolean offline = ArtifactStore.isOffline();
+        for (String arg : argv) {
+            if (arg.equals("--")) {
+                break;
+            }
+            if (arg.equals("--dry-run")) {
+                dryRun = true;
+            }
+            if (arg.equals("--offline") || arg.equals("-o")) {
+                offline = true;
+            }
+        }
+
         var root = JsonUtils.object();
         root.put("schemaVersion", SCHEMA_VERSION);
         root.put("kind", "commandResult");
         root.put("command", command == null ? "" : command);
         root.put("status", "error");
         root.put("exitCode", exitCode);
+        root.put("dryRun", dryRun);
+        root.put("offline", offline);
 
         var diagnostics = JsonUtils.array();
         var diagnostic = JsonUtils.object();

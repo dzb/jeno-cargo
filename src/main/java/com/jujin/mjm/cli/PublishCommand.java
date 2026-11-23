@@ -137,23 +137,23 @@ public final class PublishCommand implements Command {
             try {
                 run = WorkspaceRun.root(projectDir, args);
             } catch (Workspaces.UsageException e) {
-                return error(json, 2, "USAGE", e.getMessage());
+                return error(json, dryRun, 2, "USAGE", e.getMessage());
             } catch (Workspaces.WorkspaceException e) {
-                return error(json, 1, "WORKSPACE_INVALID", e.getMessage());
+                return error(json, dryRun, 1, "WORKSPACE_INVALID", e.getMessage());
             }
             if (run == null || run.module() == null) {
-                return error(json, 2, "MODULE_REQUIRED",
+                return error(json, dryRun, 2, "MODULE_REQUIRED",
                         "this directory is a workspace root — say which module: --module <path>");
             }
             moduleDir = run.module();
             moduleArgs = run.args();
         } else if (moduleArgs.stream().anyMatch(arg -> arg.equals("--module")
                 || arg.startsWith("--module="))) {
-            return error(json, 2, "MODULE_WITHOUT_WORKSPACE",
+            return error(json, dryRun, 2, "MODULE_WITHOUT_WORKSPACE",
                     "--module is only used at a workspace root");
         }
         if (moduleArgs.size() > 1) {
-            return error(json, 2, "USAGE",
+            return error(json, dryRun, 2, "USAGE",
                     "publish takes at most one target — got '" + moduleArgs.get(1) + "'");
         }
 
@@ -162,10 +162,10 @@ public final class PublishCommand implements Command {
         try {
             plan = publishPlan(moduleDir, target);
         } catch (RuntimeException e) {
-            return error(json, 1, "PUBLISH_PLAN_FAILED", e.getMessage());
+            return error(json, dryRun, 1, "PUBLISH_PLAN_FAILED", e.getMessage());
         }
         if (ArtifactStore.isOffline() && plan.network()) {
-            return error(json, 2, "OFFLINE_FORBIDDEN",
+            return error(json, dryRun, 2, "OFFLINE_FORBIDDEN",
                     "publish to " + target + " requires network access");
         }
         if (!dryRun) {
@@ -174,7 +174,7 @@ public final class PublishCommand implements Command {
             JsonCapture.Result captured = JsonCapture.run(() ->
                     new PublishCommand(targetDir).executeHuman(targetArgs));
             if (captured.exitCode() != 0) {
-                return error(json, captured.exitCode(), "PUBLISH_FAILED", captured.message());
+                return error(json, dryRun, captured.exitCode(), "PUBLISH_FAILED", captured.message());
             }
             plan = publishPlan(moduleDir, target);
         }
@@ -187,9 +187,9 @@ public final class PublishCommand implements Command {
         return 0;
     }
 
-    private int error(boolean json, int exit, String code, String message) {
+    private int error(boolean json, boolean dryRun, int exit, String code, String message) {
         if (json) {
-            JsonResult.error("publish", exit, code, message).emit(exit);
+            JsonResult.error("publish", exit, code, message).dryRun(dryRun).emit(exit);
         } else {
             System.err.println(Ui.errPrefix() + message);
         }

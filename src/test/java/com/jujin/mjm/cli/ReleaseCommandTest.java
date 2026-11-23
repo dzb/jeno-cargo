@@ -143,6 +143,19 @@ class ReleaseCommandTest {
     }
 
     @Test
+    void jsonDryRunMissingTarCarriesDryRunTrue() throws Exception {
+        Files.delete(dir.resolve("target/dist/app-1.0.0.tar.gz"));
+
+        Result result = runRaw("--json", "--dry-run", "--allow-unsigned");
+
+        assertEquals(1, result.exit());
+        var json = JsonUtils.parseObject(result.out());
+        assertEquals(true, json.getBoolean("dryRun"));
+        assertEquals("RELEASE_PLAN_FAILED",
+                json.getArray("diagnostics").getObject(0).getString("code"));
+    }
+
+    @Test
     void jsonPrivateLanDryRunCarriesThePlainHttpWarning() throws Exception {
         Result result = runRaw("--json", "--dry-run", "--allow-unsigned",
                 "mjm:http://192.168.1.39:18080/upload/");

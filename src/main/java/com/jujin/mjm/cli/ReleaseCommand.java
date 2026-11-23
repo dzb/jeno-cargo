@@ -114,19 +114,19 @@ public final class ReleaseCommand implements Command {
             try {
                 run = WorkspaceRun.root(projectDir, args);
             } catch (Workspaces.UsageException e) {
-                return error(json, 2, "USAGE", e.getMessage());
+                return error(json, dryRun, 2, "USAGE", e.getMessage());
             } catch (Workspaces.WorkspaceException e) {
-                return error(json, 1, "WORKSPACE_INVALID", e.getMessage());
+                return error(json, dryRun, 1, "WORKSPACE_INVALID", e.getMessage());
             }
             if (run == null || run.module() == null) {
-                return error(json, 2, "MODULE_REQUIRED",
+                return error(json, dryRun, 2, "MODULE_REQUIRED",
                         "this directory is a workspace root — say which module: --module <path>");
             }
             moduleDir = run.module();
             moduleArgs = run.args();
         } else if (moduleArgs.stream().anyMatch(arg -> arg.equals("--module")
                 || arg.startsWith("--module="))) {
-            return error(json, 2, "MODULE_WITHOUT_WORKSPACE",
+            return error(json, dryRun, 2, "MODULE_WITHOUT_WORKSPACE",
                     "--module is only used at a workspace root");
         }
 
@@ -134,17 +134,17 @@ public final class ReleaseCommand implements Command {
         try {
             parsed = parse(moduleArgs);
         } catch (IllegalArgumentException e) {
-            return error(json, 2, "USAGE", e.getMessage());
+            return error(json, dryRun, 2, "USAGE", e.getMessage());
         }
 
         ReleasePlan plan;
         try {
             plan = planRelease(moduleDir, parsed.target(), parsed.allowUnsigned(), json);
         } catch (RuntimeException e) {
-            return error(json, 1, "RELEASE_PLAN_FAILED", e.getMessage());
+            return error(json, dryRun, 1, "RELEASE_PLAN_FAILED", e.getMessage());
         }
         if (parsed.offlineConflict(plan)) {
-            return error(json, 2, "OFFLINE_FORBIDDEN",
+            return error(json, dryRun, 2, "OFFLINE_FORBIDDEN",
                     "release to " + parsed.target() + " requires network access");
         }
 
@@ -154,7 +154,7 @@ public final class ReleaseCommand implements Command {
             JsonCapture.Result captured = JsonCapture.run(() ->
                     new ReleaseCommand(targetDir).executeHuman(targetArgs));
             if (captured.exitCode() != 0) {
-                return error(json, captured.exitCode(), "RELEASE_FAILED", captured.message());
+                return error(json, dryRun, captured.exitCode(), "RELEASE_FAILED", captured.message());
             }
             plan = planRelease(moduleDir, parsed.target(), parsed.allowUnsigned(), json);
         }
@@ -327,9 +327,9 @@ public final class ReleaseCommand implements Command {
         return new Parsed(target, allowUnsigned);
     }
 
-    private int error(boolean json, int exit, String code, String message) {
+    private int error(boolean json, boolean dryRun, int exit, String code, String message) {
         if (json) {
-            JsonResult.error("release", exit, code, message).emit(exit);
+            JsonResult.error("release", exit, code, message).dryRun(dryRun).emit(exit);
         } else {
             System.err.println(Ui.errPrefix() + message);
         }
