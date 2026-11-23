@@ -381,16 +381,19 @@ public final class BundleCommand implements Command {
             // have gone, so the dist carries the local code, not the locked copy.
             List<Path> mergeJars = new ArrayList<>();
             List<Path> mergeDirs = new ArrayList<>();
+            List<LockedArtifact> mergedRows = new ArrayList<>();
             List<LockedArtifact> toolchainRows = new ArrayList<>();
             java.util.Set<String> declaredToolchain = java.util.Set.copyOf(project.toolchain());
             for (LockedArtifact artifact : locked) {
-                if (artifact.scope() == com.jujin.mjm.resolve.Scope.PROCESSOR) {
-                    continue;
-                }
+                // [toolchain] wins over scope: a PROCESSOR artifact can be part
+                // of the test toolchain even though it never merges at runtime.
                 if (declaredToolchain.contains(artifact.id())) {
                     if (withToolchain) {
                         toolchainRows.add(artifact);
                     }
+                    continue;
+                }
+                if (artifact.scope() == com.jujin.mjm.resolve.Scope.PROCESSOR) {
                     continue;
                 }
                 if (!artifact.isMain()) {
@@ -399,18 +402,24 @@ public final class BundleCommand implements Command {
                 Substitutions.Module local = substitutions.find(artifact.id());
                 if (local != null) {
                     mergeDirs.add(substitutions.localClasses(local, artifact.version()));
+                    mergedRows.add(artifact);
                     substitutions.noteEmbedded(local);
                 } else {
                     Path jar = jars.get(artifact.id());
                     if (jar != null) {
                         mergeJars.add(jar);
+                        mergedRows.add(artifact);
                     }
                 }
+            }
+            List<String> mergedLabels = new ArrayList<>();
+            for (LockedArtifact artifact : mergedRows) {
+                mergedLabels.add(artifact.id() + "@" + artifact.version());
             }
             try {
                 UberJar.write(lib.resolve(name + "-" + version + ".jar"),
                         new UberJar.Input(projectDir.resolve(CLASSES), mergeJars,
-                                mergeDirs, UberJar.labels(locked)),
+                                mergeDirs, List.copyOf(mergedLabels)),
                         new UberJar.Header(name, version, project.main()));
             } catch (IOException e) {
                 System.err.println(Ui.errPrefix() + "cannot assemble " + name + ".jar: " + e.getMessage());

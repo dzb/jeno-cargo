@@ -50,7 +50,7 @@ class DistLayoutTest {
             main = "demo.App"
 
             [toolchain]
-            jars = ["com.acme:test-kit"]
+            jars = ["com.acme:test-kit", "com.acme:proc-kit"]
             """);
         Files.writeString(dir.resolve("src/main/java/demo/App.java"), """
             package demo;
@@ -67,8 +67,11 @@ class DistLayoutTest {
                 "com/acme/Skeleton.class", "skeleton");
         Path toolchainJar = jar(dir.resolve("jars/test-kit-1.0.0.jar"),
                 "com/acme/TestKit.class", "test-kit");
+        Path processorJar = jar(dir.resolve("jars/proc-kit-1.0.0.jar"),
+                "com/acme/ProcKit.class", "proc-kit");
         Path placedSkeleton = place(storeDir, skeletonJar);
         Path placedToolchain = place(storeDir, toolchainJar);
+        Path placedProcessor = place(storeDir, processorJar);
 
         Files.writeString(dir.resolve("mjm.lock"), """
             [[artifacts]]
@@ -86,8 +89,18 @@ class DistLayoutTest {
             url = "%s"
             sha256 = "%s"
             depth = 1
+
+            [[artifacts]]
+            id = "com.acme:proc-kit"
+            version = "1.0.0"
+            source = "local"
+            url = "%s"
+            sha256 = "%s"
+            depth = 1
+            scope = "processor"
             """.formatted(placedSkeleton.toUri(), ArtifactStore.sha256(skeletonJar),
-                placedToolchain.toUri(), ArtifactStore.sha256(toolchainJar)));
+                placedToolchain.toUri(), ArtifactStore.sha256(toolchainJar),
+                placedProcessor.toUri(), ArtifactStore.sha256(processorJar)));
 
         ArtifactStore store = new ArtifactStore(storeDir);
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
@@ -113,8 +126,14 @@ class DistLayoutTest {
             assertTrue(zip.getEntry("com/acme/TestKit.class") == null,
                     "toolchain classes never merge into the running jar");
         }
+        String labels = labels(uber);
+        assertTrue(labels.contains("com.acme:skeleton@1.0.0"), labels);
+        assertFalse(labels.contains("com.acme:test-kit"), labels);
+        assertFalse(labels.contains("com.acme:proc-kit"), labels);
         assertTrue(Files.exists(lib.resolve("toolchain/test-kit-1.0.0.jar")),
                 "the declared toolchain ships under lib/toolchain/ with a readable name");
+        assertTrue(Files.exists(lib.resolve("toolchain/proc-kit-1.0.0.jar")),
+                "a PROCESSOR artifact named in [toolchain] ships there too");
         assertFalse(Files.exists(lib.resolve("toolchain/skeleton-1.0.0.jar")),
                 "non-toolchain jars never land in the toolchain directory");
 
@@ -138,6 +157,15 @@ class DistLayoutTest {
         assertEquals("bundle-directory", artifacts.getObject(0).getString("kind"));
         assertEquals("tar.gz", artifacts.getObject(1).getString("kind"));
         assertTrue(artifacts.getObject(1).getString("sha256").matches("[0-9a-f]{64}"));
+
+        // package --uber keeps its old label set: every MAIN row, including
+        // [toolchain] (package has no toolchain concept).
+        assertEquals(0, new PackageCommand(store, dir).execute(List.of("--uber")));
+        String packageLabels = labels(
+                dir.resolve("target/dist/demo-1.0.0-uber.jar"));
+        assertTrue(packageLabels.contains("com.acme:skeleton@1.0.0"), packageLabels);
+        assertTrue(packageLabels.contains("com.acme:test-kit@1.0.0"), packageLabels);
+        assertFalse(packageLabels.contains("com.acme:proc-kit"), packageLabels);
     }
 
     @Test
@@ -213,6 +241,13 @@ class DistLayoutTest {
     // ------------------------------------------------------------------
     // fixtures
     // ------------------------------------------------------------------
+
+    private static String labels(Path jar) throws Exception {
+        try (var file = new java.util.jar.JarFile(jar.toFile())) {
+            return String.valueOf(file.getManifest().getMainAttributes()
+                    .getValue("mjm-Dependencies"));
+        }
+    }
 
     private static Path jar(Path target, String entry, String content) throws Exception {
         Files.createDirectories(target.getParent());
