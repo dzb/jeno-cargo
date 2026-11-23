@@ -183,9 +183,10 @@ class WorkspaceSubstitutionTest {
             [project]
             name = "%s"
             version = "%s"
-            %s%s
+            %s%s%s
             """.formatted(name, version,
                 group == null ? "" : "group = \"" + group + "\"\n",
+                name.equals("web") ? "main = \"web.Main\"\n" : "",
                 dependency == null ? "" : "\n[deps]\n" + dependency));
         String packageName = name.equals("core") ? "core" : "web";
         String className = name.equals("core") ? "Core" : "Main";

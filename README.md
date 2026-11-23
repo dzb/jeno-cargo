@@ -200,7 +200,7 @@ project's CI job; mjm provides the mechanics one step at a time.
 
 ```bash
 mjm lock && mjm build && mjm test   # verify the code under test
-mjm bundle                          # assemble the installable distribution
+mjm bundle                          # assemble the installable distribution (mjm itself: --toolchain)
 gh release create vX.Y.Z ...        # the CI decides to publish
 ```
 
@@ -237,9 +237,12 @@ One jar. freeway is mjm's skeleton, not a dependency a user could swap — so it
 is merged in, not shipped beside. The test toolchain is separate because a
 production run never loads a single byte of it.
 
-`mjm bundle` assembles that directory and a `tar.gz` for `curl | bash`; `setup.sh` installs
-surgically: it replaces `lib/` and `bin/`, and leaves `${XDG_CACHE_HOME:-~/.cache}/mjm/store` (your entire
-dependency cache) untouched. `mjm upgrade` (alias `mjm update`) upgrades in place and takes effect on
+`mjm bundle` assembles that directory and a `tar.gz` for `curl | bash`; it needs
+`[project].main` and targets the JDK from `[java].version` (or the build JDK).
+`setup.sh` verifies `SHA256SUMS`, swaps `lib/` and `bin/` through a staging
+directory, and leaves `${XDG_CACHE_HOME:-~/.cache}/mjm/store` (your entire
+dependency cache) untouched; `uninstall.sh` removes the install. Test toolchain
+jars ship only with `--toolchain`. `mjm upgrade` (alias `mjm update`) upgrades in place and takes effect on
 the next invocation.
 
 ## Commands

@@ -396,7 +396,7 @@ modules = ["libs/core", "apps/web"]
 | `mjm info <id> [--source]` | 身份/来源/依赖/源码地址;`--source` 取源码树。标题按 scope 标记:`[dev]`、`[processor]`,MAIN 无标记 |
 | `mjm classpath [--test] [--file <path>]` | IDE 用 classpath;默认编译可见性;`--test` 为测试闭包(MAIN + dev,**排除 processor**——与 `mjm test` 的差异见 REMINDS §14);路径指向 store 内容寻址 jar,不拷贝 |
 | `mjm package [--uber] [--main <class>]` | `target/dist/<name>-<version>.jar`;`--uber` 合并闭包输出 `...-uber.jar`;`--main` 只影响本 jar 的 MANIFEST,不影响 `bundle`/`run` 的 `[project].main` |
-| `mjm bundle` | `target/dist/<name>-<version>/`(bin/lib/setup.sh/SHA256SUMS)+ `.tar.gz`。**当前是 mjm 专用安装器**:setup.sh 要求 JDK 25,launcher 是 mjm 品牌(`[project].main` 缺失时用 UsageStub 兜底),`lib/toolchain` 带 test 工具链;不是通用 app bundler |
+| `mjm bundle [--toolchain]` | `target/dist/<name>-<version>/`(bin/lib/setup.sh/uninstall.sh/SHA256SUMS)+ `.tar.gz`。需要 `[project].main`(缺失即报错);setup.sh 的 JDK 要求取 `[java].version`,未声明则取构建 JDK major;安装前用 `sha256sum -c`/`shasum -a 256 -c` 校验 SHA256SUMS,lib/bin 经 staging 交换并保留 store/config;默认不带 test toolchain,`--toolchain` 才写入 `lib/toolchain` |
 | `mjm clean [--target (default) \| --dist]` | 默认整棵删 `target/`;`--dist` 只删 `target/dist/` 保留 classes;永不触碰 store |
 | `mjm cache dir \| size \| prune \| purge [--dry-run] [--yes]` | `dir`/`size` 只读;`prune` 删可证明无用之物,无需确认;`purge` 删 store 与 sources,是**破坏性**命令——无 `--yes` 时打印路径/大小并 exit 2,`--dry-run` 只展示不删除(exit 0),`--yes` 才执行;`clean` 是兼容 alias,支持同样 flags |
 | `mjm outdated [--json] [--dev]` | **只读 `mjm.lock`**(不需要 `mjm.toml`);已钉版本 vs 仓库可用版本;默认只查 MAIN,`--dev` 含 dev/processor;`gh:`/`url`/`local:`/`mjm:` 列为未检查;跨 major 单列;完成即 exit 0(有更新也是 0) |
@@ -514,9 +514,11 @@ Maven 布局(`group/...`,需要 POM)不是发布目标(§6.6)。
 
 ```
 target/dist/<name>-<version>/
-  bin/<name>          # launcher
-  lib/                # 应用 jar(含闭包)与 toolchain
-  setup.sh            # 自安装脚本
+  bin/<name>          # launcher(注释写明 <name> <version>)
+  lib/<name>-<version>.jar
+  lib/toolchain/      # 仅 mjm bundle --toolchain
+  setup.sh            # JDK 检查 + SHA256SUMS 校验 + staging 交换
+  uninstall.sh        # 删除 $HOME/.<name>,提示手动清 PATH 行
   SHA256SUMS
 target/dist/<name>-<version>.tar.gz
 ```

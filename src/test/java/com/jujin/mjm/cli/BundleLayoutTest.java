@@ -85,6 +85,10 @@ class DistLayoutTest {
         ArtifactStore store = new ArtifactStore(storeDir);
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
         assertEquals(0, new BundleCommand(store, dir).execute(List.of()));
+        assertFalse(Files.exists(dir.resolve("target/dist/demo-1.0.0/lib/toolchain")),
+                "the toolchain is opt-in");
+
+        assertEquals(0, new BundleCommand(store, dir).execute(List.of("--toolchain")));
 
         Path lib = dir.resolve("target/dist/demo-1.0.0/lib");
         List<Path> topLevel;
@@ -115,6 +119,7 @@ class DistLayoutTest {
             [project]
             name = "demo"
             version = "1.0.0"
+            main = "demo.App"
             """);
         Files.writeString(dir.resolve("src/main/java/demo/App.java"),
                 "package demo; public final class App {}");
@@ -125,6 +130,9 @@ class DistLayoutTest {
         assertEquals(0, new BundleCommand(store, dir).execute(List.of()));
 
         String launcher = Files.readString(dir.resolve("target/dist/demo-1.0.0/bin/demo"));
+        assertTrue(launcher.startsWith("#!/bin/sh\n# demo 1.0.0 launcher\n"),
+                "the launcher names the program, not mjm: " + launcher);
+        assertFalse(launcher.contains("modern java manager"), "no mjm branding");
         assertTrue(launcher.contains("-cp \"$MJM_HOME/lib/*\""),
                 "one classpath wildcard, no toolchain: " + launcher);
         String execLine = launcher.lines()
@@ -141,6 +149,7 @@ class DistLayoutTest {
             [project]
             name = "demo"
             version = "1.0.0"
+            main = "demo.App"
             """);
         Files.writeString(dir.resolve("src/main/java/demo/App.java"),
                 "package demo; public final class App {}");
@@ -192,5 +201,83 @@ class DistLayoutTest {
         Path placed = storeDir.resolve(ArtifactStore.sha256(jar) + ".jar");
         Files.copy(jar, placed);
         return placed;
+    }
+
+    @Test
+    void bundleNeedsAMainClass(@TempDir Path storeDir) throws Exception {
+        Files.createDirectories(dir.resolve("src/main/java/demo"));
+        Files.writeString(dir.resolve("mjm.toml"), """
+            [project]
+            name = "demo"
+            version = "1.0.0"
+            """);
+        Files.writeString(dir.resolve("src/main/java/demo/App.java"),
+                "package demo; public final class App {}");
+        Files.writeString(dir.resolve("mjm.lock"), "");
+
+        ArtifactStore store = new ArtifactStore(storeDir);
+        assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
+
+        int exit = new BundleCommand(store, dir).execute(List.of());
+
+        assertEquals(1, exit, "a distribution without an entry point is not runnable");
+        assertFalse(Files.exists(dir.resolve("target/dist/demo-1.0.0")), "nothing assembled");
+    }
+
+    @Test
+    void setupScriptUsesTheDeclaredJavaVersionAndVerifiesChecksums(@TempDir Path storeDir)
+            throws Exception {
+        Files.createDirectories(dir.resolve("src/main/java/demo"));
+        Files.writeString(dir.resolve("mjm.toml"), """
+            [project]
+            name = "demo"
+            version = "2.0.0"
+            main = "demo.App"
+
+            [java]
+            version = 17
+            """);
+        Files.writeString(dir.resolve("src/main/java/demo/App.java"),
+                "package demo; public final class App {}");
+        Files.writeString(dir.resolve("mjm.lock"), "");
+
+        ArtifactStore store = new ArtifactStore(storeDir);
+        assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
+        assertEquals(0, new BundleCommand(store, dir).execute(List.of()));
+
+        String setup = Files.readString(dir.resolve("target/dist/demo-2.0.0/setup.sh"));
+        assertTrue(setup.contains("requires JDK 17+"), setup);
+        assertTrue(setup.contains("\"$JAVA_MAJOR\" -lt 17"), setup);
+        assertTrue(setup.contains("sha256sum -c"), setup);
+        assertTrue(setup.contains("shasum -a 256 -c"), "a macOS fallback exists");
+        assertTrue(setup.contains("SHA256SUMS verification failed"), setup);
+        assertTrue(setup.contains(".staging."), "lib/bin are swapped via staging");
+
+        Path uninstall = dir.resolve("target/dist/demo-2.0.0/uninstall.sh");
+        assertTrue(Files.exists(uninstall), "an uninstaller ships with the dist");
+        String script = Files.readString(uninstall);
+        assertTrue(script.contains("$HOME/.demo"), script);
+        assertTrue(script.contains("shell rc"), "the PATH line is called out");
+    }
+
+    @Test
+    void withoutJavaVersionSetupUsesTheRunningJdkMajor(@TempDir Path storeDir) throws Exception {
+        Files.createDirectories(dir.resolve("src/main/java/demo"));
+        Files.writeString(dir.resolve("mjm.toml"), """
+            [project]
+            name = "demo"
+            version = "1.0.0"
+            main = "demo.App"
+            """);
+        Files.writeString(dir.resolve("src/main/java/demo/App.java"),
+                "package demo; public final class App {}");
+        Files.writeString(dir.resolve("mjm.lock"), "");
+
+        ArtifactStore store = new ArtifactStore(storeDir);
+        assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
+        assertEquals(0, new BundleCommand(store, dir).execute(List.of()));
+
+        String setup = Files.readString(dir.resolve("target/dist/demo-1.0.0/setup.sh"));
+        assertTrue(setup.contains("requires JDK " + Runtime.version().feature() + "+"), setup);
     }
 }

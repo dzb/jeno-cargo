@@ -11,7 +11,7 @@
    (只验证,不发版)          用刚编出来的 mjm 跑 lock/build/test
                             ────── 绿了就好,没有 tag、没有 release ──────
 
-2. 想发版时 ───────────→   push tag v* ──────→ 一致性门 → mjm bundle
+2. 想发版时 ───────────→   push tag v* ──────→ 一致性门 → mjm bundle --toolchain
    ├ 改 mjm.toml 的 version                                              │
    ├ git commit                                                          │
    └ git tag v{version} && git push github v{version}                    ↓
@@ -22,7 +22,7 @@
 
 **升级地址(唯一事实来源)**:`https://api.github.com/repos/dzb/mjm-cargo/releases/latest` ——
 `mjm upgrade`(alias `mjm update`) 查询它,`setup.sh`(动态解析 latest,永不写死版本)与 CI 共用同一约定。
-发行物附件命名 `mjm-bin-{version}.tar.gz`(`mjm bundle` 产物,与库 jar 三件套区分),
+发行物附件命名 `mjm-bin-{version}.tar.gz`(`mjm bundle --toolchain` 产物,与库 jar 三件套区分),
 版本号只在 `mjm.toml [project].version` 声明一处。
 
 **CI 不装上一个 release 来构建**:上一版与新树同时改语法时(如 0.2.0 的
@@ -76,7 +76,7 @@ javac -d target/classes -cp "$VJARS" $(find src/main/java -name '*.java')
 java -cp "target/classes:$VJARS" com.jujin.mjm.cli.Mjm lock
 java -cp "target/classes:$VJARS" com.jujin.mjm.cli.Mjm build
 java -cp "target/classes:$VJARS" com.jujin.mjm.cli.Mjm test
-java -cp "target/classes:$VJARS" com.jujin.mjm.cli.Mjm bundle
+java -cp "target/classes:$VJARS" com.jujin.mjm.cli.Mjm bundle --toolchain
 gh release create v{ver} dist/mjm-{ver}.tar.gz --title "mjm v{ver}" --notes "…"
 ```
 

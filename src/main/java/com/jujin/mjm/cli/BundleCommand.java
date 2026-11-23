@@ -53,7 +53,7 @@ public final class BundleCommand implements Command {
 
     private static final String LAUNCHER_TEMPLATE = """
         #!/bin/sh
-        # mjm — modern java manager
+        # %1$s %2$s launcher
 
         PRG="$0"
         while [ -h "$PRG" ]; do
@@ -71,40 +71,71 @@ public final class BundleCommand implements Command {
             JAVA=$(command -v java 2>/dev/null)
         fi
         if [ -z "$JAVA" ]; then
-            echo "mjm: no java found — set JAVA_HOME or add java to PATH" >&2
+            echo "%1$s: no java found — set JAVA_HOME or add java to PATH" >&2
             exit 1
         fi
 
-        # lib/ holds one jar — mjm and its skeleton merged. The lifecycle
-        # toolchain under lib/toolchain/ is loaded only by the forked test JVM.
-        exec "$JAVA" -cp "$MJM_HOME/lib/*" %s "$@"
+        # lib/ holds this program with its shipped dependencies merged. The
+        # lifecycle toolchain under lib/toolchain/ is test-only and is not on
+        # this classpath.
+        exec "$JAVA" -cp "$MJM_HOME/lib/*" %3$s "$@"
         """;
 
     private static final String SETUP_TEMPLATE = """
         #!/bin/bash
-        # setup.sh — installs this distribution to $HOME/.%1$s/
-        # Surgical update: replaces the runtime (lib/bin), leaves the
-        # content-addressed store ($HOME/.%1$s/store) untouched.
+        # setup.sh — installs %1$s %2$s to $HOME/.%1$s/
+        # Verifies SHA256SUMS, then swaps lib/bin through a staging directory.
+        # The content-addressed store and any other files under
+        # $HOME/.%1$s are left alone.
 
         set -e
 
         JAVA_MAJOR=$(java -version 2>&1 | head -1 | sed 's/.*"\\([0-9]*\\)\\..*/\\1/')
-        if [ -z "$JAVA_MAJOR" ] || [ "$JAVA_MAJOR" -lt 25 ]; then
-            echo "%1$s requires JDK 25+ (found: ${JAVA_MAJOR:-none})"
-            echo "  download: https://adoptium.net/temurin/releases/?version=25"
+        if [ -z "$JAVA_MAJOR" ] || [ "$JAVA_MAJOR" -lt %4$d ]; then
+            echo "%1$s requires JDK %4$d+ (found: ${JAVA_MAJOR:-none})"
+            echo "  install a JDK %4$d+ and put it on PATH, or set JAVA_HOME"
             exit 1
         fi
 
         SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
         INSTALL_DIR="$HOME/.%1$s"
-        BIN_DIR="$HOME/.%1$s/bin"
+        BIN_DIR="$INSTALL_DIR/bin"
+
+        if command -v sha256sum >/dev/null 2>&1; then
+            CHECK="sha256sum -c"
+        elif command -v shasum >/dev/null 2>&1; then
+            CHECK="shasum -a 256 -c"
+        else
+            echo "%1$s: need sha256sum or shasum to verify the distribution" >&2
+            exit 1
+        fi
+        if ! ( cd "$SCRIPT_DIR" && $CHECK SHA256SUMS >/dev/null ); then
+            echo "%1$s: SHA256SUMS verification failed — the download is corrupt" >&2
+            exit 1
+        fi
 
         echo "installing %1$s %2$s to $INSTALL_DIR ..."
-        rm -rf "$INSTALL_DIR/lib" "$INSTALL_DIR/bin" "$INSTALL_DIR/SHA256SUMS"
-        mkdir -p "$BIN_DIR" "$INSTALL_DIR"
-        cp -R "$SCRIPT_DIR"/lib "$INSTALL_DIR/"
-        cp "$SCRIPT_DIR"/SHA256SUMS "$INSTALL_DIR/" 2>/dev/null || true
+        mkdir -p "$INSTALL_DIR" "$BIN_DIR"
+        STAGING=$(mktemp -d "$INSTALL_DIR/.staging.XXXXXX")
+        BACKUP=$(mktemp -d "$INSTALL_DIR/.backup.XXXXXX")
+        trap 'rm -rf "$STAGING" "$BACKUP"' EXIT
 
+        cp -R "$SCRIPT_DIR/lib" "$STAGING/lib"
+        cp "$SCRIPT_DIR/SHA256SUMS" "$STAGING/SHA256SUMS"
+
+        if [ -d "$INSTALL_DIR/lib" ]; then mv "$INSTALL_DIR/lib" "$BACKUP/lib"; fi
+        if [ -d "$INSTALL_DIR/bin" ]; then mv "$INSTALL_DIR/bin" "$BACKUP/bin"; fi
+        if ! mv "$STAGING/lib" "$INSTALL_DIR/lib" \\
+                || ! mv "$STAGING/SHA256SUMS" "$INSTALL_DIR/SHA256SUMS"; then
+            rm -rf "$INSTALL_DIR/lib"
+            if [ -d "$BACKUP/lib" ]; then mv "$BACKUP/lib" "$INSTALL_DIR/lib"; fi
+            if [ -d "$BACKUP/bin" ]; then mv "$BACKUP/bin" "$INSTALL_DIR/bin"; fi
+            echo "%1$s: install failed — the previous version was restored" >&2
+            exit 1
+        fi
+        rm -rf "$BACKUP"
+
+        mkdir -p "$BIN_DIR"
         cat > "$BIN_DIR/%1$s" << 'LAUNCHER_EOF'
         %3$s
         LAUNCHER_EOF
@@ -123,6 +154,15 @@ public final class BundleCommand implements Command {
         fi
 
         echo "%1$s %2$s installed — run '%1$s' to verify"
+        """;
+
+    private static final String UNINSTALL_TEMPLATE = """
+        #!/bin/sh
+        # removes $HOME/.%1$s; the PATH line in your shell rc is yours to remove
+        set -e
+        rm -rf "$HOME/.%1$s"
+        echo "removed $HOME/.%1$s"
+        echo "remove the .%1$s/bin PATH line from your shell rc by hand"
         """;
 
     private final ArtifactStore store;
@@ -151,15 +191,21 @@ public final class BundleCommand implements Command {
         if (workspace != null) {
             return workspace;
         }
-        if (!args.isEmpty()) {
-            System.err.println("mjm: bundle takes no arguments — got '" + args.getFirst() + "'");
-            return 2;
+        boolean withToolchain = false;
+        for (String arg : args) {
+            if (arg.equals("--toolchain")) {
+                withToolchain = true;
+            } else {
+                System.err.println("mjm: bundle takes --toolchain only — got '" + arg + "'");
+                return 2;
+            }
         }
-        // the whole assembly writes target/dist/: skeleton, toolchain, launcher, tar.gz
-        return ProjectLock.with(projectDir, this::assemble);
+        boolean includeToolchain = withToolchain;
+        // the whole assembly writes target/dist/: jar, launcher, setup, archive
+        return ProjectLock.with(projectDir, () -> assemble(includeToolchain));
     }
 
-    private int assemble() {
+    private int assemble(boolean withToolchain) {
         DistOutput.warnLegacy(projectDir);
         MjProject project;
         List<LockedArtifact> locked;
@@ -180,6 +226,10 @@ public final class BundleCommand implements Command {
 
         if (!Files.isDirectory(projectDir.resolve(CLASSES))) {
             System.err.println("mjm: " + CLASSES + " is missing — run mjm build first");
+            return 1;
+        }
+        if (project.main() == null || project.main().isBlank()) {
+            System.err.println("mjm: bundle needs [project].main — set it in mjm.toml");
             return 1;
         }
 
@@ -224,7 +274,9 @@ public final class BundleCommand implements Command {
                     continue;
                 }
                 if (isTestOnly(artifact.id())) {
-                    toolchainRows.add(artifact);
+                    if (withToolchain) {
+                        toolchainRows.add(artifact);
+                    }
                     continue;
                 }
                 Substitutions.Module local = substitutions.find(artifact.id());
@@ -242,9 +294,7 @@ public final class BundleCommand implements Command {
                 UberJar.write(lib.resolve(name + "-" + version + ".jar"),
                         new UberJar.Input(projectDir.resolve(CLASSES), mergeJars,
                                 mergeDirs, UberJar.labels(locked)),
-                        new UberJar.Header(name, version,
-                                project.main() == null || project.main().isBlank()
-                                        ? null : project.main()));
+                        new UberJar.Header(name, version, project.main()));
             } catch (IOException e) {
                 System.err.println("mjm: cannot assemble " + name + ".jar: " + e.getMessage());
                 return 1;
@@ -273,22 +323,28 @@ public final class BundleCommand implements Command {
                 }
             }
 
-            // the launcher — main class from [project].main
-            String launcherMain = project.main() != null ? project.main() : "";
-            if (launcherMain.isBlank()) {
-                launcherMain = "com.jujin.mjm.cli.UsageStub";
-            }
-            Files.writeString(bin.resolve(name),
-                    LAUNCHER_TEMPLATE.formatted(launcherMain), StandardCharsets.UTF_8);
+            // the launcher — [project].main is required, so there is no fallback
+            String launcherMain = project.main();
+            String launcherBody = LAUNCHER_TEMPLATE.formatted(name, version, launcherMain);
+            Files.writeString(bin.resolve(name), launcherBody, StandardCharsets.UTF_8);
             Files.setPosixFilePermissions(bin.resolve(name),
                     PosixFilePermissions.fromString("r-xr-xr-x"));
 
-            // setup.sh — self-installing; the embedded launcher is the same
-            // launcher the dist ships, spliced verbatim into the heredoc
-            String launcherBody = LAUNCHER_TEMPLATE.formatted(launcherMain);
-            String setupScript = SETUP_TEMPLATE.formatted(name, version, launcherBody);
+            // A runnable module has a target major even without [java].version:
+            // without --release, javac emits the running JDK's bytecode.
+            int jdkMajor = project.javaVersion() != null
+                    ? project.javaVersion() : Runtime.version().feature();
+
+            // setup.sh — verifies, stages, swaps; the embedded launcher is the
+            // same launcher the dist ships, spliced verbatim into the heredoc
+            String setupScript = SETUP_TEMPLATE.formatted(name, version, launcherBody, jdkMajor);
             Files.writeString(dist.resolve("setup.sh"), setupScript, StandardCharsets.UTF_8);
             Files.setPosixFilePermissions(dist.resolve("setup.sh"),
+                    PosixFilePermissions.fromString("r-xr-xr-x"));
+
+            Files.writeString(dist.resolve("uninstall.sh"),
+                    UNINSTALL_TEMPLATE.formatted(name), StandardCharsets.UTF_8);
+            Files.setPosixFilePermissions(dist.resolve("uninstall.sh"),
                     PosixFilePermissions.fromString("r-xr-xr-x"));
 
             // SHA256SUMS
