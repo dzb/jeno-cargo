@@ -402,11 +402,11 @@ modules = ["libs/core", "apps/web"]
 | `mjm outdated [--json] [--dev]` | 已钉版本 vs 仓库可用版本;默认只查 MAIN,`--dev` 含 dev/processor;`gh:`/`url`/`local:`/`mjm:` 列为未检查;跨 major 单列;完成即 exit 0(有更新也是 0) |
 | `mjm audit [--json] [--dev]` | OSV 漏洞查询;默认只查 MAIN,`--dev` 才含 dev/processor;只查 Central 坐标,其余列 `notChecked` 并给原因;漏洞或查询失败 exit 1 |
 | `mjm publish [target]` | 写三件套;目标只接受 `gh:`、`mjm:https:`、`mjm:local:`(§6.6) |
-| `mjm update` / `mjm upgrade` | 自升级(同一实现) |
+| `mjm upgrade` / `mjm update`(alias) | 自升级(同一实现) |
 
 ### 6.2 参数约定
 
-- **未知参数是用法错误**:exit 2,不静默忽略(`build`/`test`/`bundle`/`update` 无参数;`why` 恰好一个 id;`publish` 最多一个 target)。
+- **未知参数是用法错误**:exit 2,不静默忽略(`build`/`test`/`bundle`/`upgrade`(alias `update`) 无参数;`why` 恰好一个 id;`publish` 最多一个 target)。
 - **`--` 结束 mjm 的选项**:之后的内容作为位置参数交给命令(`run` 交给程序)。
 - **`--help` / `-h`**:只在 `--` 之前、且是唯一剩余参数时生效;`mjm --help` 打印清单 exit 0。
 - **`run` 的旗标边界**:mjm 的 `--module`/`--offline` 只在 target 之前生效;target 之后(或 `--` 之后)全部是程序参数。
@@ -428,7 +428,7 @@ modules = ["libs/core", "apps/web"]
 |---|---|---|
 | orchestrate | `lock`、`build`、`test`、`package`、`bundle`、`clean` | 按依赖拓扑序逐模块;`--module <path>` 只跑一个;`build`/`package`/`bundle`/`lock` 遇错即停,`test`/`clean` 继续并汇总 |
 | requireModule | `add`、`remove`、`run`、`classpath`、`info`、`tree`、`why`、`publish`、`audit`、`outdated` | 无 `--module` → exit 2 标准句;带 `--module` → 在该模块执行 |
-| global | `init`、`cache`、`update` | 不参与编排;`init` 在根目录拒绝(§6.1) |
+| global | `init`、`cache`、`upgrade`(alias `update`) | 不参与编排;`init` 在根目录拒绝(§6.1) |
 
 ### 6.5 输出与 JSON
 
@@ -488,7 +488,7 @@ Maven 布局仓库仍可**读取**(`[repos]` 的 `type = "maven"`,§2.1)。
 
 每个 store 访问都经过同一个判定点（`ArtifactStore.ensure`），所以 `lock` / `build` / `test` / `info --source` 都自动遵守。
 
-**不适用的命令**：`update`、`publish`、`outdated`、`audit` —— 它们的存在就是联网操作。传入 `--offline` 报用法错误（退出码 2），而不是假装接受。
+**不适用的命令**：`upgrade`(alias `update`)、`publish`、`outdated`、`audit` —— 它们的存在就是联网操作。传入 `--offline` 报用法错误（退出码 2），而不是假装接受。
 
 **`add` 的 discover 形态**：不带显式版本时（列举版本 = 读 `maven-metadata.xml`，或裸名走 Central 索引搜索）是联网操作，`--offline` 下报用法错误（退出码 2）——要离线就带上显式版本：`mjm add "<id>" <version>` 只读 store，`--offline` 下照常可用。
 

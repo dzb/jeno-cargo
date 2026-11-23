@@ -17,11 +17,11 @@
    └ git tag v{version} && git push github v{version}                    ↓
                                                               release + 附件
                                                                         │
-                                                                3. mjm update / curl|bash
+                                                                3. mjm upgrade / curl|bash
 ```
 
 **升级地址(唯一事实来源)**:`https://api.github.com/repos/dzb/mjm-cargo/releases/latest` ——
-`mjm update` 查询它,`setup.sh`(动态解析 latest,永不写死版本)与 CI 共用同一约定。
+`mjm upgrade`(alias `mjm update`) 查询它,`setup.sh`(动态解析 latest,永不写死版本)与 CI 共用同一约定。
 发行物附件命名 `mjm-bin-{version}.tar.gz`(`mjm bundle` 产物,与库 jar 三件套区分),
 版本号只在 `mjm.toml [project].version` 声明一处。
 
@@ -35,7 +35,7 @@
 |---|---|---|
 | 整个版本号 | **人工**,发版时改一次 | `mjm.toml` `[project].version` |
 | 派生的两份 | `mjm build` 自动生成 | `META-INF/mjm/version.properties`(`--version` 读它)、jar manifest 的 `Implementation-Version` |
-| 账本 | git tags | `v{version}`;`mjm update` 比对 GitHub 的 latest release |
+| 账本 | git tags | `v{version}`;`mjm upgrade` 比对 GitHub 的 latest release |
 
 `Mj.VERSION` 不是第二个声明,它是那份资源的读取方——CI 的一致性门会同时校验
 `tag == mjm.toml 版本 == 刚构建的二进制 --version`,三者不一致即失败。
@@ -80,7 +80,7 @@ java -cp "target/classes:$VJARS" com.jujin.mjm.cli.Mjm bundle
 gh release create v{ver} dist/mjm-{ver}.tar.gz --title "mjm v{ver}" --notes "…"
 ```
 
-修好链条后跑一次 `mjm update`,本机回到链条上。
+修好链条后跑一次 `mjm upgrade`,本机回到链条上。
 
 ## 已知边界
 

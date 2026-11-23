@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 /**
- * {@code mjm update}: checks GitHub Releases for a newer version and
+ * {@code mjm upgrade} ({@code mjm update} is an alias): checks GitHub Releases for a newer version and
  * self-upgrades — download the tar.gz, extract, run the setup.sh inside.
  * The same install mechanism as the one-liner, so the upgrade is atomic
  * (fresh install to $HOME/.mjm/, launcher regenerated, old version replaced).
@@ -67,12 +67,12 @@ public final class UpdateCommand implements Command {
 
     @Override
     public String name() {
-        return "update";
+        return "upgrade";
     }
 
     @Override
     public String[] aliases() {
-        return new String[]{"upgrade"};
+        return new String[]{"update"};
     }
 
     @Override
@@ -88,7 +88,7 @@ public final class UpdateCommand implements Command {
     @Override
     public int execute(List<String> args) {
         if (!args.isEmpty()) {
-            System.err.println("mjm: update takes no arguments — got '" + args.getFirst() + "'");
+            System.err.println("mjm: upgrade takes no arguments — got '" + args.getFirst() + "'");
             return 2;
         }
         String latest;

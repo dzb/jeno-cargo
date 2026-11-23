@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -255,5 +256,31 @@ class UpdateTest {
         });
         server.start();
         return server;
+    }
+
+    @Test
+    void upgradeIsTheNameAndUpdateIsAnAlias() throws Exception {
+        UpdateCommand command = new UpdateCommand();
+        assertEquals("upgrade", command.name());
+        assertArrayEquals(new String[]{"update"}, command.aliases());
+
+        CommandRunner runner = new CommandRunner(List.of(command));
+        String viaAlias = help(runner, "update");
+        String viaName = help(runner, "upgrade");
+        assertTrue(viaAlias.contains("usage: mjm upgrade"), viaAlias);
+        assertTrue(viaName.contains("usage: mjm upgrade"), viaName);
+        assertTrue(viaName.contains("(also: update)"), viaName);
+    }
+
+    private static String help(CommandRunner runner, String command) {
+        PrintStream original = System.out;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try {
+            System.setOut(new PrintStream(out, true, java.nio.charset.StandardCharsets.UTF_8));
+            assertEquals(0, runner.run(command, "--help"));
+        } finally {
+            System.setOut(original);
+        }
+        return out.toString(java.nio.charset.StandardCharsets.UTF_8);
     }
 }

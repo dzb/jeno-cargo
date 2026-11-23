@@ -238,7 +238,7 @@ production run never loads a single byte of it.
 
 `mjm bundle` assembles that directory and a `tar.gz` for `curl | bash`; `setup.sh` installs
 surgically: it replaces `lib/` and `bin/`, and leaves `${XDG_CACHE_HOME:-~/.cache}/mjm/store` (your entire
-dependency cache) untouched. `mjm update` upgrades in place and takes effect on
+dependency cache) untouched. `mjm upgrade` (alias `mjm update`) upgrades in place and takes effect on
 the next invocation.
 
 ## Commands

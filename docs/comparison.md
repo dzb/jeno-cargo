@@ -53,7 +53,7 @@ mjm 自身的数据(命令面、目录语义)直接读代码与 `mjm` 的 usage 
 | cargo | ~40 | 文档 |
 | npm | ~70 | 文档 |
 
-mjm 现有 19 个:`add audit build bundle cache classpath clean info init lock outdated package publish remove run test tree why update`(另有别名 `upgrade`、`dist`)。
+mjm 现有 19 个:`add audit build bundle cache classpath clean info init lock outdated package publish remove run test tree why upgrade`(另有别名 `update`、`dist`)。
 
 **结论:在「动词数量」这条轴上,mjm 不需要再学谁。** 值得记的是 mjm 已经比同级工具更干净的
 三处,以及唯一真正缺的那个动词(见 §5 A2)。

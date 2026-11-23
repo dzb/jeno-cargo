@@ -69,7 +69,7 @@ public final class MjModule implements ModuleEx {
                 c -> new AuditCommand(projectDir));
         binder.contribute(Command.class).addDeferred("outdated",
                 c -> new OutdatedCommand(projectDir));
-        binder.contribute(Command.class).addDeferred("update",
+        binder.contribute(Command.class).addDeferred("upgrade",
                 c -> new UpdateCommand());
     }
 }
