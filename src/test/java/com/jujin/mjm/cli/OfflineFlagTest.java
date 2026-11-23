@@ -44,6 +44,11 @@ class OfflineFlagTest {
             }
 
             @Override
+            public CommandCapabilities capabilities() {
+                return CommandCapabilities.builder().build();
+            }
+
+            @Override
             public int execute(List<String> args) {
                 sawOffline.set(ArtifactStore.isOffline());
                 sawFlag.set(args.contains("-o") || args.contains("--offline"));

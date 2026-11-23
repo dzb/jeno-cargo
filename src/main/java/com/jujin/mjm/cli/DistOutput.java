@@ -67,7 +67,7 @@ final class DistOutput {
     /** One line, non-blocking: the old directory is no longer read. */
     static void warnLegacy(Path projectDir) {
         if (legacyPresent(projectDir)) {
-            System.err.println("mjm: the old dist/ at the project root is no longer read — "
+            System.err.println(Ui.errPrefix() + "the old dist/ at the project root is no longer read — "
                     + "deliverables go to target/dist; remove it when convenient");
         }
     }

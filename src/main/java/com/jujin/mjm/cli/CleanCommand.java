@@ -1,5 +1,9 @@
 package com.jujin.mjm.cli;
 
+import com.jujin.freeway.commons.json.JsonArray;
+import com.jujin.freeway.commons.json.JsonObject;
+import com.jujin.freeway.commons.json.JsonUtils;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -58,7 +62,81 @@ public final class CleanCommand implements Command {
     }
 
     @Override
+    public Command.Category category() {
+        return Command.Category.BUILD;
+    }
+
+    @Override
+    public int order() {
+        return 60;
+    }
+
+    @Override
+    public CommandCapabilities capabilities() {
+        return CommandCapabilities.builder()
+                .json()
+                .network(CommandCapabilities.NetworkMode.NEVER)
+                .writes(CommandCapabilities.WriteScope.TARGET)
+                .workspace(CommandCapabilities.WorkspaceMode.AGGREGATE)
+                .destructive()
+                .build();
+    }
+
+    @Override
     public int execute(List<String> args) {
+        boolean json = args.contains("--json");
+        List<String> cleaned = args.stream().filter(arg -> !arg.equals("--json")).toList();
+        if (json) {
+            return JsonWorkspace.run("clean", projectDir, cleaned, this::jsonModule);
+        }
+        return executeHuman(cleaned);
+    }
+
+    private JsonWorkspace.ModuleResult jsonModule(Path moduleDir, List<String> args) {
+        boolean target = args.contains("--target");
+        boolean dist = args.contains("--dist");
+        if (!target && !dist) {
+            target = true;
+        }
+        List<RemoveCandidate> candidates = new ArrayList<>();
+        if (target) {
+            candidates.add(candidate(moduleDir.resolve("target"), "target"));
+        } else if (dist) {
+            candidates.add(candidate(moduleDir.resolve("target/dist"), "dist"));
+        }
+
+        JsonCapture.Result captured = JsonCapture.run(() ->
+                new CleanCommand(moduleDir).executeHuman(args));
+        if (captured.exitCode() != 0) {
+            return JsonWorkspace.ModuleResult.failed(captured.exitCode(),
+                    "CLEAN_FAILED", captured.message());
+        }
+
+        JsonArray removed = JsonUtils.array();
+        for (RemoveCandidate candidate : candidates) {
+            if (candidate.existed() && !Files.exists(candidate.path(), LinkOption.NOFOLLOW_LINKS)) {
+                JsonObject entry = JsonUtils.object();
+                entry.put("path", candidate.path().toAbsolutePath().normalize().toString());
+                entry.put("kind", candidate.kind());
+                entry.put("bytes", candidate.bytes());
+                entry.put("fileCount", candidate.fileCount());
+                removed.add(entry);
+            }
+        }
+        JsonObject data = JsonUtils.object();
+        data.put("removed", removed);
+        data.put("removedCount", removed.size());
+        data.put("nothingToClean", removed.isEmpty());
+        return JsonWorkspace.ModuleResult.ok(data);
+    }
+
+    private static RemoveCandidate candidate(Path path, String kind) {
+        boolean existed = Files.exists(path, LinkOption.NOFOLLOW_LINKS);
+        return new RemoveCandidate(path, kind, existed, existed ? treeSize(path) : 0,
+                existed ? fileCount(path) : 0);
+    }
+
+    private int executeHuman(List<String> args) {
         Integer workspace = WorkspaceRun.orchestrate(projectDir, args, "cleaned", true,
                 (dir, rest) -> new CleanCommand(dir).execute(rest));
         if (workspace != null) {
@@ -73,7 +151,7 @@ public final class CleanCommand implements Command {
                 case "--target" -> target = true;
                 case "--dist" -> dist = true;
                 default -> {
-                    System.err.println("mjm: unknown clean option '" + arg + "'"
+                    System.err.println(Ui.errPrefix() + "unknown clean option '" + arg + "'"
                             + " — use --target or --dist");
                     return 2;
                 }
@@ -110,7 +188,7 @@ public final class CleanCommand implements Command {
             mounts.addAll(mountDetector.apply(tree));
         }
         if (!mounts.isEmpty()) {
-            System.err.println("mjm: refusing to remove " + describe(requested)
+            System.err.println(Ui.errPrefix() + "refusing to remove " + describe(requested)
                     + " — these paths are mount points: " + describe(mounts)
                     + "; unmount them first, or remove the contents by hand");
             return 1;
@@ -128,7 +206,7 @@ public final class CleanCommand implements Command {
         }
 
         if (!removedSomething) {
-            System.out.println("nothing to clean — no build output in " + projectDir);
+            System.out.println(Ui.dim("nothing to clean — no build output in " + projectDir));
             return 0;
         }
         // Only removing target/ can delete this JVM's own classes, and only when
@@ -177,14 +255,14 @@ public final class CleanCommand implements Command {
         try {
             if (Files.isSymbolicLink(directory)) {
                 Files.delete(directory);
-                System.out.println("removed " + label);
+                System.out.println(Ui.ok("removed " + label));
                 return true;
             }
             DistOutput.clear(directory);
-            System.out.println("removed " + label);
+            System.out.println(Ui.ok("removed " + label));
             return true;
         } catch (IOException e) {
-            System.err.println("mjm: cannot remove " + directory + " — " + e.getMessage());
+            System.err.println(Ui.errPrefix() + "cannot remove " + directory + " — " + e.getMessage());
             throw new IllegalStateException(e);
         }
     }
@@ -257,4 +335,44 @@ public final class CleanCommand implements Command {
         return paths.stream().map(Path::toString)
                 .collect(java.util.stream.Collectors.joining(", "));
     }
+    private static long treeSize(Path root) {
+        if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) {
+            return 0;
+        }
+        if (Files.isRegularFile(root, LinkOption.NOFOLLOW_LINKS)) {
+            try {
+                return Files.size(root);
+            } catch (IOException e) {
+                return 0;
+            }
+        }
+        try (Stream<Path> walk = Files.walk(root)) {
+            return walk.filter(Files::isRegularFile).mapToLong(path -> {
+                try {
+                    return Files.size(path);
+                } catch (IOException e) {
+                    return 0;
+                }
+            }).sum();
+        } catch (IOException e) {
+            return 0;
+        }
+    }
+
+    private static long fileCount(Path root) {
+        if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)
+                || Files.isRegularFile(root, LinkOption.NOFOLLOW_LINKS)
+                || Files.isSymbolicLink(root)) {
+            return 1;
+        }
+        try (Stream<Path> walk = Files.walk(root)) {
+            return walk.filter(Files::isRegularFile).count();
+        } catch (IOException e) {
+            return 0;
+        }
+    }
+
+    private record RemoveCandidate(Path path, String kind, boolean existed,
+                                   long bytes, long fileCount) {}
+
 }

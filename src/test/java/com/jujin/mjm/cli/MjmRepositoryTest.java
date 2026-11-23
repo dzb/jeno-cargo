@@ -274,7 +274,7 @@ class MjmRepositoryTest {
         server.createContext("/", exchange -> {
             String path = exchange.getRequestURI().getPath();
             if (exchange.getRequestMethod().equals("PUT")) {
-                exchange.getRequestBody().readAllBytes();
+                routes.put(path, exchange.getRequestBody().readAllBytes());
                 puts.add(path);
                 exchange.sendResponseHeaders(201, -1);
                 exchange.close();

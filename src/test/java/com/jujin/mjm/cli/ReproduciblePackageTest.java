@@ -8,7 +8,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -117,6 +119,38 @@ class ReproduciblePackageTest {
 
         assertArrayEquals(first, Files.readAllBytes(jar),
                 "merged closure and services must land in the same order every time");
+    }
+
+    @Test
+    void jsonPackageExportsAJarArtifactWithItsDigest() throws Exception {
+        Path project = project("jsonpkg", null, """
+            package demo;
+
+            public final class App {
+            }
+            """);
+        assertEquals(0, new BuildCommand(store, project).execute(List.of()));
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        PrintStream original = System.out;
+        int exit;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            exit = new PackageCommand(store, project).execute(List.of("--json"));
+        } finally {
+            System.setOut(original);
+        }
+
+        assertEquals(0, exit);
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                out.toString(StandardCharsets.UTF_8));
+        assertEquals("package", json.getString("command"));
+        var result = json.getArray("modules").getObject(0).getObject("result");
+        var artifact = result.getArray("artifacts").getObject(0);
+        assertEquals("jar", artifact.getString("kind"));
+        assertEquals("plain", artifact.getString("variant"));
+        assertTrue(artifact.getString("sha256").matches("[0-9a-f]{64}"));
+        assertTrue(artifact.getLong("bytes") > 0);
+        assertTrue(Files.isRegularFile(Path.of(artifact.getString("path"))));
     }
 
     @Test

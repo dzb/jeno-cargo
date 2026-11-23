@@ -110,6 +110,26 @@ public final class RunCommand implements Command {
     }
 
     @Override
+    public Command.Category category() {
+        return Command.Category.BUILD;
+    }
+
+    @Override
+    public int order() {
+        return 30;
+    }
+
+    @Override
+    public CommandCapabilities capabilities() {
+        return CommandCapabilities.builder()
+                .network(CommandCapabilities.NetworkMode.OPTIONAL)
+                .writes(CommandCapabilities.WriteScope.CACHE)
+                .workspace(CommandCapabilities.WorkspaceMode.MODULE)
+                .passThrough()
+                .build();
+    }
+
+    @Override
     public int execute(List<String> args, List<String> passthrough) {
         Integer workspace = WorkspaceRun.requireModule(projectDir, args, true,
                 (dir, rest) -> new RunCommand(store, dir).execute(rest, passthrough));
@@ -123,7 +143,7 @@ public final class RunCommand implements Command {
         try {
             project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
         } catch (IOException e) {
-            System.err.println("mjm: no mjm.toml in " + projectDir
+            System.err.println(Ui.errPrefix() + "no mjm.toml in " + projectDir
                     + " — run mjm init to create one");
             return 1;
         }
@@ -134,7 +154,7 @@ public final class RunCommand implements Command {
             target = project.main();
             rest = List.copyOf(passthrough);
             if (target == null || target.isBlank()) {
-                System.err.println("mjm: run needs a main class or a script name — "
+                System.err.println(Ui.errPrefix() + "run needs a main class or a script name — "
                         + "mjm run <main-class> [args...] | mjm run <script-name>, or set "
                         + "[project].main in mjm.toml");
                 return 2;
@@ -157,7 +177,7 @@ public final class RunCommand implements Command {
         try {
             classpath = classpath();
         } catch (RuntimeException e) {
-            System.err.println("mjm: " + e.getMessage());
+            System.err.println(Ui.errPrefix() + e.getMessage());
             return 1;
         }
 
@@ -185,7 +205,7 @@ public final class RunCommand implements Command {
             String classpath = classpath();
             environment.put("MJM_CLASSPATH", classpath);
         } catch (RuntimeException e) {
-            System.err.println("mjm: running '" + name + "' without MJM_CLASSPATH — " + e.getMessage());
+            System.err.println(Ui.errPrefix() + "running '" + name + "' without MJM_CLASSPATH — " + e.getMessage());
         }
 
         List<String> command = new ArrayList<>();
@@ -240,7 +260,7 @@ public final class RunCommand implements Command {
         try {
             return builder.start().waitFor();
         } catch (IOException e) {
-            System.err.println("mjm: cannot " + what + " — is a shell/Java on the PATH?");
+            System.err.println(Ui.errPrefix() + "cannot " + what + " — is a shell/Java on the PATH?");
             return 1;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

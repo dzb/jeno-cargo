@@ -1,5 +1,8 @@
 package com.jujin.mjm.cli;
 
+import com.jujin.freeway.commons.json.JsonArray;
+import com.jujin.freeway.commons.json.JsonObject;
+import com.jujin.freeway.commons.json.JsonUtils;
 import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.mjm.project.MjProject;
 import com.jujin.mjm.project.ProjectReader;
@@ -49,22 +52,86 @@ public final class BuildCommand implements Command {
     }
 
     @Override
+    public Command.Category category() {
+        return Command.Category.BUILD;
+    }
+
+    @Override
+    public int order() {
+        return 10;
+    }
+
+    @Override
+    public CommandCapabilities capabilities() {
+        return CommandCapabilities.builder()
+                .json()
+                .network(CommandCapabilities.NetworkMode.OPTIONAL)
+                .writes(CommandCapabilities.WriteScope.TARGET)
+                .workspace(CommandCapabilities.WorkspaceMode.AGGREGATE)
+                .build();
+    }
+
+    @Override
     public int execute(List<String> args) {
+        boolean json = args.contains("--json");
+        List<String> cleaned = args.stream().filter(arg -> !arg.equals("--json")).toList();
+        if (json) {
+            return JsonWorkspace.run("build", projectDir, cleaned, this::jsonModule);
+        }
+        return executeHuman(cleaned);
+    }
+
+    private JsonWorkspace.ModuleResult jsonModule(Path moduleDir, List<String> args) {
+        long started = System.nanoTime();
+        JsonCapture.Result captured = JsonCapture.run(() ->
+                new BuildCommand(store, moduleDir).executeHuman(args));
+        if (captured.exitCode() != 0) {
+            return JsonWorkspace.ModuleResult.failed(captured.exitCode(),
+                    "BUILD_FAILED", captured.message());
+        }
+        try {
+            MjProject project = ProjectReader.parse(
+                    Files.readString(moduleDir.resolve("mjm.toml")));
+            Path classes = moduleDir.resolve(OUTPUT).toAbsolutePath().normalize();
+            JsonObject data = JsonUtils.object();
+            data.put("classesDir", classes.toString());
+            data.put("sourceCount", countFiles(moduleDir.resolve(SOURCES), ".java"));
+            data.put("resourceCount", countFiles(moduleDir.resolve(RESOURCES), null));
+            data.put("fileCount", countFiles(classes, null));
+            data.put("bytes", treeSize(classes));
+            data.put("durationMs", (System.nanoTime() - started) / 1_000_000L);
+            JsonArray artifacts = JsonUtils.array();
+            JsonObject artifact = JsonUtils.object();
+            artifact.put("kind", "classes");
+            artifact.put("path", classes.toString());
+            artifact.put("fileCount", countFiles(classes, null));
+            artifact.put("bytes", treeSize(classes));
+            artifacts.add(artifact);
+            data.put("artifacts", artifacts);
+            data.put("project", project.name() + "@" + project.version());
+            return JsonWorkspace.ModuleResult.ok(data);
+        } catch (IOException | RuntimeException e) {
+            return JsonWorkspace.ModuleResult.failed(1, "RESULT_UNREADABLE",
+                    "build finished but its result could not be described: " + e.getMessage());
+        }
+    }
+
+    private int executeHuman(List<String> args) {
         Integer workspace = WorkspaceRun.orchestrate(projectDir, args, "built", false,
                 (dir, rest) -> new BuildCommand(store, dir).execute(rest));
         if (workspace != null) {
             return workspace;
         }
         if (!args.isEmpty()) {
-            System.err.println("mjm: build takes no arguments — got '" + args.getFirst() + "'");
+            System.err.println(Ui.errPrefix() + "build takes no arguments — got '" + args.getFirst() + "'");
             return 2;
         }
         if (!Files.exists(projectDir.resolve("mjm.lock"))) {
-            System.err.println("mjm: no mjm.lock in " + projectDir + " — run mjm lock first");
+            System.err.println(Ui.errPrefix() + "no mjm.lock in " + projectDir + " — run mjm lock first");
             return 1;
         }
         if (!Files.exists(projectDir.resolve("mjm.toml"))) {
-            System.err.println("mjm: no mjm.toml in " + projectDir
+            System.err.println(Ui.errPrefix() + "no mjm.toml in " + projectDir
                     + " — run mjm init to create one");
             return 1;
         }
@@ -76,6 +143,7 @@ public final class BuildCommand implements Command {
 
     /** The locked body of {@link #execute}. */
     private int build() {
+        long started = System.nanoTime();
         List<LockedArtifact> locked = readLock();
         MjProject project = readProject();
 
@@ -87,7 +155,7 @@ public final class BuildCommand implements Command {
         if (project.javaVersion() != null) {
             int running = Runtime.version().feature();
             if (running < project.javaVersion()) {
-                System.err.println("mjm: this project targets Java "
+                System.err.println(Ui.errPrefix() + "this project targets Java "
                         + project.javaVersion() + " but mjm runs on Java " + running
                         + " — run mjm on a newer JDK, or lower [java].version");
                 return 1;
@@ -101,7 +169,7 @@ public final class BuildCommand implements Command {
             // still be present and intact in the store
             store.verifiedJars(locked, artifact -> substitutions.find(artifact.id()) != null);
         } catch (RuntimeException e) {
-            System.err.println("mjm: " + e.getMessage());
+            System.err.println(Ui.errPrefix() + e.getMessage());
             return 1;
         }
 
@@ -111,13 +179,13 @@ public final class BuildCommand implements Command {
                     projectDir, store, substitutions,
                     ClasspathAssembler.Input.compile(project, locked)).joined();
         } catch (ClasspathAssembler.ClasspathException e) {
-            System.err.println("mjm: " + e.getMessage());
+            System.err.println(Ui.errPrefix() + e.getMessage());
             return 1;
         }
         List<String> sources = sources();
         boolean resources = hasResources();
         if (sources.isEmpty() && !resources) {
-            System.err.println("mjm: no sources under " + projectDir.resolve(SOURCES)
+            System.err.println(Ui.errPrefix() + "no sources under " + projectDir.resolve(SOURCES)
                     + " and no resources under " + projectDir.resolve(RESOURCES)
                     + " — nothing to build");
             return 1;
@@ -127,7 +195,7 @@ public final class BuildCommand implements Command {
         try {
             Files.createDirectories(output);
         } catch (IOException e) {
-            System.err.println("mjm: cannot create " + output);
+            System.err.println(Ui.errPrefix() + "cannot create " + output);
             return 1;
         }
 
@@ -136,8 +204,8 @@ public final class BuildCommand implements Command {
         if (sources.isEmpty()) {
             SourceResources.copy(projectDir.resolve(RESOURCES), output);
             writeVersionResource(project, output);
-            System.out.println("copied resources into " + output
-                    + " (no Java sources to compile)");
+            System.out.println(Ui.ok("copied resources into " + output
+                    + " (no Java sources to compile)"));
             return 0;
         }
 
@@ -145,7 +213,7 @@ public final class BuildCommand implements Command {
         // no PATH dependency, output straight to the console.
         javax.tools.JavaCompiler compiler = javax.tools.ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
-            System.err.println("mjm: no system Java compiler — mjm needs a JDK, not a JRE");
+            System.err.println(Ui.errPrefix() + "no system Java compiler — mjm needs a JDK, not a JRE");
             return 1;
         }
         List<String> command = new ArrayList<>();
@@ -180,7 +248,8 @@ public final class BuildCommand implements Command {
         if (exit == 0) {
             SourceResources.copy(projectDir.resolve("src/main/resources"), output);
             writeVersionResource(project, output);
-            System.out.println("compiled " + sources.size() + " source file(s) into " + output);
+            System.out.println(Ui.ok("compiled " + sources.size()
+                    + " source file(s) into " + output) + Ui.duration(started));
         }
         return exit;
     }
@@ -202,6 +271,36 @@ public final class BuildCommand implements Command {
             return walk.anyMatch(Files::isRegularFile);
         } catch (IOException e) {
             return false;
+        }
+    }
+
+    private static long countFiles(Path root, String suffix) {
+        if (!Files.isDirectory(root)) {
+            return 0;
+        }
+        try (Stream<Path> walk = Files.walk(root)) {
+            return walk.filter(Files::isRegularFile)
+                    .filter(path -> suffix == null || path.toString().endsWith(suffix))
+                    .count();
+        } catch (IOException e) {
+            return 0;
+        }
+    }
+
+    private static long treeSize(Path root) {
+        if (!Files.isDirectory(root)) {
+            return 0;
+        }
+        try (Stream<Path> walk = Files.walk(root)) {
+            return walk.filter(Files::isRegularFile).mapToLong(path -> {
+                try {
+                    return Files.size(path);
+                } catch (IOException e) {
+                    return 0;
+                }
+            }).sum();
+        } catch (IOException e) {
+            return 0;
         }
     }
 

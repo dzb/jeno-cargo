@@ -86,6 +86,49 @@ class LockCheckTest {
     }
 
     @Test
+    void jsonCheckReportsArtifactsAndUpToDateSummary() throws Exception {
+        lockProject();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        int exit = run(out, "--json", "--check");
+
+        assertEquals(0, exit);
+        var root = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                out.toString(StandardCharsets.UTF_8).strip());
+        assertEquals("lock", root.getString("command"));
+        assertEquals("ok", root.getString("status"));
+        assertEquals(true, root.getBoolean("check"));
+        assertEquals(1, root.getArray("modules").size());
+        var module = root.getArray("modules").getObject(0);
+        assertEquals(true, module.getBoolean("upToDate"));
+        assertEquals(1, root.getObject("summary").getInt("upToDateModules"));
+    }
+
+    @Test
+    void jsonDriftIsAStructuredFailureWithADifference() throws Exception {
+        lockProject();
+        Files.writeString(dir.resolve("mjm.toml"),
+                Files.readString(dir.resolve("mjm.toml"))
+                        .replace("\"com.example:lib-a\" = \"vendor:1.0.0\"",
+                                "\"com.example:lib-a\" = \"vendor:1.2.0\""));
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        int exit = run(out, "--json", "--check");
+
+        assertEquals(1, exit);
+        var root = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                out.toString(StandardCharsets.UTF_8).strip());
+        assertEquals("failed", root.getString("status"));
+        var module = root.getArray("modules").getObject(0);
+        assertEquals(false, module.getBoolean("upToDate"));
+        assertTrue(module.getArray("differences").toList().stream()
+                .map(String::valueOf).anyMatch(line -> line.contains("+ version = \"1.2.0\"")));
+        assertTrue(root.getArray("diagnostics").toList().stream()
+                .map(value -> ((java.util.Map<?, ?>) value).get("code"))
+                .anyMatch("LOCK_STALE"::equals));
+    }
+
+    @Test
     void refreshIsAnUnknownOptionNow() throws Exception {
         lockProject();
 

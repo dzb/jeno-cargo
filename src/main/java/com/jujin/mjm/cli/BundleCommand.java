@@ -1,5 +1,8 @@
 package com.jujin.mjm.cli;
 
+import com.jujin.freeway.commons.json.JsonArray;
+import com.jujin.freeway.commons.json.JsonObject;
+import com.jujin.freeway.commons.json.JsonUtils;
 import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.mjm.project.MjProject;
 import com.jujin.mjm.project.ProjectReader;
@@ -188,7 +191,102 @@ public final class BundleCommand implements Command {
     }
 
     @Override
+    public String usage() {
+        return "[--toolchain]";
+    }
+
+    @Override
+    public String help() {
+        return """
+               --toolchain also ships the artifacts named in [toolchain].jars under
+               lib/toolchain/; they never merge into the launcher jar.""";
+    }
+
+    @Override
+    public Command.Category category() {
+        return Command.Category.BUILD;
+    }
+
+    @Override
+    public int order() {
+        return 50;
+    }
+
+    @Override
+    public CommandCapabilities capabilities() {
+        return CommandCapabilities.builder()
+                .json()
+                .network(CommandCapabilities.NetworkMode.OPTIONAL)
+                .writes(CommandCapabilities.WriteScope.TARGET)
+                .workspace(CommandCapabilities.WorkspaceMode.AGGREGATE)
+                .build();
+    }
+
+    @Override
     public int execute(List<String> args) {
+        boolean json = args.contains("--json");
+        List<String> cleaned = args.stream().filter(arg -> !arg.equals("--json")).toList();
+        if (json) {
+            return JsonWorkspace.run("bundle", projectDir, cleaned, this::jsonModule);
+        }
+        return executeHuman(cleaned);
+    }
+
+    private JsonWorkspace.ModuleResult jsonModule(Path moduleDir, List<String> args) {
+        long started = System.nanoTime();
+        JsonCapture.Result captured = JsonCapture.run(() ->
+                new BundleCommand(store, moduleDir).executeHuman(args));
+        if (captured.exitCode() != 0) {
+            return JsonWorkspace.ModuleResult.failed(captured.exitCode(),
+                    "BUNDLE_FAILED", captured.message());
+        }
+        try {
+            MjProject project = ProjectReader.parse(
+                    Files.readString(moduleDir.resolve("mjm.toml")));
+            Path dist = moduleDir.resolve("target/dist");
+            Path bundleDir = dist.resolve(project.name() + "-" + project.version())
+                    .toAbsolutePath().normalize();
+            Path tar = dist.resolve(project.name() + "-" + project.version() + ".tar.gz")
+                    .toAbsolutePath().normalize();
+            if (!Files.isDirectory(bundleDir) || !Files.isRegularFile(tar)) {
+                return JsonWorkspace.ModuleResult.failed(1, "ARTIFACT_MISSING",
+                        "bundle reported success but did not write " + bundleDir + " and " + tar);
+            }
+            JsonObject data = JsonUtils.object();
+            data.put("project", project.name() + "@" + project.version());
+            data.put("toolchain", args.contains("--toolchain"));
+            data.put("durationMs", (System.nanoTime() - started) / 1_000_000L);
+
+            JsonObject files = JsonUtils.object();
+            files.put("launcher", bundleDir.resolve("bin")
+                    .resolve(project.name()).toString());
+            files.put("setupScript", bundleDir.resolve("setup.sh").toString());
+            files.put("uninstallScript", bundleDir.resolve("uninstall.sh").toString());
+            files.put("checksums", bundleDir.resolve("SHA256SUMS").toString());
+            data.put("files", files);
+
+            JsonArray artifacts = JsonUtils.array();
+            JsonObject directory = JsonUtils.object();
+            directory.put("kind", "bundle-directory");
+            directory.put("path", bundleDir.toString());
+            directory.put("fileCount", countFiles(bundleDir));
+            directory.put("bytes", treeSize(bundleDir));
+            artifacts.add(directory);
+            JsonObject archive = JsonUtils.object();
+            archive.put("kind", "tar.gz");
+            archive.put("path", tar.toString());
+            archive.put("sha256", ArtifactStore.sha256(tar));
+            archive.put("bytes", Files.size(tar));
+            artifacts.add(archive);
+            data.put("artifacts", artifacts);
+            return JsonWorkspace.ModuleResult.ok(data);
+        } catch (IOException | RuntimeException e) {
+            return JsonWorkspace.ModuleResult.failed(1, "RESULT_UNREADABLE",
+                    "bundle finished but its result could not be described: " + e.getMessage());
+        }
+    }
+
+    private int executeHuman(List<String> args) {
         Integer workspace = WorkspaceRun.orchestrate(projectDir, args, "bundled", false,
                 (dir, rest) -> new BundleCommand(store, dir).execute(rest));
         if (workspace != null) {
@@ -199,7 +297,7 @@ public final class BundleCommand implements Command {
             if (arg.equals("--toolchain")) {
                 withToolchain = true;
             } else {
-                System.err.println("mjm: bundle takes --toolchain only — got '" + arg + "'");
+                System.err.println(Ui.errPrefix() + "bundle takes --toolchain only — got '" + arg + "'");
                 return 2;
             }
         }
@@ -222,17 +320,28 @@ public final class BundleCommand implements Command {
             substitutions = Substitutions.forProject(projectDir);
             jars = store.verifiedJars(locked,
                     artifact -> substitutions.find(artifact.id()) != null);
+            java.util.Set<String> lockedIds = new java.util.HashSet<>();
+            for (LockedArtifact artifact : locked) {
+                lockedIds.add(artifact.id());
+            }
+            for (String id : project.toolchain()) {
+                if (!lockedIds.contains(id)) {
+                    System.err.println(Ui.errPrefix() + "[toolchain].jars names '" + id
+                            + "' but it is not in mjm.lock — run mjm lock");
+                    return 1;
+                }
+            }
         } catch (IOException | RuntimeException e) {
-            System.err.println("mjm: " + e.getMessage());
+            System.err.println(Ui.errPrefix() + e.getMessage());
             return 1;
         }
 
         if (!Files.isDirectory(projectDir.resolve(CLASSES))) {
-            System.err.println("mjm: " + CLASSES + " is missing — run mjm build first");
+            System.err.println(Ui.errPrefix() + CLASSES + " is missing — run mjm build first");
             return 1;
         }
         if (project.main() == null || project.main().isBlank()) {
-            System.err.println("mjm: bundle needs [project].main — set it in mjm.toml");
+            System.err.println(Ui.errPrefix() + "bundle needs [project].main — set it in mjm.toml");
             return 1;
         }
 
@@ -242,7 +351,7 @@ public final class BundleCommand implements Command {
         try {
             dist = DistOutput.dist(projectDir).resolve(name + "-" + version);
         } catch (IOException e) {
-            System.err.println("mjm: cannot prepare target/dist/ — " + e.getMessage());
+            System.err.println(Ui.errPrefix() + "cannot prepare target/dist/ — " + e.getMessage());
             return 1;
         }
         Path lib = dist.resolve("lib");
@@ -254,7 +363,7 @@ public final class BundleCommand implements Command {
             DistOutput.clear(dist);
             DistOutput.clear(dist.resolveSibling(name + "-" + version + ".tar.gz"));
         } catch (IOException e) {
-            System.err.println("mjm: cannot clean the previous output: " + e.getMessage());
+            System.err.println(Ui.errPrefix() + "cannot clean the previous output: " + e.getMessage());
             return 1;
         }
 
@@ -262,24 +371,29 @@ public final class BundleCommand implements Command {
             Files.createDirectories(bin);
             Files.createDirectories(lib);
 
-            // the project as ONE jar: its own classes plus the runtime closure
-            // (freeway, slf4j) merged in. They are mjm's skeleton, not swappable
-            // dependencies — a user never picks a different freeway-ioc. The
-            // lifecycle toolchain (junit) is separate: only `mjm test` needs it.
-            // the skeleton alone merges; test-only jars go to lib/toolchain.
+            // The project as ONE jar: its own classes plus the main runtime
+            // closure. Artifacts named in [toolchain].jars are different: they
+            // are build/test machinery, never part of the running program, so
+            // they are omitted unless --toolchain asks for them and then ship
+            // under lib/toolchain/. This is an explicit manifest fact, not a
+            // guess based on package names.
             // A workspace module contributes its classes wherever its jar would
             // have gone, so the dist carries the local code, not the locked copy.
             List<Path> mergeJars = new ArrayList<>();
             List<Path> mergeDirs = new ArrayList<>();
             List<LockedArtifact> toolchainRows = new ArrayList<>();
+            java.util.Set<String> declaredToolchain = java.util.Set.copyOf(project.toolchain());
             for (LockedArtifact artifact : locked) {
-                if (!artifact.isMain()) {
+                if (artifact.scope() == com.jujin.mjm.resolve.Scope.PROCESSOR) {
                     continue;
                 }
-                if (isTestOnly(artifact.id())) {
+                if (declaredToolchain.contains(artifact.id())) {
                     if (withToolchain) {
                         toolchainRows.add(artifact);
                     }
+                    continue;
+                }
+                if (!artifact.isMain()) {
                     continue;
                 }
                 Substitutions.Module local = substitutions.find(artifact.id());
@@ -299,7 +413,7 @@ public final class BundleCommand implements Command {
                                 mergeDirs, UberJar.labels(locked)),
                         new UberJar.Header(name, version, project.main()));
             } catch (IOException e) {
-                System.err.println("mjm: cannot assemble " + name + ".jar: " + e.getMessage());
+                System.err.println(Ui.errPrefix() + "cannot assemble " + name + ".jar: " + e.getMessage());
                 return 1;
             }
 
@@ -370,13 +484,13 @@ public final class BundleCommand implements Command {
                     .inheritIO().start();
             tar.waitFor();
 
-            System.out.println("dist " + dist);
-            System.out.println("  " + bin.resolve(name) + " — the launcher");
-            System.out.println("  " + dist.resolve("setup.sh") + " — self-installing");
-            System.out.println("  " + tarGz + " — the release artifact");
+            System.out.println(Ui.ok("dist " + dist));
+            System.out.println("  " + Ui.dim(bin.resolve(name) + " — the launcher"));
+            System.out.println("  " + Ui.dim(dist.resolve("setup.sh") + " — self-installing"));
+            System.out.println("  " + Ui.dim(tarGz + " — the release artifact"));
             return 0;
         } catch (IOException | InterruptedException e) {
-            System.err.println("mjm: dist assembly failed: " + e.getMessage());
+            System.err.println(Ui.errPrefix() + "dist assembly failed: " + e.getMessage());
             return 1;
         }
     }
@@ -418,7 +532,7 @@ public final class BundleCommand implements Command {
                 Files.deleteIfExists(manifestFile);
             }
         } catch (IOException e) {
-            System.err.println("mjm: cannot run jar — is a JDK on the PATH?");
+            System.err.println(Ui.errPrefix() + "cannot run jar — is a JDK on the PATH?");
             return 1;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -434,30 +548,12 @@ public final class BundleCommand implements Command {
             Process process = new ProcessBuilder(command).inheritIO().start();
             return process.waitFor();
         } catch (IOException e) {
-            System.err.println("mjm: cannot run jar — is a JDK on the PATH?");
+            System.err.println(Ui.errPrefix() + "cannot run jar — is a JDK on the PATH?");
             return 1;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return 1;
         }
-    }
-
-    /**
-     * The lifecycle toolchain: the jars {@code mjm test} injects when the
-     * closure does not already declare them (junit and its platform deps).
-     * They ship in {@code lib/toolchain/} instead of the uber-jar because they
-     * are not part of the running program — a production run never loads one.
-     *
-     * <p>Recognized by group: {@code org.junit.*} and {@code org.opentest4j}.
-     * Anything else in the closure is skeleton and merges into the jar.
-     */
-    /** Jars that exist only to run tests — the lifecycle toolchain. */
-    private static boolean isTestOnly(String id) {
-        // apiguardian rides with junit: it is the annotation jar junit's own API
-        // class files refer to, and it belongs in the toolchain, not merged into
-        // the launcher's jar
-        return id.startsWith("org.junit.") || id.startsWith("org.opentest4j:")
-                || id.startsWith("org.apiguardian:");
     }
 
     /**
@@ -471,4 +567,32 @@ public final class BundleCommand implements Command {
         String artifactPart = colon < 0 ? id : id.substring(colon + 1);
         return artifactPart + "-" + artifact.version() + ".jar";
     }
+    private static long countFiles(Path root) {
+        if (!Files.isDirectory(root)) {
+            return 0;
+        }
+        try (Stream<Path> walk = Files.walk(root)) {
+            return walk.filter(Files::isRegularFile).count();
+        } catch (IOException e) {
+            return 0;
+        }
+    }
+
+    private static long treeSize(Path root) {
+        if (!Files.isDirectory(root)) {
+            return 0;
+        }
+        try (Stream<Path> walk = Files.walk(root)) {
+            return walk.filter(Files::isRegularFile).mapToLong(path -> {
+                try {
+                    return Files.size(path);
+                } catch (IOException e) {
+                    return 0;
+                }
+            }).sum();
+        } catch (IOException e) {
+            return 0;
+        }
+    }
+
 }

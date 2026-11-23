@@ -1,5 +1,8 @@
 package com.jujin.mjm.cli;
 
+import com.jujin.freeway.commons.json.JsonArray;
+import com.jujin.freeway.commons.json.JsonObject;
+import com.jujin.freeway.commons.json.JsonUtils;
 import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.mjm.store.Paths;
 
@@ -42,7 +45,7 @@ public final class CacheCommand implements Command {
 
     @Override
     public String usage() {
-        return "dir | size | prune | purge [--dry-run] [--yes]";
+        return "dir | size | prune | purge [--dry-run] [--yes] [--json]";
     }
 
     @Override
@@ -51,62 +54,143 @@ public final class CacheCommand implements Command {
     }
 
     @Override
+    public Command.Category category() {
+        return Command.Category.MAINTAIN;
+    }
+
+    @Override
+    public int order() {
+        return 10;
+    }
+
+    @Override
+    public CommandCapabilities capabilities() {
+        return CommandCapabilities.builder()
+                .json()
+                .network(CommandCapabilities.NetworkMode.NEVER)
+                .writes(CommandCapabilities.WriteScope.CACHE,
+                        CommandCapabilities.WriteScope.SOURCES,
+                        CommandCapabilities.WriteScope.LOCKS)
+                .workspace(CommandCapabilities.WorkspaceMode.GLOBAL)
+                .dryRun()
+                .destructive()
+                .confirmation(CommandCapabilities.Confirmation.CONDITIONAL)
+                .build();
+    }
+
+    @Override
     public int execute(List<String> args) {
         if (args.isEmpty()) {
-            System.err.println("mjm: cache needs one subcommand — " + usage());
+            System.err.println(Ui.errPrefix() + "cache needs one subcommand — " + usage());
             return 2;
         }
         String subcommand = args.getFirst();
         List<String> rest = args.subList(1, args.size());
+        boolean json = rest.contains("--json");
+
         if (subcommand.equals("purge") || subcommand.equals("clean")) {
             boolean dryRun = false;
             boolean yes = false;
             for (String flag : rest) {
                 switch (flag) {
+                    case "--json" -> { }
                     case "--dry-run" -> dryRun = true;
                     case "--yes" -> yes = true;
                     default -> {
-                        System.err.println("mjm: cache " + subcommand + " takes --dry-run and "
-                                + "--yes only — got '" + flag + "'");
+                        String message = "cache " + subcommand + " takes --dry-run, --yes and --json only"
+                                + " — got '" + flag + "'";
+                        if (json) {
+                            JsonResult.error("cache", 2, "USAGE", message).emit(2);
+                        } else {
+                            System.err.println(Ui.errPrefix() + message);
+                        }
                         return 2;
                     }
                 }
             }
-            return purge(dryRun, yes);
+            return purge(subcommand, dryRun, yes, json);
         }
-        if (!rest.isEmpty()) {
-            System.err.println("mjm: cache " + subcommand + " takes no arguments — got '"
-                    + rest.getFirst() + "'");
-            return 2;
+
+        for (String flag : rest) {
+            if (!flag.equals("--json")) {
+                String message = "cache " + subcommand + " takes no arguments — got '" + flag + "'";
+                if (json) {
+                    JsonResult.error("cache", 2, "USAGE", message).emit(2);
+                } else {
+                    System.err.println(Ui.errPrefix() + message);
+                }
+                return 2;
+            }
         }
         return switch (subcommand) {
-            case "dir" -> dir();
-            case "size" -> size();
-            case "prune" -> prune();
+            case "dir" -> dir(json);
+            case "size" -> size(json);
+            case "prune" -> prune(json);
             default -> {
-                System.err.println("mjm: unknown cache subcommand '" + subcommand
-                        + "' — " + usage());
+                String message = "unknown cache subcommand '" + subcommand + "' — " + usage();
+                if (json) {
+                    JsonResult.error("cache", 2, "USAGE", message).emit(2);
+                } else {
+                    System.err.println(Ui.errPrefix() + message);
+                }
                 yield 2;
             }
         };
     }
 
-    private int dir() {
-        System.out.println("store   " + Paths.store());
-        System.out.println("sources " + Paths.sources());
-        System.out.println("locks   " + Paths.locks());
+    private int dir(boolean json) {
+        if (json) {
+            JsonObject paths = JsonUtils.object();
+            paths.put("store", Paths.store().toAbsolutePath().normalize().toString());
+            paths.put("sources", Paths.sources().toAbsolutePath().normalize().toString());
+            paths.put("locks", Paths.locks().toAbsolutePath().normalize().toString());
+            JsonResult.start("cache")
+                    .put("subcommand", "dir")
+                    .put("paths", paths)
+                    .emit(0);
+            return 0;
+        }
+        if (Ui.enabled()) {
+            System.out.println(Ui.heading("mjm local paths"));
+        }
+        System.out.println(Ui.dim("store   ") + Paths.store());
+        System.out.println(Ui.dim("sources ") + Paths.sources());
+        System.out.println(Ui.dim("locks   ") + Paths.locks());
         return 0;
     }
 
-    private int size() {
+    private int size(boolean json) {
         long store = bytes(Paths.store());
         long sources = bytes(Paths.sources());
         long locks = bytes(Paths.locks());
-        System.out.println("store   " + human(store));
-        System.out.println("sources " + human(sources));
-        System.out.println("locks   " + human(locks));
-        System.out.println("total   " + human(store + sources + locks));
+        long total = store + sources + locks;
+        if (json) {
+            JsonObject sizes = JsonUtils.object();
+            sizes.put("store", sizeJson(store));
+            sizes.put("sources", sizeJson(sources));
+            sizes.put("locks", sizeJson(locks));
+            sizes.put("total", sizeJson(total));
+            JsonResult.start("cache")
+                    .put("subcommand", "size")
+                    .put("sizes", sizes)
+                    .emit(0);
+            return 0;
+        }
+        if (Ui.enabled()) {
+            System.out.println(Ui.heading("mjm local sizes"));
+        }
+        System.out.println(Ui.dim("store   ") + human(store));
+        System.out.println(Ui.dim("sources ") + human(sources));
+        System.out.println(Ui.dim("locks   ") + human(locks));
+        System.out.println(Ui.dim("total   ") + Ui.strong(human(total)));
         return 0;
+    }
+
+    private static JsonObject sizeJson(long bytes) {
+        JsonObject result = JsonUtils.object();
+        result.put("bytes", bytes);
+        result.put("human", human(bytes));
+        return result;
     }
 
     /**
@@ -114,14 +198,19 @@ public final class CacheCommand implements Command {
      * {@code project=} line predates the sidecar and is kept — "unknown" is not
      * "dead".
      */
-    private int prune() {
+    private int prune(boolean json) {
+        int removedFiles = 0;
+        long reclaimed = 0;
         try {
             if (Files.isDirectory(Paths.locks())) {
                 try (Stream<Path> locks = Files.list(Paths.locks())) {
                     for (Path lock : locks.filter(path -> path.toString().endsWith(".lock"))
                             .toList()) {
                         if (projectGone(lock)) {
-                            Files.deleteIfExists(lock);
+                            reclaimed += sizeOf(lock);
+                            if (Files.deleteIfExists(lock)) {
+                                removedFiles++;
+                            }
                         }
                     }
                 }
@@ -133,7 +222,10 @@ public final class CacheCommand implements Command {
                             .filter(path -> path.getFileName().toString().startsWith("part-"))
                             .filter(path -> path.getFileName().toString().endsWith(".tmp"))
                             .toList()) {
-                        Files.deleteIfExists(entry);
+                        reclaimed += sizeOf(entry);
+                        if (Files.deleteIfExists(entry)) {
+                            removedFiles++;
+                        }
                     }
                 }
                 Path index = store.resolve("index");
@@ -142,15 +234,31 @@ public final class CacheCommand implements Command {
                         for (Path entry : entries
                                 .filter(path -> path.toString().endsWith(".url")).toList()) {
                             if (danglingIndexEntry(entry, store)) {
-                                Files.deleteIfExists(entry);
+                                reclaimed += sizeOf(entry);
+                                if (Files.deleteIfExists(entry)) {
+                                    removedFiles++;
+                                }
                             }
                         }
                     }
                 }
             }
         } catch (IOException e) {
-            System.err.println("mjm: cannot prune " + e.getMessage());
+            if (json) {
+                JsonResult.error("cache", 1, "PRUNE_FAILED",
+                        "cannot prune " + e.getMessage()).emit(1);
+            } else {
+                System.err.println(Ui.errPrefix() + "cannot prune " + e.getMessage());
+            }
             return 1;
+        }
+        if (json) {
+            JsonResult.start("cache")
+                    .put("subcommand", "prune")
+                    .put("removedFiles", removedFiles)
+                    .put("reclaimedBytes", reclaimed)
+                    .put("reclaimed", human(reclaimed))
+                    .emit(0);
         }
         return 0;
     }
@@ -183,11 +291,37 @@ public final class CacheCommand implements Command {
      * Deletes store and sources; locks, the project and mjm.lock stay.
      * Destructive, so it needs --yes; --dry-run only reports what would go.
      */
-    private int purge(boolean dryRun, boolean yes) {
+    private int purge(String subcommand, boolean dryRun, boolean yes, boolean json) {
+        List<Path> roots = List.of(Paths.store(), Paths.sources());
         long freed = 0;
         StringBuilder report = new StringBuilder();
         if (dryRun || !yes) {
-            for (Path root : List.of(Paths.store(), Paths.sources())) {
+            if (json) {
+                JsonArray rootArray = JsonUtils.array();
+                for (Path root : roots) {
+                    long size = bytes(root);
+                    JsonObject entry = JsonUtils.object();
+                    entry.put("path", root.toAbsolutePath().normalize().toString());
+                    entry.put("bytes", size);
+                    entry.put("human", human(size));
+                    rootArray.add(entry);
+                }
+                JsonResult result = JsonResult.start("cache")
+                        .put("subcommand", subcommand)
+                        .put("dryRun", dryRun)
+                        .put("requiresYes", !yes)
+                        .put("roots", rootArray);
+                if (!dryRun) {
+                    result.diagnostic("error", "CONFIRMATION_REQUIRED",
+                            "cache purge needs --yes",
+                            List.of(List.of("mjm", "cache", "purge", "--yes")));
+                    result.emit(2);
+                    return 2;
+                }
+                result.emit(0);
+                return 0;
+            }
+            for (Path root : roots) {
                 long size = bytes(root);
                 System.out.println((dryRun ? "would purge " : "purge ") + root
                         + (size > 0 ? " (" + human(size) + ")" : " (empty)"));
@@ -198,21 +332,47 @@ public final class CacheCommand implements Command {
             }
             return 0;
         }
-        for (Path root : List.of(Paths.store(), Paths.sources())) {
+
+        JsonArray removed = JsonUtils.array();
+        for (Path root : roots) {
             long size = bytes(root);
             try {
                 deleteTree(root);
             } catch (IOException e) {
-                System.err.println("mjm: cannot remove " + root + " — " + e.getMessage());
+                if (json) {
+                    JsonResult.error("cache", 1, "PURGE_FAILED",
+                            "cannot remove " + root + " — " + e.getMessage()).emit(1);
+                } else {
+                    System.err.println(Ui.errPrefix() + "cannot remove " + root + " — " + e.getMessage());
+                }
                 return 1;
             }
             if (size > 0) {
                 freed += size;
-                report.append("\nfreed ").append(human(size)).append(" from ").append(root);
+                if (json) {
+                    JsonObject entry = JsonUtils.object();
+                    entry.put("path", root.toAbsolutePath().normalize().toString());
+                    entry.put("bytes", size);
+                    entry.put("human", human(size));
+                    removed.add(entry);
+                } else {
+                    report.append("\nfreed ").append(human(size)).append(" from ").append(root);
+                }
             }
         }
+        if (json) {
+            JsonResult.start("cache")
+                    .put("subcommand", subcommand)
+                    .put("dryRun", false)
+                    .put("requiresYes", false)
+                    .put("freedBytes", freed)
+                    .put("freed", human(freed))
+                    .put("removed", removed)
+                    .emit(0);
+            return 0;
+        }
         if (report.isEmpty()) {
-            System.out.println("nothing to purge");
+            System.out.println(Ui.dim("nothing to purge"));
             return 0;
         }
         System.out.println(report.toString().strip());
@@ -231,6 +391,14 @@ public final class CacheCommand implements Command {
             for (Path path : walk.sorted(java.util.Comparator.reverseOrder()).toList()) {
                 Files.deleteIfExists(path);
             }
+        }
+    }
+
+    private static long sizeOf(Path path) {
+        try {
+            return Files.isRegularFile(path) ? Files.size(path) : 0;
+        } catch (IOException e) {
+            return 0;
         }
     }
 

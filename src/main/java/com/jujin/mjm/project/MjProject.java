@@ -27,6 +27,13 @@ import java.util.Map;
  *                        resolve into mjm.lock but never reach the compile
  *                        visibility, the runtime classpath or a published
  *                        descriptor (Cargo's dev-dependencies)
+ * @param toolchain       {@code [toolchain].jars} — artifact ids that are
+ *                        build/test machinery, not part of the running
+ *                        program. They are excluded from the merged uber-jar
+ *                        and, when {@code bundle --toolchain} is used, shipped
+ *                        under {@code lib/toolchain/}. This is packaging
+ *                        metadata only; it does not change resolution or
+ *                        visibility.
  */
 public record MjProject(
         String name,
@@ -47,7 +54,8 @@ public record MjProject(
         List<String> processors,
         List<Requirement> processorRequirements,
         List<String> testInclude,
-        List<String> testExclude) {
+        List<String> testExclude,
+        List<String> toolchain) {
 
     public MjProject {
         if (requirements == null) {
@@ -90,5 +98,9 @@ public record MjProject(
             testExclude = List.of();
         }
         testExclude = List.copyOf(testExclude);
+        if (toolchain == null) {
+            toolchain = List.of();
+        }
+        toolchain = List.copyOf(toolchain);
     }
 }

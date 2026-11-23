@@ -87,20 +87,50 @@ public final class AuditCommand implements Command {
     private record Failed(String id, String error) {}
 
     @Override
+    public Command.Category category() {
+        return Command.Category.INSPECT;
+    }
+
+    @Override
+    public int order() {
+        return 60;
+    }
+
+    @Override
+    public CommandCapabilities capabilities() {
+        return CommandCapabilities.builder()
+                .json()
+                .network(CommandCapabilities.NetworkMode.ALWAYS)
+                .workspace(CommandCapabilities.WorkspaceMode.MODULE)
+                .build();
+    }
+
+    @Override
     public int execute(List<String> args) {
+        boolean json = args.contains("--json");
+        if (json && Workspaces.rootAt(projectDir).isPresent() && !hasModuleOption(args)) {
+            JsonResult.error("audit", 2, "MODULE_REQUIRED",
+                    "this directory is a workspace root — say which module: --module <path>")
+                    .emit(2);
+            return 2;
+        }
         Integer workspace = WorkspaceRun.requireModule(projectDir, args,
                 (dir, rest) -> new AuditCommand(dir).execute(rest));
         if (workspace != null) {
             return workspace;
         }
-        boolean json = false;
         boolean includeDev = false;
         for (String arg : args) {
             switch (arg) {
-                case "--json" -> json = true;
+                case "--json" -> { }
                 case "--dev" -> includeDev = true;
                 default -> {
-                    System.err.println("mjm: audit takes --json and --dev only — got '" + arg + "'");
+                    String message = "audit takes --json and --dev only — got '" + arg + "'";
+                    if (json) {
+                        JsonResult.error("audit", 2, "USAGE", message).emit(2);
+                    } else {
+                        System.err.println(Ui.errPrefix() + message);
+                    }
                     return 2;
                 }
             }
@@ -110,15 +140,29 @@ public final class AuditCommand implements Command {
         try {
             Path lock = projectDir.resolve("mjm.lock");
             if (!Files.exists(lock)) {
-                System.err.println("mjm: no mjm.lock in " + projectDir + " — run mjm lock first");
+                String message = "no mjm.lock in " + projectDir + " — run mjm lock first";
+                if (json) {
+                    JsonResult.error("audit", 1, "LOCK_MISSING", message).emit(1);
+                } else {
+                    System.err.println(Ui.errPrefix() + message);
+                }
                 return 1;
             }
             locked = LockFileReader.read(Files.readString(lock));
         } catch (IOException e) {
-            System.err.println("mjm: cannot read mjm.lock in " + projectDir);
+            String message = "cannot read mjm.lock in " + projectDir;
+            if (json) {
+                JsonResult.error("audit", 1, "LOCK_UNREADABLE", message).emit(1);
+            } else {
+                System.err.println(Ui.errPrefix() + message);
+            }
             return 1;
         } catch (RuntimeException e) {
-            System.err.println("mjm: " + e.getMessage());
+            if (json) {
+                JsonResult.error("audit", 1, "LOCK_INVALID", e.getMessage()).emit(1);
+            } else {
+                System.err.println(Ui.errPrefix() + e.getMessage());
+            }
             return 1;
         }
 
@@ -390,6 +434,15 @@ public final class AuditCommand implements Command {
     private void printJson(List<Vulnerable> vulnerable, List<NotChecked> notChecked,
                            List<Failed> failures) {
         var root = JsonUtils.object();
+        boolean failed = !vulnerable.isEmpty() || !failures.isEmpty();
+        root.put("schemaVersion", CommandCatalog.SCHEMA_VERSION);
+        root.put("kind", "commandResult");
+        root.put("command", "audit");
+        root.put("status", failed ? "failed" : "ok");
+        root.put("exitCode", failed ? 1 : 0);
+        root.put("dryRun", false);
+        root.put("offline", com.jujin.mjm.store.ArtifactStore.isOffline());
+        root.put("diagnostics", JsonUtils.array());
 
         var vulnArray = JsonUtils.array();
         for (Vulnerable entry : vulnerable) {
@@ -438,6 +491,7 @@ public final class AuditCommand implements Command {
             failedArray.add(object);
         }
         root.put("failures", failedArray);
+        JsonResult.markEmitted();
         System.out.println(root);
     }
 
@@ -446,12 +500,13 @@ public final class AuditCommand implements Command {
         if (vulnerable.isEmpty()) {
             // a failed query means the closure was not fully checked, so the
             // report must not say "clean" — only the checked part is clean
-            System.out.println(failures.isEmpty()
+            String summary = failures.isEmpty()
                     ? "checked " + checked + " dependencies; no known vulnerabilities"
                     : "checked " + checked + " dependencies; " + failures.size()
-                            + " could not be checked");
+                            + " could not be checked";
+            System.out.println(failures.isEmpty() ? Ui.ok(summary) : Ui.warn(summary));
         } else {
-            System.out.println("vulnerabilities:");
+            System.out.println(Ui.fail("vulnerabilities:"));
             for (Vulnerable entry : vulnerable) {
                 System.out.println("  " + entry.id() + " " + entry.version());
                 for (Advisory advisory : entry.advisories()) {
@@ -470,16 +525,21 @@ public final class AuditCommand implements Command {
             }
         }
         if (!notChecked.isEmpty()) {
-            System.out.println("not checked:");
+            System.out.println(Ui.dim("not checked:"));
             for (NotChecked entry : notChecked) {
                 System.out.println("  " + entry.id() + " — " + entry.reason());
             }
         }
         if (!failures.isEmpty()) {
-            System.out.println("failures:");
+            System.out.println(Ui.fail("failures:"));
             for (Failed failure : failures) {
                 System.out.println("  " + failure.id() + " — " + failure.error());
             }
         }
     }
+    private static boolean hasModuleOption(List<String> args) {
+        return args.stream().anyMatch(arg ->
+                arg.equals("--module") || arg.startsWith("--module="));
+    }
+
 }

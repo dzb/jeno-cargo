@@ -207,6 +207,31 @@ class CleanOutdatedTest {
     }
 
     @Test
+    void jsonCleanReportsTheRemovedTargetTree() throws Exception {
+        Files.createDirectories(dir.resolve("target/classes/demo"));
+        Files.writeString(dir.resolve("target/classes/demo/A.class"), "class-bytes");
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        PrintStream original = System.out;
+        int exit;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            exit = new CleanCommand(dir).execute(List.of("--json"));
+        } finally {
+            System.setOut(original);
+        }
+
+        assertEquals(0, exit);
+        assertFalse(Files.exists(dir.resolve("target")));
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                out.toString(StandardCharsets.UTF_8));
+        assertEquals("clean", json.getString("command"));
+        var result = json.getArray("modules").getObject(0).getObject("result");
+        assertEquals(1, result.getInt("removedCount"));
+        assertEquals("target", result.getArray("removed").getObject(0).getString("kind"));
+        assertTrue(result.getArray("removed").getObject(0).getLong("bytes") > 0);
+    }
+
+    @Test
     void cleanSaysWhenThereIsNothingToDo() throws Exception {
         java.io.PrintStream original = System.out;
         var buffer = new java.io.ByteArrayOutputStream();
@@ -327,6 +352,10 @@ class CleanOutdatedTest {
             String out = runOutdated(1, "--json");
 
             var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(out);
+            assertEquals(1, json.getInt("schemaVersion"));
+            assertEquals("outdated", json.getString("command"));
+            assertEquals("ok", json.getString("status"));
+            assertEquals(0, json.getInt("exitCode"));
             assertEquals(false, json.getBoolean("upToDate"));
             var updates = json.getArray("updates");
             assertEquals(1, updates.size());

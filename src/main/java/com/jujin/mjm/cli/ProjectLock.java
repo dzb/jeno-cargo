@@ -82,7 +82,7 @@ final class ProjectLock {
         try {
             Files.createDirectories(lockPath.getParent());
         } catch (IOException e) {
-            System.err.println("mjm: cannot create " + lockPath.getParent()
+            System.err.println(Ui.errPrefix() + "cannot create " + lockPath.getParent()
                     + " — " + e.getMessage());
             return 1;
         }
@@ -101,7 +101,7 @@ final class ProjectLock {
             }
             return body.getAsInt();
         } catch (IOException e) {
-            System.err.println("mjm: cannot lock " + lockPath + " — " + e.getMessage());
+            System.err.println(Ui.errPrefix() + "cannot lock " + lockPath + " — " + e.getMessage());
             return 1;
         } finally {
             queue.unlock();

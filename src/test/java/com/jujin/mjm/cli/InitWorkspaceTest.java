@@ -88,6 +88,40 @@ class InitWorkspaceTest {
     }
 
     @Test
+    void aLegacyMjManifestIsNamedByTheScan() throws Exception {
+        Path old = Files.createDirectories(dir.resolve("old-module"));
+        Files.writeString(old.resolve("mj.toml"), """
+                [project]
+                name = "old"
+                version = "2.0.2"
+                """);
+
+        Result result = runCaptured(dir, "--ws");
+
+        assertEquals(1, result.exit());
+        assertFalse(Files.exists(dir.resolve("mjm.ws.toml")));
+        assertTrue(result.err().contains("found legacy mj.toml in: old-module"),
+                result.err());
+        assertTrue(result.err().contains("mjm does not read mj.toml"), result.err());
+    }
+
+    @Test
+    void anExplicitLegacyModuleGetsTheMigrationHint() throws Exception {
+        Path old = Files.createDirectories(dir.resolve("old-module"));
+        Files.writeString(old.resolve("mj.toml"), """
+                [project]
+                name = "old"
+                version = "2.0.2"
+                """);
+
+        Result result = runCaptured(dir, "--ws", "old-module");
+
+        assertEquals(1, result.exit());
+        assertTrue(result.err().contains("has mj.toml, not mjm.toml"), result.err());
+        assertTrue(result.err().contains("mjm does not read the old name"), result.err());
+    }
+
+    @Test
     void theReaderWalksUpAndValidatesWhatItFinds(@TempDir Path elsewhere) throws Exception {
         module("libs/core");
         assertEquals(0, run(dir, "--ws", "libs/core"), errors());
@@ -151,6 +185,59 @@ class InitWorkspaceTest {
         } finally {
             System.setErr(original);
         }
+    }
+
+    private static Result runCaptured(Path projectDir, String... args) {
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        int exit;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
+            exit = new InitCommand(projectDir).execute(List.of(args));
+        } finally {
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+        }
+        return new Result(exit, out.toString(StandardCharsets.UTF_8),
+                err.toString(StandardCharsets.UTF_8));
+    }
+
+    private record Result(int exit, String out, String err) {}
+
+    @Test
+    void jsonProjectInitReportsTheCreatedManifest() throws Exception {
+        Result result = runCaptured(dir, "--json");
+
+        assertEquals(0, result.exit(), result.err());
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(result.out());
+        assertEquals("init", json.getString("command"));
+        assertEquals("project", json.getString("mode"));
+        assertEquals(false, json.getBoolean("overwritten"));
+        assertEquals(dir.resolve("mjm.toml").toAbsolutePath().normalize().toString(),
+                json.getString("file"));
+        assertEquals(InitCommand.nameOf(dir), json.getObject("project").getString("name"));
+        assertTrue(Files.exists(dir.resolve("mjm.toml")));
+    }
+
+    @Test
+    void jsonWorkspaceInitReportsEveryModule() throws Exception {
+        module("libs/core");
+        module("apps/web");
+
+        Result result = runCaptured(dir, "--ws", "--json");
+
+        assertEquals(0, result.exit(), result.err());
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(result.out());
+        assertEquals("workspace", json.getString("mode"));
+        assertEquals(dir.resolve("mjm.ws.toml").toAbsolutePath().normalize().toString(),
+                json.getString("file"));
+        assertEquals(2, json.getInt("moduleCount"));
+        assertEquals(java.util.Set.of("apps/web", "libs/core"),
+                java.util.Set.copyOf(json.getArray("modules").toList().stream()
+                        .map(String::valueOf).toList()));
     }
 
     @Test

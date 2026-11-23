@@ -80,7 +80,12 @@ class AuditCommandTest {
         Result result = audit("--json");
 
         assertEquals(1, result.exit());
-        Map<String, Object> root = JsonUtils.parseObject(result.out().strip()).toMap();
+        var document = JsonUtils.parseObject(result.out().strip());
+        assertEquals(1, document.getInt("schemaVersion"));
+        assertEquals("audit", document.getString("command"));
+        assertEquals("failed", document.getString("status"));
+        assertEquals(1, document.getInt("exitCode"));
+        Map<String, Object> root = document.toMap();
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> entries = (List<Map<String, Object>>) root.get("vulnerabilities");
         assertEquals(1, entries.size());

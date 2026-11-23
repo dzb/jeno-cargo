@@ -9,8 +9,48 @@ import java.util.List;
  */
 public interface Command {
 
+    /** The help-page band a command belongs to; commands own their own metadata. */
+    enum Category {
+        PROJECT("Project"),
+        BUILD("Build & run"),
+        INSPECT("Inspect"),
+        PUBLISH("Publish"),
+        MAINTAIN("Maintain"),
+        OTHER("Other");
+
+        private final String title;
+
+        Category(String title) {
+            this.title = title;
+        }
+
+        public String title() {
+            return title;
+        }
+    }
+
     /** The command word on the command line, e.g. {@code lock}. */
     String name();
+
+    /**
+     * The help-page grouping for this command. The default keeps custom or
+     * test commands out of the curated sections rather than guessing a role.
+     */
+    default Category category() {
+        return Category.OTHER;
+    }
+
+    /** Relative position inside the category's help band; lower comes first. */
+    default int order() {
+        return 100;
+    }
+
+    /**
+     * What an agent (or shell completion) may rely on before invoking this
+     * command: output support, network use, write scopes, workspace policy and
+     * safety gates. Every command declares this explicitly.
+     */
+    CommandCapabilities capabilities();
 
     /**
      * Alternate command words that dispatch to the same command — e.g.

@@ -1,5 +1,8 @@
 package com.jujin.mjm.cli;
 
+import com.jujin.freeway.commons.json.JsonArray;
+import com.jujin.freeway.commons.json.JsonObject;
+import com.jujin.freeway.commons.json.JsonUtils;
 import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.mjm.project.Descriptor;
 import com.jujin.mjm.project.DescriptorReader;
@@ -66,7 +69,35 @@ public final class InfoCommand implements Command {
     }
 
     @Override
+    public Command.Category category() {
+        return Command.Category.INSPECT;
+    }
+
+    @Override
+    public int order() {
+        return 30;
+    }
+
+    @Override
+    public CommandCapabilities capabilities() {
+        return CommandCapabilities.builder()
+                .json()
+                .network(CommandCapabilities.NetworkMode.OPTIONAL)
+                .writes(CommandCapabilities.WriteScope.CACHE,
+                        CommandCapabilities.WriteScope.SOURCES)
+                .workspace(CommandCapabilities.WorkspaceMode.MODULE)
+                .build();
+    }
+
+    @Override
     public int execute(List<String> args) {
+        boolean json = args.contains("--json");
+        if (json && Workspaces.rootAt(projectDir).isPresent() && !hasModuleOption(args)) {
+            JsonResult.error("info", 2, "MODULE_REQUIRED",
+                    "this directory is a workspace root — say which module: --module <path>")
+                    .emit(2);
+            return 2;
+        }
         Integer workspace = WorkspaceRun.requireModule(projectDir, args,
                 (dir, rest) -> new InfoCommand(store, dir).execute(rest));
         if (workspace != null) {
@@ -75,17 +106,35 @@ public final class InfoCommand implements Command {
         boolean fetchSource = false;
         String id = null;
         for (String arg : args) {
-            if (arg.equals("--source")) {
+            if (arg.equals("--json")) {
+                continue;
+            } else if (arg.equals("--source")) {
                 fetchSource = true;
             } else if (id == null) {
                 id = arg;
             } else {
-                System.err.println("mjm: info takes one dependency id — mjm info \"group:artifact\"");
+                String message = "info takes one dependency id — mjm info \"group:artifact\"";
+                if (json) {
+                    JsonResult.error("info", 2, "USAGE", message).emit(2);
+                } else {
+                    System.err.println(Ui.errPrefix() + message);
+                }
                 return 2;
             }
         }
         if (id == null) {
-            System.err.println("mjm: info needs a dependency id — mjm info \"group:artifact\"");
+            String message = "info needs a dependency id — mjm info \"group:artifact\"";
+            if (json) {
+                JsonResult.error("info", 2, "USAGE", message).emit(2);
+            } else {
+                System.err.println(Ui.errPrefix() + message);
+            }
+            return 2;
+        }
+        if (json && fetchSource) {
+            JsonResult.error("info", 2, "JSON_SOURCE_UNSUPPORTED",
+                    "info --source is not machine-readable yet; run info --json without --source")
+                    .emit(2);
             return 2;
         }
         final String wanted = id;
@@ -94,7 +143,19 @@ public final class InfoCommand implements Command {
         try {
             locked = LockFileReader.read(Files.readString(projectDir.resolve("mjm.lock")));
         } catch (IOException e) {
-            System.err.println("mjm: no readable mjm.lock in " + projectDir + " — run mjm lock first");
+            String message = "no readable mjm.lock in " + projectDir + " — run mjm lock first";
+            if (json) {
+                JsonResult.error("info", 1, "LOCK_UNREADABLE", message).emit(1);
+            } else {
+                System.err.println(Ui.errPrefix() + message);
+            }
+            return 1;
+        } catch (RuntimeException e) {
+            if (json) {
+                JsonResult.error("info", 1, "LOCK_INVALID", e.getMessage()).emit(1);
+            } else {
+                System.err.println(Ui.errPrefix() + e.getMessage());
+            }
             return 1;
         }
         LockedArtifact artifact = locked.stream()
@@ -102,19 +163,29 @@ public final class InfoCommand implements Command {
                 .findFirst()
                 .orElse(null);
         if (artifact == null) {
-            System.err.println("mjm: '" + wanted + "' is not in the closure — mjm why " + wanted
-                    + " shows what is");
+            String message = "'" + wanted + "' is not in the closure — mjm why " + wanted
+                    + " shows what is";
+            if (json) {
+                JsonResult.error("info", 1, "ARTIFACT_NOT_FOUND", message).emit(1);
+            } else {
+                System.err.println(Ui.errPrefix() + message);
+            }
             return 1;
         }
 
         Substitutions substitutions = Substitutions.forProject(projectDir);
-        System.out.println(artifact.id() + "@" + artifact.version()
-                + switch (artifact.scope()) {
-                    case MAIN -> "";
-                    case DEV -> "  [dev]";
-                    case PROCESSOR -> "  [processor]";
-                }
-                + substitutions.marker(artifact.id()));
+        if (json) {
+            emitJson(artifact, substitutions);
+            return 0;
+        }
+        String scope = switch (artifact.scope()) {
+            case MAIN -> "";
+            case DEV -> "  [dev]";
+            case PROCESSOR -> "  [processor]";
+        };
+        System.out.println(Ui.strong(artifact.id() + "@" + artifact.version())
+                + Ui.dim(scope)
+                + Ui.accent(substitutions.marker(artifact.id())));
 
         Descriptor descriptor = descriptor(artifact);
         if (descriptor != null) {
@@ -156,6 +227,195 @@ public final class InfoCommand implements Command {
             return 0;
         }
         return fetchSource(artifact);
+    }
+
+    // ------------------------------------------------------------------
+    // JSON export
+    // ------------------------------------------------------------------
+
+    /** A dependency-consumer view; context-only fields stay under context. */
+    private void emitJson(LockedArtifact artifact, Substitutions substitutions) {
+        int colon = artifact.id().indexOf(':');
+        String group = colon > 0 ? artifact.id().substring(0, colon) : null;
+        String name = colon > 0 ? artifact.id().substring(colon + 1) : artifact.id();
+
+        JsonObject identity = JsonUtils.object();
+        identity.put("id", artifact.id());
+        if (group != null) {
+            identity.put("group", group);
+        }
+        identity.put("artifact", name);
+        identity.put("version", artifact.version());
+        identity.put("sha256", artifact.sha256());
+        if (artifact.metaSha256() != null) {
+            identity.put("metaSha256", artifact.metaSha256());
+        }
+
+        JsonObject provenance = JsonUtils.object();
+        provenance.put("source", artifact.source());
+        provenance.put("url", artifact.url());
+        provenance.put("readableUrl", artifact.readableUrl(projectDir));
+        repositoryFacts(provenance, artifact.source());
+        Path storedJar = store.findByDigest(artifact.sha256(), ArtifactStore.Kind.JAR);
+        JsonObject jar = JsonUtils.object();
+        if (storedJar != null) {
+            jar.put("path", storedJar.toAbsolutePath().normalize().toString());
+        }
+        Path localClasses = substitutions.classesOrNull(artifact.id());
+        if (localClasses != null) {
+            jar.put("localPath", localClasses.toAbsolutePath().normalize().toString());
+            jar.put("local", true);
+        } else {
+            jar.put("local", false);
+        }
+        provenance.put("jar", jar);
+
+        MetadataRef metadata = metadata(artifact);
+        if (metadata != null) {
+            JsonObject meta = JsonUtils.object();
+            meta.put("kind", metadata.kind().name().toLowerCase(java.util.Locale.ROOT));
+            meta.put("sha256", artifact.metaSha256());
+            meta.put("path", metadata.path().toAbsolutePath().normalize().toString());
+            provenance.put("metadata", meta);
+        }
+
+        JsonObject context = JsonUtils.object();
+        context.put("scope", artifact.scope().name().toLowerCase(java.util.Locale.ROOT));
+        context.put("depth", artifact.depth());
+        context.put("local", localClasses != null);
+        context.put("marker", substitutions.marker(artifact.id()));
+
+        JsonObject source = JsonUtils.object();
+        String page = sourcePage(artifact);
+        if (page != null) {
+            source.put("page", page);
+        }
+        String archive = sourceArchive(artifact);
+        if (archive != null) {
+            source.put("archive", archive);
+        }
+        source.put("fetched", false);
+
+        JsonResult result = JsonResult.start("info")
+                .workspace(projectDir, "single")
+                .put("artifact", identity)
+                .put("provenance", provenance)
+                .put("context", context);
+        Descriptor descriptor = descriptor(artifact);
+        if (descriptor != null) {
+            result.put("descriptor", descriptorJson(descriptor));
+        }
+        if (!source.isEmpty()) {
+            result.put("source", source);
+        }
+        result.emit(0);
+    }
+
+    private static JsonObject descriptorJson(Descriptor descriptor) {
+        JsonObject result = JsonUtils.object();
+        result.put("name", descriptor.name());
+        if (descriptor.group() != null) {
+            result.put("group", descriptor.group());
+        }
+        result.put("version", descriptor.version());
+        if (descriptor.javaVersion() != null) {
+            result.put("javaVersion", descriptor.javaVersion());
+        }
+        if (descriptor.summary() != null) {
+            result.put("summary", descriptor.summary());
+        }
+        if (descriptor.homepage() != null) {
+            result.put("homepage", descriptor.homepage());
+        }
+        if (descriptor.license() != null) {
+            result.put("license", descriptor.license());
+        }
+        JsonArray dependencies = JsonUtils.array();
+        for (com.jujin.mjm.project.Requirement requirement : descriptor.requirements()) {
+            JsonObject dependency = JsonUtils.object();
+            dependency.put("id", requirement.id());
+            dependency.put("species", requirement.species().name()
+                    .toLowerCase(java.util.Locale.ROOT));
+            if (requirement.version() != null) {
+                dependency.put("version", requirement.version());
+            }
+            if (requirement.tag() != null) {
+                dependency.put("tag", requirement.tag());
+            }
+            if (requirement.repository() != null) {
+                dependency.put("repository", requirement.repository());
+            }
+            if (requirement.classifier() != null) {
+                dependency.put("classifier", requirement.classifier());
+            }
+            dependencies.add(dependency);
+        }
+        result.put("dependencies", dependencies);
+        if (!descriptor.retract().isEmpty()) {
+            JsonObject retract = JsonUtils.object();
+            descriptor.retract().forEach(retract::put);
+            result.put("retract", retract);
+        }
+        return result;
+    }
+
+    private static void repositoryFacts(JsonObject provenance, String source) {
+        if (source.equals("central")) {
+            provenance.put("repository", "central");
+            provenance.put("layout", "maven");
+            return;
+        }
+        if (source.equals("url")) {
+            provenance.put("layout", "plain-url");
+            return;
+        }
+        if (source.startsWith("gh:")) {
+            provenance.put("repository", source);
+            provenance.put("layout", "github-release");
+            provenance.put("transport", "https");
+            return;
+        }
+        try {
+            Repository repository = Repository.parse(source);
+            provenance.put("repository", repository.declaration());
+            provenance.put("layout", repository.layout().name()
+                    .toLowerCase(java.util.Locale.ROOT));
+            provenance.put("transport", repository.transport().name()
+                    .toLowerCase(java.util.Locale.ROOT));
+        } catch (RuntimeException e) {
+            provenance.put("layout", "unknown");
+        }
+    }
+
+    private MetadataRef metadata(LockedArtifact artifact) {
+        if (artifact.metaSha256() == null) {
+            return null;
+        }
+        for (ArtifactStore.Kind kind : List.of(
+                ArtifactStore.Kind.DESCRIPTOR, ArtifactStore.Kind.POM)) {
+            Path path = store.findByDigest(artifact.metaSha256(), kind);
+            if (path != null) {
+                return new MetadataRef(kind, path);
+            }
+        }
+        return null;
+    }
+
+    private static String sourceArchive(LockedArtifact artifact) {
+        Matcher matcher = RELEASE_DOWNLOAD.matcher(artifact.url());
+        if (!matcher.matches()) {
+            return null;
+        }
+        String host = artifact.url().substring(0, artifact.url().indexOf('/', 8));
+        return host + "/" + matcher.group(1) + "/" + matcher.group(2)
+                + "/archive/refs/tags/" + matcher.group(3) + ".tar.gz";
+    }
+
+    private record MetadataRef(ArtifactStore.Kind kind, Path path) {}
+
+    private static boolean hasModuleOption(List<String> args) {
+        return args.stream().anyMatch(arg ->
+                arg.equals("--module") || arg.startsWith("--module="));
     }
 
     // ------------------------------------------------------------------
@@ -201,14 +461,14 @@ public final class InfoCommand implements Command {
             return fetchNativeTree(artifact, target);
         }
         if (artifact.source().equals("url")) {
-            System.err.println("mjm: '" + artifact.id() + "' is a bare URL leaf — a jar URL "
+            System.err.println(Ui.errPrefix() + "'" + artifact.id() + "' is a bare URL leaf — a jar URL "
                     + "carries no tag, so there is no source tree to fetch");
             return 1;
         }
         Repository repository = artifact.source().equals("central")
                 ? null : Repository.parse(artifact.source());
         if (repository != null && repository.layout() == Repository.Layout.MJM) {
-            System.err.println("mjm: '" + artifact.id() + "' comes from an mjm-layout repository — "
+            System.err.println(Ui.errPrefix() + "'" + artifact.id() + "' comes from an mjm-layout repository — "
                     + "this origin has no source tree (it publishes jars only)");
             return 1;
         }
@@ -218,7 +478,7 @@ public final class InfoCommand implements Command {
     private int fetchNativeTree(LockedArtifact artifact, Path target) {
         Matcher matcher = RELEASE_DOWNLOAD.matcher(artifact.url());
         if (!matcher.matches()) {
-            System.err.println("mjm: cannot read the release coordinates out of " + artifact.url());
+            System.err.println(Ui.errPrefix() + "cannot read the release coordinates out of " + artifact.url());
             return 1;
         }
         String host = artifact.url().substring(0, artifact.url().indexOf('/', 8));
@@ -231,7 +491,7 @@ public final class InfoCommand implements Command {
         try {
             tarGz = store.ensure(archive, ArtifactStore.Kind.ARCHIVE);
         } catch (RuntimeException e) {
-            System.err.println("mjm: no source archive for " + owner + "/" + repo + "@" + tag
+            System.err.println(Ui.errPrefix() + "no source archive for " + owner + "/" + repo + "@" + tag
                     + " — " + e.getMessage());
             System.err.println("  browse instead: " + host + "/" + owner + "/" + repo
                     + "/tree/" + tag);
@@ -248,7 +508,7 @@ public final class InfoCommand implements Command {
     private int fetchCentralSources(LockedArtifact artifact, Repository repository, Path target) {
         int colon = artifact.id().indexOf(':');
         if (colon < 0) {
-            System.err.println("mjm: '" + artifact.id() + "' is not a group:artifact coordinate");
+            System.err.println(Ui.errPrefix() + "'" + artifact.id() + "' is not a group:artifact coordinate");
             return 1;
         }
         String group = artifact.id().substring(0, colon);
@@ -262,7 +522,7 @@ public final class InfoCommand implements Command {
         try {
             jar = store.ensure(url, ArtifactStore.Kind.JAR);
         } catch (RuntimeException e) {
-            System.err.println("mjm: " + artifact.id() + "@" + artifact.version()
+            System.err.println(Ui.errPrefix() + artifact.id() + "@" + artifact.version()
                     + " published no sources jar");
             System.err.println("  this publisher shipped binaries only — read the bytecode with "
                     + "your IDE's decompiler, or ask the publisher for source access");
@@ -287,12 +547,12 @@ public final class InfoCommand implements Command {
                     "-C", target.toString(), "--strip-components=1")
                     .inheritIO().start();
             if (tar.waitFor() != 0) {
-                System.err.println("mjm: cannot unpack " + tarGz);
+                System.err.println(Ui.errPrefix() + "cannot unpack " + tarGz);
                 return false;
             }
             return true;
         } catch (IOException e) {
-            System.err.println("mjm: cannot run tar — is it on the PATH? " + e.getMessage());
+            System.err.println(Ui.errPrefix() + "cannot run tar — is it on the PATH? " + e.getMessage());
             return false;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -306,7 +566,7 @@ public final class InfoCommand implements Command {
             for (var entry : zip.stream().toList()) {
                 Path destination = target.resolve(entry.getName()).normalize();
                 if (!destination.startsWith(target)) {
-                    System.err.println("mjm: the sources jar contains a path escape: "
+                    System.err.println(Ui.errPrefix() + "the sources jar contains a path escape: "
                             + entry.getName());
                     return false;
                 }
@@ -321,7 +581,7 @@ public final class InfoCommand implements Command {
             }
             return true;
         } catch (IOException e) {
-            System.err.println("mjm: cannot read " + jar + ": " + e.getMessage());
+            System.err.println(Ui.errPrefix() + "cannot read " + jar + ": " + e.getMessage());
             return false;
         }
     }

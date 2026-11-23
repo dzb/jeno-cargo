@@ -70,19 +70,48 @@ public final class TreeCommand implements Command {
     }
 
     @Override
+    public Command.Category category() {
+        return Command.Category.INSPECT;
+    }
+
+    @Override
+    public int order() {
+        return 10;
+    }
+
+    @Override
+    public CommandCapabilities capabilities() {
+        return CommandCapabilities.builder()
+                .json()
+                .network(CommandCapabilities.NetworkMode.OPTIONAL)
+                .writes(CommandCapabilities.WriteScope.CACHE)
+                .workspace(CommandCapabilities.WorkspaceMode.MODULE)
+                .build();
+    }
+
+    @Override
     public int execute(List<String> args) {
+        boolean json = args.contains("--json");
+        if (json && Workspaces.rootAt(projectDir).isPresent() && !hasModuleOption(args)) {
+            JsonResult.error("tree", 2, "MODULE_REQUIRED",
+                    "this directory is a workspace root — say which module: --module <path>")
+                    .emit(2);
+            return 2;
+        }
         Integer workspace = WorkspaceRun.requireModule(projectDir, args,
                 (dir, rest) -> new TreeCommand(store, pomSource, descriptorSource, dir)
                         .execute(rest));
         if (workspace != null) {
             return workspace;
         }
-        boolean json = false;
         for (String arg : args) {
-            if (arg.equals("--json")) {
-                json = true;
-            } else {
-                System.err.println("mjm: tree takes no arguments except --json");
+            if (!arg.equals("--json")) {
+                String message = "tree takes no arguments except --json";
+                if (json) {
+                    JsonResult.error("tree", 2, "USAGE", message).emit(2);
+                } else {
+                    System.err.println(Ui.errPrefix() + message);
+                }
                 return 2;
             }
         }
@@ -90,15 +119,23 @@ public final class TreeCommand implements Command {
         try {
             project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
         } catch (IOException e) {
-            System.err.println("mjm: no mjm.toml in " + projectDir
-                    + " — run mjm init to create one");
+            String message = "no mjm.toml in " + projectDir + " — run mjm init to create one";
+            if (json) {
+                JsonResult.error("tree", 1, "MANIFEST_MISSING", message).emit(1);
+            } else {
+                System.err.println(Ui.errPrefix() + message);
+            }
             return 1;
         }
         ResolvedGraph graph;
         try {
             graph = LockedGraphView.graph(projectDir, project, pomSource, descriptorSource);
         } catch (LockedGraphView.OutOfDateException e) {
-            System.err.println("mjm: " + e.getMessage());
+            if (json) {
+                JsonResult.error("tree", 1, "LOCK_STALE", e.getMessage()).emit(1);
+            } else {
+                System.err.println(Ui.errPrefix() + e.getMessage());
+            }
             return 1;
         }
         Substitutions substitutions = Substitutions.forProject(projectDir);
@@ -113,8 +150,8 @@ public final class TreeCommand implements Command {
             return 0;
         }
 
-        System.out.println(project.name() + "@" + project.version()
-                + " (budget " + project.maxDepth() + ")");
+        System.out.println(Ui.strong(project.name() + "@" + project.version())
+                + Ui.dim(" (budget " + project.maxDepth() + ")"));
 
         List<Requirement> requirements = new ArrayList<>(project.requirements());
         requirements.addAll(project.devRequirements());
@@ -143,7 +180,7 @@ public final class TreeCommand implements Command {
             boolean last = i == children.size() - 1;
             ResolvedGraph.ResolvedArtifact child = byId(graph, children.get(i));
             boolean repeat = !printed.add(child.id());
-            System.out.println(prefix + (last ? "└─ " : "├─ ")
+            System.out.println(Ui.dim(prefix + (last ? "└─ " : "├─ "))
                     + line(child, repeat ? "  (*) above" : "", substitutions));
             if (!repeat) {
                 expand(child, prefix + (last ? "   " : "│  "), graph, printed,
@@ -160,6 +197,14 @@ public final class TreeCommand implements Command {
     private static void printJson(MjProject project, ResolvedGraph graph,
                                    Substitutions substitutions) {
         var root = com.jujin.freeway.commons.json.JsonUtils.object();
+        root.put("schemaVersion", CommandCatalog.SCHEMA_VERSION);
+        root.put("kind", "commandResult");
+        root.put("command", "tree");
+        root.put("status", "ok");
+        root.put("exitCode", 0);
+        root.put("dryRun", false);
+        root.put("offline", com.jujin.mjm.store.ArtifactStore.isOffline());
+        root.put("diagnostics", com.jujin.freeway.commons.json.JsonUtils.array());
         var identity = com.jujin.freeway.commons.json.JsonUtils.object();
         identity.put("name", project.name());
         identity.put("version", project.version());
@@ -201,17 +246,24 @@ public final class TreeCommand implements Command {
                 });
         root.put("artifacts", artifacts);
 
+        JsonResult.markEmitted();
         System.out.println(root);
     }
 
     private static String line(ResolvedGraph.ResolvedArtifact artifact, String suffix,
                                Substitutions substitutions) {
-        return artifact.id() + "@" + artifact.version()
-                + substitutions.marker(artifact.id())
-                + "  [depth " + artifact.depth()
+        return Ui.strong(artifact.id() + "@" + artifact.version())
+                + Ui.accent(substitutions.marker(artifact.id()))
+                + Ui.dim("  [depth " + artifact.depth()
                 + (artifact.declared() ? ", declared" : "")
                 + scopeSuffix(artifact.scope())
-                + "]" + suffix;
+                + "]" + suffix);
+    }
+
+
+    private static boolean hasModuleOption(List<String> args) {
+        return args.stream().anyMatch(arg ->
+                arg.equals("--module") || arg.startsWith("--module="));
     }
 
     /** The human marker for an artifact's scope: empty, {@code , dev}, {@code , processor}. */

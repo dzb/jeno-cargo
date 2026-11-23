@@ -4,6 +4,9 @@ import com.jujin.mjm.store.ArtifactStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -14,8 +17,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The dist layout contract: {@code lib/} holds ONE jar — mj merged with its
- * skeleton (freeway, slf4j) — and the lifecycle toolchain (junit) ships apart
- * under {@code lib/toolchain/}, loaded only by the forked test JVM.
+ * main runtime closure — and artifacts explicitly named in
+ * {@code [toolchain].jars} ship apart under {@code lib/toolchain/}, loaded
+ * only by the forked test JVM.
  *
  * <p>freeway is mj's skeleton, not a swappable dependency: a user never picks
  * a different freeway-ioc. Shipping nine jars for that is the opposite of
@@ -37,13 +41,16 @@ class DistLayoutTest {
     }
 
     @Test
-    void distShipsOneJarPlusTheToolchainDirectory(@TempDir Path storeDir) throws Exception {
+    void distShipsOneJarPlusTheDeclaredToolchain(@TempDir Path storeDir) throws Exception {
         Files.createDirectories(dir.resolve("src/main/java/demo"));
         Files.writeString(dir.resolve("mjm.toml"), """
             [project]
             name = "demo"
             version = "1.0.0"
             main = "demo.App"
+
+            [toolchain]
+            jars = ["com.acme:test-kit"]
             """);
         Files.writeString(dir.resolve("src/main/java/demo/App.java"), """
             package demo;
@@ -54,14 +61,14 @@ class DistLayoutTest {
                 }
             }
             """);
-        // two jars: a skeleton one and a junit one, both MAIN (as mj's own
-        // mjm.toml declares them)
+        // Both are MAIN rows. The split is declared by [toolchain].jars, not
+        // inferred from the artifact id or package name.
         Path skeletonJar = jar(dir.resolve("jars/skeleton-1.0.0.jar"),
                 "com/acme/Skeleton.class", "skeleton");
-        Path junitJar = jar(dir.resolve("jars/junit-jupiter-api-6.1.3.jar"),
-                "org/junit/jupiter/api/Test.class", "junit");
+        Path toolchainJar = jar(dir.resolve("jars/test-kit-1.0.0.jar"),
+                "com/acme/TestKit.class", "test-kit");
         Path placedSkeleton = place(storeDir, skeletonJar);
-        Path placedJunit = place(storeDir, junitJar);
+        Path placedToolchain = place(storeDir, toolchainJar);
 
         Files.writeString(dir.resolve("mjm.lock"), """
             [[artifacts]]
@@ -73,14 +80,14 @@ class DistLayoutTest {
             depth = 1
 
             [[artifacts]]
-            id = "org.junit.jupiter:junit-jupiter-api"
-            version = "6.1.3"
+            id = "com.acme:test-kit"
+            version = "1.0.0"
             source = "local"
             url = "%s"
             sha256 = "%s"
             depth = 1
             """.formatted(placedSkeleton.toUri(), ArtifactStore.sha256(skeletonJar),
-                placedJunit.toUri(), ArtifactStore.sha256(junitJar)));
+                placedToolchain.toUri(), ArtifactStore.sha256(toolchainJar)));
 
         ArtifactStore store = new ArtifactStore(storeDir);
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
@@ -103,13 +110,34 @@ class DistLayoutTest {
         try (var zip = new java.util.zip.ZipFile(uber.toFile())) {
             assertTrue(zip.getEntry("com/acme/Skeleton.class") != null,
                     "the skeleton's classes are merged into the one jar");
-            assertTrue(zip.getEntry("org/junit/jupiter/api/Test.class") == null,
-                    "junit never merges into the running jar");
+            assertTrue(zip.getEntry("com/acme/TestKit.class") == null,
+                    "toolchain classes never merge into the running jar");
         }
-        assertTrue(Files.exists(lib.resolve("toolchain/junit-jupiter-api-6.1.3.jar")),
-                "junit ships under lib/toolchain/ with its readable name");
+        assertTrue(Files.exists(lib.resolve("toolchain/test-kit-1.0.0.jar")),
+                "the declared toolchain ships under lib/toolchain/ with a readable name");
         assertFalse(Files.exists(lib.resolve("toolchain/skeleton-1.0.0.jar")),
-                "non-junit jars never land in the toolchain directory");
+                "non-toolchain jars never land in the toolchain directory");
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        PrintStream original = System.out;
+        int jsonExit;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            jsonExit = new BundleCommand(store, dir)
+                    .execute(List.of("--json", "--toolchain"));
+        } finally {
+            System.setOut(original);
+        }
+        assertEquals(0, jsonExit);
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                out.toString(StandardCharsets.UTF_8));
+        assertEquals("bundle", json.getString("command"));
+        var result = json.getArray("modules").getObject(0).getObject("result");
+        assertEquals(true, result.getBoolean("toolchain"));
+        var artifacts = result.getArray("artifacts");
+        assertEquals("bundle-directory", artifacts.getObject(0).getString("kind"));
+        assertEquals("tar.gz", artifacts.getObject(1).getString("kind"));
+        assertTrue(artifacts.getObject(1).getString("sha256").matches("[0-9a-f]{64}"));
     }
 
     @Test
@@ -201,6 +229,41 @@ class DistLayoutTest {
         Path placed = storeDir.resolve(ArtifactStore.sha256(jar) + ".jar");
         Files.copy(jar, placed);
         return placed;
+    }
+
+    @Test
+    void aToolchainIdMissingFromTheLockIsNamed(@TempDir Path storeDir) throws Exception {
+        Files.createDirectories(dir.resolve("src/main/java/demo"));
+        Files.writeString(dir.resolve("mjm.toml"), """
+            [project]
+            name = "demo"
+            version = "1.0.0"
+            main = "demo.App"
+
+            [toolchain]
+            jars = ["com.acme:missing-kit"]
+            """);
+        Files.writeString(dir.resolve("src/main/java/demo/App.java"),
+                "package demo; public final class App {}");
+        Files.writeString(dir.resolve("mjm.lock"), "");
+
+        ArtifactStore store = new ArtifactStore(storeDir);
+        assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
+
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream errors = new ByteArrayOutputStream();
+        int exit;
+        try {
+            System.setErr(new PrintStream(errors, true, StandardCharsets.UTF_8));
+            exit = new BundleCommand(store, dir).execute(List.of("--toolchain"));
+        } finally {
+            System.setErr(originalErr);
+        }
+
+        assertEquals(1, exit);
+        String message = errors.toString(StandardCharsets.UTF_8);
+        assertTrue(message.contains("[toolchain].jars names 'com.acme:missing-kit'"), message);
+        assertTrue(message.contains("run mjm lock"), message);
     }
 
     @Test

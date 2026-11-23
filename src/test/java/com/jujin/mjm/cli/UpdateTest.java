@@ -169,6 +169,39 @@ class UpdateTest {
     }
 
     @Test
+    void jsonCheckReportsAnAvailableUpdateWithoutInstalling(@TempDir Path home) throws Exception {
+        HttpServer server = serveLatest("v0.1.99");
+        System.setProperty("mjm.update.api",
+                "http://localhost:" + server.getAddress().getPort()
+                        + "/repos/dzb/mjm-cargo/releases/latest");
+        System.setProperty("mjm.update.home", home.toString());
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        PrintStream original = System.out;
+        int exit;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            exit = new UpdateCommand().execute(List.of("--json", "--check"));
+        } finally {
+            System.setOut(original);
+            server.stop(0);
+            System.clearProperty("mjm.update.api");
+            System.clearProperty("mjm.update.home");
+        }
+
+        assertEquals(0, exit);
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                out.toString(StandardCharsets.UTF_8));
+        assertEquals("upgrade", json.getString("command"));
+        assertEquals(true, json.getBoolean("checkOnly"));
+        assertEquals(Mjm.VERSION, json.getString("currentVersion"));
+        assertEquals("0.1.99", json.getString("latestVersion"));
+        assertEquals(true, json.getBoolean("updateAvailable"));
+        assertEquals(false, json.getBoolean("upgraded"));
+        assertFalse(Files.exists(home.resolve(".mjm/marker")),
+                "check mode never downloads or installs");
+    }
+
+    @Test
     void theCurrentVersionIsANoOp(@TempDir Path home) throws Exception {
         HttpServer server = serveLatest("v" + Mjm.VERSION);
 

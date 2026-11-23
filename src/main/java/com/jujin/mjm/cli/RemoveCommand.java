@@ -1,8 +1,11 @@
 package com.jujin.mjm.cli;
 
+import com.jujin.freeway.commons.json.JsonObject;
+import com.jujin.freeway.commons.json.JsonUtils;
 import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.mjm.project.ProjectReader;
 import com.jujin.mjm.project.Requirement;
+import com.jujin.mjm.store.LockFileReader;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -50,14 +53,111 @@ public final class RemoveCommand implements Command {
 
 
     @Override
+    public Command.Category category() {
+        return Command.Category.PROJECT;
+    }
+
+    @Override
+    public int order() {
+        return 30;
+    }
+
+    @Override
+    public CommandCapabilities capabilities() {
+        return CommandCapabilities.builder()
+                .json()
+                .network(CommandCapabilities.NetworkMode.OPTIONAL)
+                .writes(CommandCapabilities.WriteScope.PROJECT,
+                        CommandCapabilities.WriteScope.LOCKS,
+                        CommandCapabilities.WriteScope.CACHE)
+                .workspace(CommandCapabilities.WorkspaceMode.MODULE)
+                .destructive()
+                .build();
+    }
+
+    @Override
     public int execute(List<String> args) {
+        boolean json = args.contains("--json");
+        List<String> cleaned = args.stream().filter(arg -> !arg.equals("--json")).toList();
+        if (!json) {
+            return executeHuman(cleaned);
+        }
+        if (cleaned.size() != 1) {
+            JsonResult.error("remove", 2, "USAGE",
+                    "remove needs exactly one dependency id — mjm remove \"group:artifact\"")
+                    .emit(2);
+            return 2;
+        }
+
+        Path moduleDir = projectDir;
+        List<String> moduleArgs = cleaned;
+        if (Workspaces.rootAt(projectDir).isPresent()) {
+            WorkspaceRun.Run run;
+            try {
+                run = WorkspaceRun.root(projectDir, cleaned);
+            } catch (Workspaces.UsageException e) {
+                JsonResult.error("remove", 2, "USAGE", e.getMessage()).emit(2);
+                return 2;
+            } catch (Workspaces.WorkspaceException e) {
+                JsonResult.error("remove", 1, "WORKSPACE_INVALID", e.getMessage()).emit(1);
+                return 1;
+            }
+            if (run == null || run.module() == null) {
+                JsonResult.error("remove", 2, "MODULE_REQUIRED",
+                        "this directory is a workspace root — say which module: --module <path>")
+                        .emit(2);
+                return 2;
+            }
+            moduleDir = run.module();
+            moduleArgs = run.args();
+        } else if (hasModuleOption(cleaned)) {
+            JsonResult.error("remove", 2, "MODULE_WITHOUT_WORKSPACE",
+                    "--module is only used at a workspace root").emit(2);
+            return 2;
+        }
+
+        String id = moduleArgs.getFirst();
+        Path targetDir = moduleDir;
+        List<String> targetArgs = moduleArgs;
+        JsonCapture.Result captured = JsonCapture.run(() ->
+                new RemoveCommand(lockService, targetDir).executeHuman(targetArgs));
+        if (captured.exitCode() != 0) {
+            JsonResult.error("remove", captured.exitCode(),
+                    captured.exitCode() == 2 ? "USAGE" : "REMOVE_FAILED", captured.message())
+                    .emit(captured.exitCode());
+            return captured.exitCode();
+        }
+        try {
+            int artifacts = LockFileReader.read(
+                    Files.readString(moduleDir.resolve("mjm.lock"))).size();
+            JsonObject removed = JsonUtils.object();
+            removed.put("id", id);
+            JsonResult.start("remove")
+                    .workspace(moduleDir, "single")
+                    .put("mode", "mutate")
+                    .put("removed", removed)
+                    .put("manifest", moduleDir.resolve("mjm.toml")
+                            .toAbsolutePath().normalize().toString())
+                    .put("lock", moduleDir.resolve("mjm.lock")
+                            .toAbsolutePath().normalize().toString())
+                    .put("artifactCount", artifacts)
+                    .put("lockUpdated", true)
+                    .emit(0);
+            return 0;
+        } catch (IOException | RuntimeException e) {
+            JsonResult.error("remove", 1, "RESULT_UNREADABLE", e.getMessage()).emit(1);
+            return 1;
+        }
+    }
+
+    private int executeHuman(List<String> args) {
         Integer workspace = WorkspaceRun.requireModule(projectDir, args,
                 (dir, rest) -> new RemoveCommand(lockService, dir).execute(rest));
         if (workspace != null) {
             return workspace;
         }
         if (args.size() != 1) {
-            System.err.println("mjm: remove needs exactly one dependency id — "
+            System.err.println(Ui.errPrefix() + "remove needs exactly one dependency id — "
                     + "mjm remove \"group:artifact\"");
             return 2;
         }
@@ -67,13 +167,18 @@ public final class RemoveCommand implements Command {
         return ProjectLock.with(projectDir, () -> remove(id));
     }
 
+    private static boolean hasModuleOption(List<String> args) {
+        return args.stream().anyMatch(arg ->
+                arg.equals("--module") || arg.startsWith("--module="));
+    }
+
     private int remove(String id) {
         Path file = projectDir.resolve("mjm.toml");
         String text;
         try {
             text = Files.readString(file);
         } catch (IOException e) {
-            System.err.println("mjm: no mjm.toml in " + projectDir
+            System.err.println(Ui.errPrefix() + "no mjm.toml in " + projectDir
                     + " — run mjm init to create one");
             return 1;
         }
@@ -88,18 +193,18 @@ public final class RemoveCommand implements Command {
                 declared.add(requirement.id());
             }
         } catch (RuntimeException e) {
-            System.err.println("mjm: " + e.getMessage());
+            System.err.println(Ui.errPrefix() + e.getMessage());
             return 1;
         }
         if (!declared.contains(id)) {
-            System.err.println("mjm: '" + id + "' is not declared — declared: "
+            System.err.println(Ui.errPrefix() + "'" + id + "' is not declared — declared: "
                     + (declared.isEmpty() ? "(none)" : String.join(", ", declared)));
             return 1;
         }
 
         String updated = removeLine(text, id);
         if (updated.equals(text)) {
-            System.err.println("mjm: could not find the declaration line for '" + id
+            System.err.println(Ui.errPrefix() + "could not find the declaration line for '" + id
                     + "' — the file may use an unusual layout; edit it by hand");
             return 1;
         }
@@ -107,17 +212,17 @@ public final class RemoveCommand implements Command {
         try {
             prepared = lockService.prepare(updated);
         } catch (RuntimeException e) {
-            System.err.println("mjm: " + e.getMessage());
+            System.err.println(Ui.errPrefix() + e.getMessage());
             return 1;
         }
         try {
             lockService.commit(projectDir, prepared);
         } catch (RuntimeException e) {
-            System.err.println("mjm: " + e.getMessage());
+            System.err.println(Ui.errPrefix() + e.getMessage());
             return 1;
         }
-        System.out.println("removed " + id + " — locked "
-                + prepared.graph().artifacts().size() + " artifact(s) into mjm.lock");
+        System.out.println(Ui.ok("removed " + id + " — locked "
+                + prepared.graph().artifacts().size() + " artifact(s) into mjm.lock"));
         return 0;
     }
 

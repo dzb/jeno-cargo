@@ -5,48 +5,22 @@
 
 ---
 
-## 1. `mjm bundle` 靠包名猜 toolchain
+## 1. toolchain 不再靠包名猜(已解决)
 
-**位置**:`BundleCommand.isTestOnly(String id)`
+**当前位置**:`BundleCommand` 读取 `mjm.toml [toolchain].jars`
 
-```java
-private static boolean isTestOnly(String id) {
-    return id.startsWith("org.junit.") || id.startsWith("org.opentest4j:")
-            || id.startsWith("org.apiguardian:");
-}
-```
+**旧问题**:dist 曾把闭包按 `org.junit.*` / `org.opentest4j:` / `org.apiguardian:`
+包名前缀分成 toolchain 和骨架。任何非 JUnit 测试库都可能被误合进生产 jar,而恰好
+同前缀的普通库也会被塞进 `lib/toolchain/`。
 
-**现状**:dist 把闭包分成两堆——toolchain（`org.junit.*` / `org.opentest4j:` /
-`org.apiguardian:`,装进 `lib/toolchain/`）和骨架（其余,合并进 uber-jar）。判据是
-**硬编码的包名前缀**。（`apiguardian` 是 junit 自己 API 注解所在的 jar,2026-11-22
-补进 vendor 时一并加了这一条,否则它会被当成骨架合进 launcher 的 jar。）
+**现行规则**:`[toolchain].jars` 显式列出 artifact id。它们是 packaging metadata,
+不参与解析、可见性或锁作用域;`bundle` 永不把它们合并进 launcher jar,
+`bundle --toolchain` 才把它们复制到 `lib/toolchain/`。id 不在锁图中时 `bundle` 直接报错。
+mjm 自己的 manifest 用这份清单标记 JUnit 工件;JUnit 仍是 MAIN 依赖,因为
+`MjmTestFork` 属于生产 CLI 的编译面。
 
-**为什么现在可接受**:mjm 自己的 `mjm.toml` 里 junit 就是全部测试依赖,规则精确命中,
-零误判。`mjm` 是当前唯一用 `mjm bundle` 的项目。
-
-**代价/风险**:
-- 任何别的项目依赖 junit,跑 `mjm bundle` 也会被塞进 `lib/toolchain/` 而不是 uber-jar
-- 如果将来 mjm 引入非 junit 的测试库（assertj、mockito、testcontainers…），它们会被
-  误判成骨架合并进运行 jar——**测试库进生产产物**,而且没人会立刻发现（因为它仍然能跑）
-
-**触发重新决定的条件**（任一即可）:
-- 第二个项目开始用 `mjm bundle`
-- mjm 引入 junit 以外的测试依赖
-- 有人问"为什么我的 assertj 在 lib/toolchain 里/在 uber-jar 里"
-
-**正确的解法**:不要在 `BundleCommand` 里猜。让 `mjm.toml` 显式声明哪些是 toolchain,例如:
-
-```toml
-[toolchain]
-"org.junit.jupiter:junit-jupiter-api" = "6.1.3"
-"org.junit.platform:junit-platform-launcher" = "6.1.3"
-```
-
-然后 dist 按这份显式清单分流,`[deps]` 里的其余一切按骨架处理。这与 mjm 的
-"closed schema, 不猜"气质一致——反过来,靠包名前缀猜正是 mjm 在别处明确拒绝的做法。
-
-**成本**:中等。要动 SPEC（新增 `[toolchain]` 节）、ProjectReader、BundleCommand,
-以及 mjm 自己的 mjm.toml 迁移。等触发条件出现再做,现在做是过早抽象。
+**代价**:清单需要包含 toolchain 闭包中的所有 id,漏写会让该 jar 被当成运行依赖或
+从发行版中缺失。mjm 自己已经列出 JUnit/Platform/OpenTest4J/APIGuardian 全部 7 件。
 
 ---
 
@@ -60,10 +34,10 @@ private static boolean isTestOnly(String id) {
 **现在的做法**(`.github/workflows/ci.yml`):
 
 ```yaml
-- name: dist (with the freshly built mjm)
+- name: bundle (with the freshly built mjm)
   run: |
     CP="target/classes:$(find vendor -name '*.jar' | tr '\n' ':')"
-    java -cp "$CP" com.jujin.mjm.cli.Mj dist
+    java -cp "$CP" com.jujin.mjm.cli.Mjm bundle --toolchain
 ```
 
 **原则**:已安装的旧 mjm 只负责 `lock` 和 `test`(那里上一版确实是正确的工具——
@@ -105,66 +79,48 @@ manifest 结构),都要检查 CI 里那步用的是不是新代码。`--version`
 
 ---
 
-## 5. 未实现但已被文档误标过的命令
+## 5. 曾未实现、现已交付的命令(历史记录)
 
-`DESIGN.md §8` 曾把 `mjm init` / `mjm remove` 标为 ✅ 但实际不存在（已纠正）。
-剩下**真实未实现**的:
+这条记录保留的是文档跑在代码前面的教训,不是当前功能清单。
 
-- `mjm clean` —— 目前只能 `rm -rf target/`
-- `mjm outdated` —— 列出已锁依赖的可用新版本
-- JUnit XML 测试报告 —— CI 的 checks UI 需要
+| 当时的待办 | 现在 |
+|---|---|
+| `mjm clean` | 已实现:`clean --target`(默认)与 `--dist`,永不触碰 store |
+| `mjm outdated` | 已实现:只读锁文件,支持 `--json` / `--dev` |
+| JUnit XML 测试报告 | 已实现:`target/test-results/TEST-*.xml`,64 个 suite 由测试覆盖 |
 
-这些在 `DESIGN.md §13` 的吸收清单里,不是债,是待办。
+教训仍是:文档没有可执行测试,就必须在功能落地时同步改掉旧表述。
 
 ---
 
-## 6. `publish` 与 `release` 的命名歧义
+## 6. `publish` 与 `release` 的分工
 
-**位置**:`PublishCommand`(原 `ReleaseCommand` 已删除)
+**当前位置**:`PublishCommand` / `ReleaseCommand`
 
-**现状**:两个词在英文里几乎同义,但在 mjm 里指两件不同的事:
+两个词在 mjm 里有明确不同的产物:
 
 | 命令 | 做什么 | 产出去哪 |
 |---|---|---|
-| `mjm publish [gh:…]` | 只发**库**的三件套(jar + 描述符 + sha256) | `dist/`,上传到 Release |
-| `mjm release [--publish …]` | 跑**全流程** lock → build → verify → test → dist,可选地顺带 publish | `target/`(发行目录 + tar.gz),以及 `dist/` |
+| `mjm publish [target]` | 发**库**的三件套:jar + `.mjm.toml` + `.sha256`;不上传自己构建的 jar | `target/dist/`;给定目标时上传并回读校验 |
+| `mjm release [target]` | 发**应用安装包**:`bundle` 产生的 tar.gz + bootstrap setup;默认 minisign 签名 | `target/dist/release/`;给定目标时上传并回读校验 |
 
-**实际关系**:`release` 的图里有一个 `publish` 阶段(默认关闭,`--publish`
-才开),它调用的就是 `PublishCommand` 本身。所以 `release --publish X` **同时**
-产出可执行发行目录和库三件套——落在两个不同目录,给两种不同消费者。
+历史歧义来自旧的 `release --publish` 全流程命令:它同时做构建、测试、bundle 和上传,
+名字却只说了发布。v0.2.17 之后这个生命周期命令已删除;现行 `release` 是单步上传器,
+**不会隐式 build/test/bundle**。决定何时执行这些步骤的是项目 CI。
 
-**为什么让人困惑**:`mjm release --publish gh:acme/widget` 读起来像同义反复。
-真实语义是"跑完整流水线,并在最后把库也发出去",但名字没有传达这个包含关系。
+因此现在的边界是“产物语义”而不是“流水线阶段”:
 
-**为什么暂不改名**:
-- `publish` 对齐业界惯例(npm publish、cargo publish),不该动
-- `release` 在 mjm 的自举语境里已特指"发版这条链",`--publish` 旗标本身暗示了包含关系
-- 改名要同时动命令、`mjm release` 的旗标、CI、README、RELEASE.md,收益是"少困惑一秒"
-
-**已落地(2026-11-21)**:`mjm release` 已删除,`mjm bundle` 改名为 `mjm bundle`。理由见 §7。
-下面保留原分析,作为"为什么最后选了删除而不是改名"的记录。
-
-**当时考虑过的替代**:不动命令名,而是**让 `release` 的输出说清它产出了什么**。
-现在 dist 阶段打印 `dist /path`,publish 阶段打印三件套路径,但没有任何一行说
-"这两个是不同的东西,给不同的人用"。在 release 结束时加一段总结:
-
-```
-release v0.1.5 complete:
-  tool distribution  target/mjm-0.1.5.tar.gz   (for `curl | bash` users)
-  library triple     dist/mjm-0.1.5.{jar,mjm.toml,sha256}   (for `mjm add` consumers)
-```
-
-**触发重新决定的条件**:
-- 有人(包括未来的我)在 README 或 issue 里把两者混为一谈
-- `release` 增加更多可选阶段,使"它到底发了什么"更难从命令名推断
-- 出现第三种发布目标(索引、镜像、签名仓库),`--publish` 的单值旗标撑不住时
-
-**成本**:改名是低风险但低收益的机械改动;加输出总结是极小改动且直接消解困惑。
-**后者优先**。
+- 有依赖解析消费者 → `publish` 库三件套;
+- 有 `curl | bash` 最终用户 → `release` 应用安装包;
+- 两者都不替你决定构建或发版时机。
 
 ---
 
-## 7. 命令面按"产物"收敛(2026-11-21 决策记录)
+## 7. 命令面按"产物"收敛(2026-11-21 历史决策)
+
+> **历史记录**:本节的“删除 `mjm release`”在 v0.2.17 被更新。现行契约见 SPEC §6:
+> `publish` 发库三件套,`release` 只上传已 bundle 的安装包;两者都是单步命令,
+> 都不编排完整生命周期。下面的旧决策保留用于解释当时的取舍。
 
 **背景**:`publish` / `dist` / `release` 三者职责重叠,人和 agent 都难以抉择。
 
@@ -181,8 +137,8 @@ release v0.1.5 complete:
 `uv` 的 `publish` 默认值就是 `dist/*`——和 mjm 的 `dist/` 布局一致。
 
 **决定**:
-1. **删除 `mjm release`** —— 生命周期编排是项目 CI 的职责,不是构建工具的。
-   mjm 提供单步机制(lock/build/test/bundle),CI 决定何时调用、如何发布。
+1. **删除旧的 `mjm release` 生命周期命令** —— 生命周期编排是项目 CI 的职责,不是构建工具的。
+   v0.2.17 重新引入了同名但语义更窄的单步上传器;它只发已 bundle 的安装包。
 2. **`mjm bundle` → `mjm bundle`** —— 名字说清产物:"组装一个可安装的发行版",
    面向"有用户要 `curl | bash` 的应用",库永远不需要它。
 3. **移除 freeway-flow 依赖** —— 唯一的用户是 `release` 的图。CLI 回到朴素形态,
@@ -194,9 +150,9 @@ release v0.1.5 complete:
 **产物矩阵(现在只有一种产物语义:jar)**:
 
 ```
-mjm package           → dist/<name>-<version>.jar   (库;可选 --uber)
-mjm publish           → 读 dist/*.jar + 写描述符/sha256 → 上传
-mjm bundle            → dist/<name>-<version>/ + .tar.gz   (应用发行版)
+mjm package           → target/dist/<name>-<version>.jar   (库;可选 --uber)
+mjm publish           → 读 target/dist/*.jar + 写描述符/sha256 → 上传
+mjm bundle            → target/dist/<name>-<version>/ + .tar.gz   (应用发行版)
 ```
 
 **留给后来者**:如果再次出现"要不要加一条流水线命令"的念头,先问一句

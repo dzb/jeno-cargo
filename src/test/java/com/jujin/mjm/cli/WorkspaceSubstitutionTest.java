@@ -91,7 +91,11 @@ class WorkspaceSubstitutionTest {
 
         List<String> entries = classpath(web);
 
-        assertTrue(entries.contains(core.resolve("target/classes").toString()), entries.toString());
+        // Workspaces records module directories by real path. On macOS /var is
+        // a symlink to /private/var, so compare against the same canonical form
+        // mjm uses instead of the temp-dir spelling.
+        assertTrue(entries.contains(core.toRealPath().resolve("target/classes").toString()),
+                entries.toString());
         assertFalse(entries.stream().anyMatch(entry -> entry.contains("c".repeat(64))),
                 "the locked jar never appears: " + entries);
         assertEquals(web.resolve("target/classes").toString(), entries.get(0));

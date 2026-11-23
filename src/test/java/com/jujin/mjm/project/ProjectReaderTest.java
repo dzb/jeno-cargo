@@ -354,6 +354,9 @@ class ProjectReaderTest {
             [test]
             include = ["*Test"]
             exclude = ["*Slow*"]
+
+            [toolchain]
+            jars = ["com.example:test-kit"]
             """);
 
         assertEquals("com.example.Main", project.main());
@@ -364,6 +367,7 @@ class ProjectReaderTest {
                 "the processor coordinate resolves as its own closure");
         assertEquals(List.of("*Test"), project.testInclude());
         assertEquals(List.of("*Slow*"), project.testExclude());
+        assertEquals(List.of("com.example:test-kit"), project.toolchain());
     }
 
     @Test
@@ -421,6 +425,24 @@ class ProjectReaderTest {
             parameters = ["-parameters"]
             bogus = 1
             """, "[build].bogus is not a key");
+
+        assertRejects("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [toolchain]
+            bogus = 1
+            """, "[toolchain].bogus is not a key");
+
+        assertRejects("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [toolchain]
+            jars = ["com.example:test-kit", "com.example:test-kit"]
+            """, "[toolchain].jars lists 'com.example:test-kit' twice");
     }
 
     @Test

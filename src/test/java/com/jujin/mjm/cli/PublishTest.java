@@ -4,7 +4,10 @@ import com.jujin.mjm.store.ArtifactStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -92,6 +95,70 @@ class PublishTest {
     }
 
     @Test
+    void jsonDryRunPlansTheTripleWithoutWritingIt() throws Exception {
+        writeProject(dir);
+        Files.createDirectories(dir.resolve("target/classes/demo"));
+        Files.writeString(dir.resolve("target/classes/demo/A.class"), "class bytes");
+        Path dist = Files.createDirectories(dir.resolve("target/dist"));
+        Files.writeString(dist.resolve("demo-1.0.0.jar"), "jar bytes");
+
+        Result result = publishJson("--json", "--dry-run");
+
+        assertEquals(0, result.exit());
+        assertFalse(Files.exists(dist.resolve("demo-1.0.0.mjm.toml")),
+                "dry-run never writes the descriptor");
+        assertFalse(Files.exists(dist.resolve("demo-1.0.0.sha256")),
+                "dry-run never writes the checksum");
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(result.out());
+        assertEquals("publish", json.getString("command"));
+        assertEquals(true, json.getBoolean("dryRun"));
+        assertEquals(false, json.getBoolean("uploaded"));
+        assertEquals(3, json.getArray("artifacts").size());
+        assertEquals("descriptor", json.getArray("artifacts").getObject(1).getString("kind"));
+        assertEquals(true, json.getArray("artifacts").getObject(1).getBoolean("wouldWrite"));
+    }
+
+    @Test
+    void jsonPublishReportsTheWrittenTriple() throws Exception {
+        writeProject(dir);
+        Files.createDirectories(dir.resolve("target/classes/demo"));
+        Files.writeString(dir.resolve("target/classes/demo/A.class"), "class bytes");
+        Path dist = Files.createDirectories(dir.resolve("target/dist"));
+        Files.writeString(dist.resolve("demo-1.0.0.jar"), "jar bytes");
+
+        Result result = publishJson("--json");
+
+        assertEquals(0, result.exit());
+        assertTrue(Files.exists(dist.resolve("demo-1.0.0.mjm.toml")));
+        assertTrue(Files.exists(dist.resolve("demo-1.0.0.sha256")));
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(result.out());
+        assertEquals(false, json.getBoolean("dryRun"));
+        assertEquals(false, json.getBoolean("uploaded"));
+        var artifacts = json.getArray("artifacts");
+        assertEquals(3, artifacts.size());
+        assertTrue(artifacts.getObject(1).getString("sha256").matches("[0-9a-f]{64}"));
+    }
+
+    @Test
+    void jsonRemotePublishUnderOfflineIsRefusedBeforeUpload() throws Exception {
+        writeProject(dir);
+        Files.createDirectories(dir.resolve("target/classes/demo"));
+        Files.writeString(dir.resolve("target/classes/demo/A.class"), "class bytes");
+        Files.createDirectories(dir.resolve("target/dist"));
+        Files.writeString(dir.resolve("target/dist/demo-1.0.0.jar"), "jar bytes");
+        ArtifactStore.goOffline();
+        try {
+            Result result = publishJson("--json", "gh:acme/demo");
+            assertEquals(2, result.exit());
+            var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(result.out());
+            assertEquals("OFFLINE_FORBIDDEN",
+                    json.getArray("diagnostics").getObject(0).getString("code"));
+        } finally {
+            resetOffline();
+        }
+    }
+
+    @Test
     void aRepoBoundDependencyCannotPublish() throws Exception {
         writeProject(dir);
         Files.createDirectories(dir.resolve("target/classes"));
@@ -130,4 +197,34 @@ class PublishTest {
             mylib = "gh:acme/mylib@v1.2.0"
             """);
     }
+    private Result publishJson(String... args) {
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        int exit;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
+            exit = new PublishCommand(dir).execute(List.of(args));
+        } finally {
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+        }
+        return new Result(exit, out.toString(StandardCharsets.UTF_8),
+                err.toString(StandardCharsets.UTF_8));
+    }
+
+    private static void resetOffline() {
+        try {
+            var field = ArtifactStore.class.getDeclaredField("offline");
+            field.setAccessible(true);
+            field.set(null, false);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    private record Result(int exit, String out, String err) {}
+
 }

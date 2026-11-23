@@ -44,7 +44,8 @@ public final class ProjectReader {
             "java", Set.of("version"),
             "limits", Set.of("max-depth"),
             "build", Set.of("parameters", "processors"),
-            "test", Set.of("include", "exclude"));
+            "test", Set.of("include", "exclude"),
+            "toolchain", Set.of("jars"));
 
     private static final String SPEC_SECTION = "SPEC.md §2.1";
 
@@ -70,7 +71,7 @@ public final class ProjectReader {
             }
             switch (entry.getKey()) {
                 case "project", "java", "deps", "dev-deps", "repos", "limits", "overrides",
-                     "scripts", "build", "test" -> { }
+                     "scripts", "build", "test", "toolchain" -> { }
 
                 default -> throw new ProjectException(at(file, source.section(entry.getKey()))
                         + "unknown section [" + entry.getKey()
@@ -258,10 +259,26 @@ public final class ProjectReader {
             testExclude = stringArrayAt(testSection, source, file, "test", "exclude");
         }
 
+        // [toolchain].jars: packaging metadata, not another dependency group.
+        // The ids must already be in the locked closure; BundleCommand rejects
+        // a stale list rather than silently shipping the wrong split.
+        List<String> toolchain = new ArrayList<>();
+        Map<String, Object> toolchainSection = optionalSection(root, "toolchain");
+        if (toolchainSection != null) {
+            Set<String> seen = new LinkedHashSet<>();
+            for (String id : stringArrayAt(toolchainSection, source, file, "toolchain", "jars")) {
+                if (!seen.add(id)) {
+                    throw new ProjectException("[toolchain].jars lists '" + id
+                            + "' twice — each toolchain artifact is named once");
+                }
+                toolchain.add(id);
+            }
+        }
+
         return new MjProject(name, group, version, main, javaVersion, maxDepth, requirements,
                 overrides, scripts, repos, buildParameters, devRequirements,
                 summary, homepage, license, processors, processorRequirements,
-                testInclude, testExclude);
+                testInclude, testExclude, toolchain);
     }
 
     /**

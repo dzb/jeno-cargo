@@ -6,11 +6,15 @@ import com.jujin.mjm.resolve.ResolvedGraph;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -51,6 +55,39 @@ class BuildRunTest {
                 "the compiled class lands in target/classes");
 
         assertEquals(0, run.execute(java.util.List.of("demo.Main")), "mj run executes the main");
+    }
+
+    @Test
+    void jsonBuildExportsTheClassesArtifactManifest(@TempDir Path storeDir) throws Exception {
+        writeProject(dir);
+        writeLock(dir);
+        ArtifactStore store = new ArtifactStore(storeDir);
+        System.setProperty("mjm.color", "always");
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        PrintStream original = System.out;
+        int exit;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            exit = new BuildCommand(store, dir).execute(java.util.List.of("--json"));
+        } finally {
+            System.setOut(original);
+            System.clearProperty("mjm.color");
+        }
+
+        assertEquals(0, exit);
+        String raw = out.toString(StandardCharsets.UTF_8);
+        assertFalse(raw.contains("\u001B["), "JSON stdout must stay ANSI-free");
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(raw);
+        assertEquals("build", json.getString("command"));
+        assertEquals("ok", json.getString("status"));
+        assertEquals(1, json.getArray("modules").size());
+        var result = json.getArray("modules").getObject(0).getObject("result");
+        assertEquals(dir.resolve("target/classes").toAbsolutePath().normalize().toString(),
+                result.getString("classesDir"));
+        assertEquals(1, result.getInt("sourceCount"));
+        assertEquals("classes", result.getArray("artifacts").getObject(0).getString("kind"));
+        assertTrue(result.getArray("artifacts").getObject(0).getLong("fileCount") >= 2,
+                "the class plus the version resource");
     }
 
     @Test

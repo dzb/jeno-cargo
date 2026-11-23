@@ -218,6 +218,20 @@ url = "vendor"
 
 匹配对象是文件名或相对路径(surefire 的 `*Slow*` 写法可用)。
 
+**[toolchain]**
+
+| 键 | 类型 | 规则 |
+|---|---|---|
+| `jars` | 字符串数组 | 测试/构建工具链工件的 id 清单。每个 id 必须已出现在 `mjm.lock` 的闭包中;不得重复。 |
+
+这是**packaging metadata,不是依赖作用域**:
+
+- 不参与 `Resolver`,不改变 strict visibility、`[dev-deps]` 语义或 lock 解析;
+- `mjm bundle` 永不把这些 id 合并进 launcher jar;
+- `mjm bundle --toolchain` 把它们原样复制到 `lib/toolchain/`(本地 workspace 替换时打包对应 classes),默认不带;
+- `mjm lock` 后发现 id 不在锁图 → `bundle` 报错并提示重新 `mjm lock`;
+- 清单里的工件可以来自 MAIN、DEV 或 PROCESSOR 的锁闭包;PROCESSOR 仍不会被 `bundle` 打包。
+
 未知节、未知键 → 报错。
 
 ### 2.2 值形态展开(mjm 原生)
@@ -278,7 +292,7 @@ version = 21              # 可选;语义同 §2.1 [java]
 
 ### 3.2 禁止项(出现即报错)
 
-`[repos]`、`[deps.{repo}]`、`[dev-deps]`、`[limits]`、`[scripts]`、`[overrides]`、任何未知节。
+`[repos]`、`[deps.{repo}]`、`[dev-deps]`、`[limits]`、`[scripts]`、`[overrides]`、`[toolchain]`、任何未知节。
 
 理由:仓库是消费方的配置;预算规则只有一份(消费方);scripts 只属于应用。**发布物里只有事实,规则只有一份。**
 
@@ -380,7 +394,7 @@ modules = ["libs/core", "apps/web"]
 
 ### 6.1 命令
 
-20 个命令,以本表为准(`mjm --help` 只打印同一份清单的摘要)。
+22 个命令,以本表为准(`mjm --help` 只打印同一份清单的摘要)。
 
 | 命令 | 契约 |
 |---|---|
@@ -396,12 +410,14 @@ modules = ["libs/core", "apps/web"]
 | `mjm info <id> [--source]` | 身份/来源/依赖/源码地址;`--source` 取源码树。标题按 scope 标记:`[dev]`、`[processor]`,MAIN 无标记 |
 | `mjm classpath [--test] [--file <path>]` | IDE 用 classpath;默认编译可见性;`--test` 为测试闭包(MAIN + dev,**排除 processor**——与 `mjm test` 的差异见 REMINDS §14);路径指向 store 内容寻址 jar,不拷贝 |
 | `mjm package [--uber] [--main <class>]` | `target/dist/<name>-<version>.jar`;`--uber` 合并闭包输出 `...-uber.jar`;`--main` 只影响本 jar 的 MANIFEST,不影响 `bundle`/`run` 的 `[project].main` |
-| `mjm bundle [--toolchain]` | `target/dist/<name>-<version>/`(bin/lib/setup.sh/uninstall.sh/SHA256SUMS)+ `.tar.gz`。需要 `[project].main`(缺失即报错);setup.sh 的 JDK 要求取 `[java].version`,未声明则取构建 JDK major;安装前用 `sha256sum -c`/`shasum -a 256 -c` 校验 SHA256SUMS,lib/bin 经 staging 交换并保留 store/config;默认不带 test toolchain,`--toolchain` 才写入 `lib/toolchain` |
+| `mjm bundle [--toolchain]` | `target/dist/<name>-<version>/`(bin/lib/setup.sh/uninstall.sh/SHA256SUMS)+ `.tar.gz`。需要 `[project].main`(缺失即报错);setup.sh 的 JDK 要求取 `[java].version`,未声明则取构建 JDK major;安装前用 `sha256sum -c`/`shasum -a 256 -c` 校验 SHA256SUMS,lib/bin 经 staging 交换并保留 store/config;默认不带 toolchain,`--toolchain` 才把 `[toolchain].jars` 对应的锁工件写入 `lib/toolchain`;未在锁图中出现的 toolchain id 是错误 |
 | `mjm clean [--target (default) \| --dist]` | 默认整棵删 `target/`;`--dist` 只删 `target/dist/` 保留 classes;永不触碰 store |
 | `mjm cache dir \| size \| prune \| purge [--dry-run] [--yes]` | `dir`/`size` 只读;`prune` 删可证明无用之物,无需确认;`purge` 删 store 与 sources,是**破坏性**命令——无 `--yes` 时打印路径/大小并 exit 2,`--dry-run` 只展示不删除(exit 0),`--yes` 才执行;`clean` 是兼容 alias,支持同样 flags |
 | `mjm outdated [--json] [--dev]` | **只读 `mjm.lock`**(不需要 `mjm.toml`);已钉版本 vs 仓库可用版本;默认只查 MAIN,`--dev` 含 dev/processor;`gh:`/`url`/`local:`/`mjm:` 列为未检查;跨 major 单列;完成即 exit 0(有更新也是 0) |
+| `mjm doctor` | **只读**本地诊断:检查当前项目或 workspace 每个模块的 `mjm.toml`/`mjm.lock` 是否存在且可解析,报告旧 `mj.toml`/`mj.lock`(mjm **不会**读取它们),并检查 XDG store/sources/locks 路径可写性;不解析依赖、不写文件、不访问网络。健康 exit 0,有问题 exit 1,带参数 exit 2 |
 | `mjm audit [--json] [--dev]` | OSV 漏洞查询;默认只查 MAIN,`--dev` 才含 dev/processor;只查 Central 坐标,其余列 `notChecked` 并给原因;漏洞或查询失败 exit 1 |
-| `mjm publish [target]` | 写三件套;目标只接受 `gh:`、`mjm:https:`、`mjm:local:`(§6.6) |
+| `mjm verify` | **只读本地发布预检**:解析 `mjm.toml`/`mjm.lock`,核对每一条直接声明与锁定行的 id/version/source/MAIN scope;按 sha256 校验 store 中每个 jar 与元数据(workspace 本地替换则校验 classes 与版本戳);若 `target/dist/` 已存在,校验发布三件套内部一致性与 bundle `SHA256SUMS`。不解析依赖、不下载、不修改项目文件、不访问网络。通过 exit 0,失败 exit 1,带参数 exit 2 |
+| `mjm publish [target]` | 写三件套;目标只接受 `gh:`、`mjm:https:`、`mjm:local:`(§6.6)。`mjm:https:` 逐文件 PUT 后立即 GET 回读,三个文件的字节必须完全一致,否则 exit 1 |
 | `mjm upgrade` / `mjm update`(alias) | 自升级(同一实现) |
 | `mjm release [target] [--dry-run] [--allow-unsigned]` | 发布 `mjm bundle` 产生的安装包(默认用 minisign 签名,`--allow-unsigned` 才允许无签名):`gh:<owner>/<repo>`、`mjm:https://host/`(loopback `http://` 仅供测试)、`mjm:local:<dir>`;无 target 只准备 `target/dist/release/` 并打印上传清单。**不隐式 build/test/bundle**;发布后回读并校验 tar 的 sha256(§7.3) |
 
@@ -433,8 +449,148 @@ modules = ["libs/core", "apps/web"]
 
 ### 6.5 输出与 JSON
 
-`tree`、`outdated`、`audit` 支持 `--json`:stdout 只有**一个** JSON 文档,诊断/警告走 stderr。
-字段集合如下(新增字段向后兼容;删改需新版本)。
+**人类可读输出**可以按终端能力着色、加状态符号并分组帮助页;这是展示层,
+不改变命令语义。非 TTY(管道、CI、测试 harness)必须保持无 ANSI 的纯文本。
+`MJM_COLOR=always|never|auto` 可显式覆盖检测,`NO_COLOR` 的存在表示禁用;
+颜色永不进入 `--json` 的 stdout。
+
+#### 6.5.1 Agent 能力目录
+
+`mjm --json --help` 输出完整 `commandCatalog`;`mjm --json <command> --help`
+输出单个 `commandDescriptor`。catalog 由每个 `Command.capabilities()` 生成,
+不得另维护一份命令能力清单。根字段:
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `schemaVersion` | 整数 | 当前为 `1`;破坏性变更必须递增 |
+| `kind` | 字符串 | `commandCatalog` / `commandDescriptor` / `commandResult` / `version` |
+| `mjmVersion` | 字符串 | 当前 mjm 版本 |
+| `commandCount` | 整数 | catalog 中的主命令数(不含 alias) |
+| `commands[]` | 数组 | 按 category/order/name 稳定排序 |
+| `globalFlags[]` | `{name, description}` | 全局参数 |
+| `exitCodes` | 对象 | `0/1/2` 的稳定含义 |
+
+每个命令 descriptor 至少包含:
+
+`name, aliases, category, summary, usage, help?, supportsJson, network,
+writes, workspace, supportsDryRun, destructive, confirmation, passThrough,
+interactive`。
+
+- `network`: `never | optional | always`
+- `writes`: `project | target | cache | sources | locks | user-install | remote`
+- `workspace`: `global | module | aggregate`
+- `confirmation`: `none | conditional | requires-yes | requires-signature`
+
+`mjm --json --version` 输出 `kind=version` 的 JSON。对声明
+`supportsJson=false` 的命令请求 `--json` 时,stdout 必须只有一个结构化
+`JSON_UNSUPPORTED` 错误,exit 2;不得先打印人类文本。
+
+支持 `--json` 的命令:`tree`、`outdated`、`audit`、`doctor`、`verify`、
+`lock`(普通 lock 和 `--check`)、`why`、`classpath`、`info`、`cache`
+(含 `dir`/`size`/`prune`/`purge`)、`build`、`package`、`bundle`、`clean`、
+`init`、`add`(写入模式)、`remove`、`upgrade`、`publish`、`release`、`test`。
+stdout 只有**一个** JSON 文档,诊断/警告走 stderr。runner 还会兜底:JSON 命令
+若提前失败而未输出结果,stdout 仍会得到一个 `COMMAND_RESULT_MISSING` 或
+`COMMAND_FAILED` 结构化错误。唯一明确不提供 JSON 的是 `run`:它的
+stdout/stderr/退出码属于用户程序,`mjm --json run` 会被 runner 以
+`JSON_UNSUPPORTED` 拒绝;`mjm run app --json` 则把 `--json` 透传给程序。
+
+所有 `commandResult` 根对象共享:
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `schemaVersion` | 整数 | 当前 `1` |
+| `kind` | 字符串 | `commandResult` |
+| `command` | 字符串 | 命令名 |
+| `status` | 字符串 | `ok` / `failed` / `error` |
+| `exitCode` | 整数 | 与进程退出码一致 |
+| `dryRun` | 布尔 | 本次调用是否为 dry-run |
+| `offline` | 布尔 | 本次调用是否处于 offline 模式 |
+| `diagnostics[]` | 数组 | `{severity, code, message, nextActions[][]}` |
+
+`doctor` 和 `verify` 的 workspace 结果统一为:
+
+```text
+workspace: {root, mode: single|module|all}
+modules[]:  {module, path, status, exitCode, project?, checks[]}
+summary:    {modules, passedModules, failedModules, checks, ...}
+```
+
+`lock --check` 使用同样的 `workspace/modules/summary` 外壳;每个 module 额外有
+`lockFile`, `check`, `upToDate`, `artifacts`, `differences[]`。check 漂移时
+诊断码为 `LOCK_STALE`,并通过 `nextActions` 给出 `["mjm","lock"]`。
+
+`why --json` 输出 `{found, target?, artifact?, paths[][], introductionPaths}`;
+不在图中时 `found=false` 且 exit 0。`classpath --json` 输出
+`{mode: compile|test, classpath, entries[], file?, written?}`。
+
+`info --json` 输出消费视图:
+`{artifact:{id,group?,artifact,version,sha256,metaSha256?},
+provenance:{source,url,readableUrl,repository?,layout,transport?,jar,metadata?},
+descriptor?:{name,group?,version,javaVersion?,summary?,homepage?,license?,
+dependencies[],retract?}, context:{scope,depth,local,marker},
+source?:{page?,archive?,fetched}}`。
+其中 `artifact/provenance/descriptor` 是包事实,`context` 只描述当前项目的 lock。
+`info --source --json` 目前以 `JSON_SOURCE_UNSUPPORTED`(exit 2)明确拒绝;
+本地 `info --json` 不写 sources tree、不触发源码下载。
+
+`cache --json`:
+- `dir` → `{paths:{store,sources,locks}}`
+- `size` → `{sizes:{store:{bytes,human},...,total:{bytes,human}}}`
+- `prune` → `{subcommand:"prune",removedFiles,reclaimedBytes,reclaimed}`
+- `purge --dry-run` → `{subcommand,dryRun:true,requiresYes,roots[]}` 且不删除
+- `purge` 无 `--yes` → `CONFIRMATION_REQUIRED`,exit 2,不删除;
+  `purge --yes` → `{freedBytes,freed,removed[]}`。
+
+`build`/`package`/`bundle`/`clean` 使用与 workspace 检查命令一致的
+`workspace/modules/summary` 外壳;每个 module 的 `result.artifacts[]` 为:
+
+```text
+{kind, path, sha256?, bytes?, fileCount?, variant?, mainClass?}
+```
+
+- `build`: `kind=classes`,`fileCount`,`bytes`;不提供单文件 sha256
+- `package`: `kind=jar`,`variant=plain|uber`,`sha256`,`bytes`,`mainClass?`
+- `bundle`: `kind=bundle-directory`(fileCount/bytes)以及
+  `kind=tar.gz`(sha256/bytes);`result.files` 给出 launcher/setup/uninstall/checksums
+- `clean`: `result.removed[]` 每项含 `kind=target|dist,path,bytes,fileCount`;
+  另有 `removedCount` 和 `nothingToClean`
+- 失败 module 在根 `diagnostics[]` 有稳定码(如 `BUILD_FAILED`、
+  `PACKAGE_FAILED`、`BUNDLE_FAILED`、`CLEAN_FAILED`)及 exit code
+
+`init --json` 输出 `{mode:project|pom|workspace,file,overwritten,
+project?:{name,version},moduleCount?,modules[]?,nextActions}`。
+`add --json <key> <value>` 输出 `{mode:"mutate",dependency:{id,value},
+manifest,lock,artifactCount,lockUpdated}`;无 value 的远程发现模式以
+`JSON_DISCOVERY_UNSUPPORTED`(exit 2)明确拒绝,不混入人类列表。
+`remove --json <id>` 输出 `{mode:"mutate",removed:{id},manifest,lock,
+artifactCount,lockUpdated}`。
+`upgrade --json [--check]` 输出 `{checkOnly,currentVersion,latestVersion,
+updateAvailable,upgraded,takesEffectNextInvocation}`;`--check` 不下载、不执行
+setup.sh、不修改安装目录。
+
+`publish --json [target] [--dry-run]` 输出 `{dryRun,target?,project,
+artifacts[],uploaded,verified}`。artifact 为
+`{kind,path,sha256?,bytes,url?,wouldWrite,wouldUpload,uploaded}`。
+dry-run 不写 `target/dist/`、不创建远端目标、不 PUT、不 GET。
+
+`release --json [target] [--dry-run] [--allow-unsigned]` 输出
+`{dryRun,target?,project,jdk,signing:{signed,publicKey?},installerUrl,
+bootstrapUrl?,files[],wouldUpload[],uploaded,verified}`。
+dry-run 不写 `target/dist/release/`、不签名文件、不创建远端目标、不上传。
+
+`--offline` 对发布链路按 target 判断:无 target 或 `mjm:local:` 允许;
+`gh:` 与远端 mjm target 在产生任何网络请求前以 `OFFLINE_FORBIDDEN` 拒绝。
+`release` 的 `gh:`/远端 mjm target 同样处理。
+
+`test --json` 使用 workspace/modules 外壳;每个 module 的 `result` 为
+`{reportsDir,reportFormat:"junit-xml",tests,passed,failed,skipped,
+noTests,reportFiles[],durationMs}`。测试失败仍是有效结果:module exit 1、
+根 status=`failed`,并产生 `TEST_FAILED` diagnostic;编译/环境错误无报告时
+也为 `TEST_FAILED`。子进程测试日志走 stderr,不得混入 JSON stdout。
+
+`checks[]` 元素为 `{id, status, message, details?}`;`id` 是稳定机器码,
+`status` 为 `ok|failed|skipped`。以下字段集合(新增字段向后兼容;删改需新版本)。
 
 **tree**
 
@@ -487,6 +643,13 @@ Maven 布局。区别在于产物:库给依赖解析用,安装包给最终用户
 **Maven 布局不是发布目标**:mjm 不写 POM,`https://host/`、`http://host/`、`local:<dir>` 一律拒绝(exit 1)。
 Maven 布局仓库仍可**读取**(`[repos]` 的 `type = "maven"`,§2.1)。
 
+HTTP mjm-layout 发布固定使用 **PUT**,不是 POST:
+
+- 每个 artifact 的最终 URL 由布局唯一确定,PUT 直接创建/替换该资源;
+- PUT 是幂等的:重试一次发布不会产生重复资源,也不会让服务端改名;
+- 发布完成后必须 `GET` 回读 jar、描述符、sha256 三个文件并逐字节比较;写入成功但回读失败或字节不同 → exit 1;
+- POST 适用于服务端分配 URL 或 multipart 表单;采用它需要 host 专属的 endpoint、字段名和响应格式,无法满足“仓库就是 URL”的契约。只支持 POST 的主机需要自行提供 PUT 网关。
+
 ### 6.7 全局旗标 `--offline`
 
 **禁止本次运行的一切网络访问。** store 里已有的内容照常使用（会话缓存 → 持久索引 → 字节校验）；缺任何东西即失败，错误消息报出缺失的 URL，并说明如何填充。
@@ -515,7 +678,8 @@ Maven 布局仓库仍可**读取**(`[repos]` 的 `type = "maven"`,§2.1)。
 
 生成在 `target/dist/`;`mjm package` 产出 jar,`mjm publish` 写描述符与 sha256。
 发布**只发 mjm 布局**:`mjm:https://` 的 `<base>/<name>/<version>/` 或 `mjm:local:<dir>` 的同构目录;
-Maven 布局(`group/...`,需要 POM)不是发布目标(§6.6)。
+Maven 布局(`group/...`,需要 POM)不是发布目标(§6.6)。HTTP 上传为 PUT,并以 GET 回读三件套做
+逐字节校验;目标主机必须是可写、匿名可读的 PUT 端点。
 
 ### 7.2 bundle 形态
 

@@ -1,5 +1,8 @@
 package com.jujin.mjm.cli;
 
+import com.jujin.freeway.commons.json.JsonArray;
+import com.jujin.freeway.commons.json.JsonObject;
+import com.jujin.freeway.commons.json.JsonUtils;
 import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.mjm.pom.PomSource;
 import com.jujin.mjm.project.DescriptorSource;
@@ -53,53 +56,140 @@ public final class WhyCommand implements Command {
 
 
     @Override
+    public Command.Category category() {
+        return Command.Category.INSPECT;
+    }
+
+    @Override
+    public int order() {
+        return 20;
+    }
+
+    @Override
+    public CommandCapabilities capabilities() {
+        return CommandCapabilities.builder()
+                .json()
+                .network(CommandCapabilities.NetworkMode.OPTIONAL)
+                .writes(CommandCapabilities.WriteScope.CACHE)
+                .workspace(CommandCapabilities.WorkspaceMode.MODULE)
+                .build();
+    }
+
+    @Override
     public int execute(List<String> args) {
+        boolean json = args.contains("--json");
+        if (json && Workspaces.rootAt(projectDir).isPresent() && !hasModuleOption(args)) {
+            JsonResult.error("why", 2, "MODULE_REQUIRED",
+                    "this directory is a workspace root — say which module: --module <path>")
+                    .emit(2);
+            return 2;
+        }
         Integer workspace = WorkspaceRun.requireModule(projectDir, args,
                 (dir, rest) -> new WhyCommand(store, pomSource, descriptorSource, dir)
                         .execute(rest));
         if (workspace != null) {
             return workspace;
         }
-        if (args.isEmpty()) {
-            System.err.println("mjm: why needs an id — mjm why <group:artifact> (or a name)");
+
+        String target = null;
+        for (String arg : args) {
+            if (arg.equals("--json")) {
+                continue;
+            }
+            if (target != null) {
+                String message = "why takes exactly one id — got '" + arg + "'";
+                if (json) {
+                    JsonResult.error("why", 2, "USAGE", message).emit(2);
+                } else {
+                    System.err.println(Ui.errPrefix() + message);
+                }
+                return 2;
+            }
+            target = arg;
+        }
+        if (target == null) {
+            String message = "why needs an id — mjm why <group:artifact> (or a name)";
+            if (json) {
+                JsonResult.error("why", 2, "USAGE", message).emit(2);
+            } else {
+                System.err.println(Ui.errPrefix() + message);
+            }
             return 2;
         }
-        if (args.size() > 1) {
-            System.err.println("mjm: why takes exactly one id — got '" + args.get(1) + "'");
-            return 2;
-        }
-        String target = args.getFirst();
+
+        final String wanted = target;
         MjProject project;
         try {
             project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
         } catch (IOException e) {
-            System.err.println("mjm: no mjm.toml in " + projectDir
-                    + " — run mjm init to create one");
+            String message = "no mjm.toml in " + projectDir + " — run mjm init to create one";
+            if (json) {
+                JsonResult.error("why", 1, "MANIFEST_MISSING", message).emit(1);
+            } else {
+                System.err.println(Ui.errPrefix() + message);
+            }
             return 1;
         }
         ResolvedGraph graph;
         try {
             graph = LockedGraphView.graph(projectDir, project, pomSource, descriptorSource);
         } catch (LockedGraphView.OutOfDateException e) {
-            System.err.println("mjm: " + e.getMessage());
+            if (json) {
+                JsonResult.error("why", 1, "LOCK_STALE", e.getMessage()).emit(1);
+            } else {
+                System.err.println(Ui.errPrefix() + e.getMessage());
+            }
             return 1;
         }
         Substitutions substitutions = Substitutions.forProject(projectDir);
 
         ResolvedGraph.ResolvedArtifact artifact = graph.artifacts().stream()
-                .filter(a -> a.id().equals(target))
+                .filter(a -> a.id().equals(wanted))
                 .findFirst()
                 .orElse(null);
         if (artifact == null) {
+            if (json) {
+                JsonResult result = JsonResult.start("why")
+                        .workspace(projectDir, "single")
+                        .put("found", false)
+                        .put("target", target);
+                result.emit(0);
+                return 0;
+            }
             System.out.println("'" + target + "' is not in the graph — it is not declared "
                     + "and no dependency pulls it");
+            return 0;
+        }
+
+        List<List<String>> paths = paths(graph, target);
+        if (json) {
+            JsonObject identity = JsonUtils.object();
+            identity.put("id", artifact.id());
+            identity.put("version", artifact.version());
+            identity.put("depth", artifact.depth());
+            identity.put("declared", artifact.declared());
+            identity.put("scope", artifact.scope().name()
+                    .toLowerCase(java.util.Locale.ROOT));
+            identity.put("marker", substitutions.marker(artifact.id()));
+            JsonArray pathsJson = JsonUtils.array();
+            for (List<String> path : paths) {
+                JsonArray one = JsonUtils.array();
+                path.forEach(one::add);
+                pathsJson.add(one);
+            }
+            JsonResult.start("why")
+                    .workspace(projectDir, "single")
+                    .put("found", true)
+                    .put("artifact", identity)
+                    .put("paths", pathsJson)
+                    .put("introductionPaths", paths.size())
+                    .emit(0);
             return 0;
         }
 
         System.out.println(target + "@" + artifact.version() + " — depth " + artifact.depth()
                 + (artifact.declared() ? ", declared directly" : "")
                 + substitutions.marker(artifact.id()));
-        List<List<String>> paths = paths(graph, target);
         if (paths.isEmpty()) {
             System.out.println("  (declared: the root of its own path)");
             return 0;
@@ -159,4 +249,9 @@ public final class WhyCommand implements Command {
                 .map(WhyCommand::display)
                 .orElse(id);
     }
+    private static boolean hasModuleOption(List<String> args) {
+        return args.stream().anyMatch(arg ->
+                arg.equals("--module") || arg.startsWith("--module="));
+    }
+
 }

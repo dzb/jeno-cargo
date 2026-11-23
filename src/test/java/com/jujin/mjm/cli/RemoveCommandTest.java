@@ -6,6 +6,9 @@ import com.jujin.mjm.store.StorePomSource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -169,6 +172,30 @@ class RemoveCommandTest {
             "com.example:lib-a" = "1.0.0"
             "com.example:lib-b" = "1.0.0"
             """.formatted(dir.resolve("vendor").toAbsolutePath()));
+    }
+
+    @Test
+    void jsonRemoveReportsTheRemovedDependencyAndUpdatedLock(@TempDir Path storeDir) throws Exception {
+        vendorProject();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        PrintStream original = System.out;
+        int exit;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            exit = remove(storeDir).execute(List.of("com.example:lib-a", "--json"));
+        } finally {
+            System.setOut(original);
+        }
+
+        assertEquals(0, exit);
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                out.toString(StandardCharsets.UTF_8));
+        assertEquals("remove", json.getString("command"));
+        assertEquals("com.example:lib-a", json.getObject("removed").getString("id"));
+        assertEquals(1, json.getInt("artifactCount"));
+        assertEquals(true, json.getBoolean("lockUpdated"));
+        assertFalse(Files.readString(dir.resolve("mjm.toml")).contains("lib-a"));
+        assertTrue(Files.exists(dir.resolve("mjm.lock")));
     }
 
     @Test

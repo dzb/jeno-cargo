@@ -175,7 +175,7 @@ final class Substitutions {
 
     private void noteOnce(Module module, String lockedVersion) {
         if (noted.add("version:" + module.id())) {
-            System.err.println("mjm: " + module.id() + ": local " + module.version()
+            System.err.println(Ui.errPrefix() + module.id() + ": local " + module.version()
                     + ", locked " + lockedVersion);
         }
     }

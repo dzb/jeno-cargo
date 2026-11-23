@@ -86,11 +86,45 @@ public final class UpdateCommand implements Command {
     }
 
     @Override
+    public Command.Category category() {
+        return Command.Category.MAINTAIN;
+    }
+
+    @Override
+    public int order() {
+        return 20;
+    }
+
+    @Override
+    public CommandCapabilities capabilities() {
+        return CommandCapabilities.builder()
+                .json()
+                .network(CommandCapabilities.NetworkMode.ALWAYS)
+                .writes(CommandCapabilities.WriteScope.USER_INSTALL)
+                .workspace(CommandCapabilities.WorkspaceMode.GLOBAL)
+                .build();
+    }
+
+    @Override
     public int execute(List<String> args) {
-        if (!args.isEmpty()) {
-            System.err.println("mjm: upgrade takes no arguments — got '" + args.getFirst() + "'");
-            return 2;
+        boolean checkOnly = false;
+        boolean json = false;
+        for (String arg : args) {
+            switch (arg) {
+                case "--check" -> checkOnly = true;
+                case "--json" -> json = true;
+                default -> {
+                    String message = "upgrade takes --check only — got '" + arg + "'";
+                    if (json) {
+                        JsonResult.error("upgrade", 2, "USAGE", message).emit(2);
+                    } else {
+                        System.err.println(Ui.errPrefix() + message);
+                    }
+                    return 2;
+                }
+            }
         }
+
         String latest;
         String tarGzUrl = null;
         try {
@@ -98,41 +132,97 @@ public final class UpdateCommand implements Command {
                     HttpRequest.newBuilder(URI.create(releasesApi())).GET().build(),
                     HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() != 200) {
-                System.err.println("mjm: cannot check for updates (GitHub answered "
-                        + response.statusCode() + ")");
-                return 1;
+                return fail(json, 1, "UPDATE_CHECK_FAILED",
+                        "cannot check for updates (GitHub answered " + response.statusCode() + ")");
             }
             var map = JsonUtils.parseObject(response.body()).toMap();
             latest = String.valueOf(map.get("tag_name"));
             tarGzUrl = findTarGzUrl(map);
         } catch (IOException | InterruptedException e) {
-            System.err.println("mjm: cannot reach GitHub — check your network connection");
-            return 1;
+            return fail(json, 1, "NETWORK_FAILED",
+                    "cannot reach GitHub — check your network connection");
         }
 
-        if (latest == null || latest.isBlank()) {
-            System.err.println("mjm: GitHub returned no release tag");
-            return 1;
+        if (latest == null || latest.isBlank() || "null".equals(latest)) {
+            return fail(json, 1, "RELEASE_INVALID", "GitHub returned no release tag");
         }
         String latestVersion = latest.startsWith("v") ? latest.substring(1) : latest;
+        boolean updateAvailable = !latestVersion.equals(Mjm.VERSION);
 
-        if (latestVersion.equals(Mjm.VERSION)) {
-            System.out.println("mjm " + Mjm.VERSION + " — already at the latest version");
+        if (checkOnly) {
+            if (json) {
+                emitResult(json, latestVersion, updateAvailable, true, false, false);
+            } else if (latestVersion.equals(Mjm.VERSION)) {
+                System.out.println("mjm " + Mjm.VERSION + " — already at the latest version");
+            } else if (updateAvailable) {
+                System.out.println("mjm " + Mjm.VERSION + " → " + latestVersion
+                        + " — update available");
+            } else {
+                System.out.println("mjm " + Mjm.VERSION + " — latest release is " + latestVersion);
+            }
+            return 0;
+        }
+
+        if (!updateAvailable) {
+            if (json) {
+                emitResult(json, latestVersion, false, false, false, false);
+            } else {
+                System.out.println("mjm " + Mjm.VERSION + " — already at the latest version");
+            }
+            return 0;
+        }
+
+        if (tarGzUrl == null || tarGzUrl.isBlank()) {
+            return fail(json, 1, "RELEASE_ASSET_MISSING",
+                    "no tar.gz asset found in release " + latest);
+        }
+
+        if (json) {
+            String versionToInstall = latestVersion;
+            String urlToInstall = tarGzUrl;
+            JsonCapture.Result captured = JsonCapture.run(() ->
+                    install(versionToInstall, urlToInstall));
+            if (captured.exitCode() != 0) {
+                JsonResult.error("upgrade", captured.exitCode(), "UPGRADE_FAILED", captured.message())
+                        .emit(captured.exitCode());
+                return captured.exitCode();
+            }
+            emitResult(json, latestVersion, true, false, true, true);
             return 0;
         }
 
         System.out.println("upgrading " + Mjm.VERSION + " → " + latestVersion + " ...");
-        if (tarGzUrl == null || tarGzUrl.isBlank()) {
-            System.err.println("mjm: no tar.gz asset found in release " + latest);
-            return 1;
-        }
+        return install(latestVersion, tarGzUrl);
+    }
 
+    private void emitResult(boolean json, String latestVersion, boolean updateAvailable,
+                            boolean checkOnly, boolean upgraded, boolean applied) {
+        JsonResult.start("upgrade")
+                .put("checkOnly", checkOnly)
+                .put("currentVersion", Mjm.VERSION)
+                .put("latestVersion", latestVersion)
+                .put("updateAvailable", updateAvailable)
+                .put("upgraded", upgraded)
+                .put("takesEffectNextInvocation", upgraded)
+                .emit(0);
+    }
+
+    private int fail(boolean json, int exit, String code, String message) {
+        if (json) {
+            JsonResult.error("upgrade", exit, code, message).emit(exit);
+        } else {
+            System.err.println(Ui.errPrefix() + message);
+        }
+        return exit;
+    }
+
+    private int install(String latestVersion, String tarGzUrl) {
         Path tempTar = null;
         Path tempDir = null;
         try {
             Fetch fetch = downloadWithRetry(tarGzUrl);
             if (fetch.body() == null) {
-                System.err.println("mjm: download failed: " + fetch.failure());
+                System.err.println(Ui.errPrefix() + "download failed: " + fetch.failure());
                 if (fetch.propagationLikely()) {
                     System.err.println("  the release asset may not have propagated yet — "
                             + "retry in a moment; if it keeps failing, download it from "
@@ -150,7 +240,7 @@ public final class UpdateCommand implements Command {
             Process tar = new ProcessBuilder("tar", "-xzf", tempTar.toString(),
                     "-C", tempDir.toString()).inheritIO().start();
             if (tar.waitFor() != 0) {
-                System.err.println("mjm: extraction failed");
+                System.err.println(Ui.errPrefix() + "extraction failed");
                 return 1;
             }
 
@@ -166,14 +256,14 @@ public final class UpdateCommand implements Command {
             int exit = install.waitFor();
 
             if (exit != 0) {
-                System.err.println("mjm: installation failed (exit " + exit + ")");
+                System.err.println(Ui.errPrefix() + "installation failed (exit " + exit + ")");
                 return 1;
             }
             System.out.println("upgraded to mjm " + latestVersion
                     + " — takes effect on the next mjm invocation");
             return 0;
         } catch (IOException | InterruptedException e) {
-            System.err.println("mjm: upgrade failed: " + e.getMessage());
+            System.err.println(Ui.errPrefix() + "upgrade failed: " + e.getMessage());
             return 1;
         } finally {
             // the temp tree goes away whether the upgrade succeeded, failed or

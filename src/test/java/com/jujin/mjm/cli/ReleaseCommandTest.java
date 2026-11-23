@@ -118,7 +118,55 @@ class ReleaseCommandTest {
 
         assertEquals(0, result.exit(), result.out() + result.err());
         assertFalse(Files.exists(repo), "dry-run never touches the target");
+        assertFalse(Files.exists(dir.resolve("target/dist/release")),
+                "dry-run never prepares local release files either");
         assertTrue(result.out().contains("dry run — would upload:"), result.out());
+    }
+
+    @Test
+    void jsonDryRunIsOneDocumentAndWritesNothing() throws Exception {
+        Path repo = dir.resolve("never-json");
+
+        Result result = runRaw("--json", "--dry-run", "--allow-unsigned",
+                "mjm:local:" + repo);
+
+        assertEquals(0, result.exit(), result.err());
+        assertFalse(Files.exists(repo));
+        assertFalse(Files.exists(dir.resolve("target/dist/release")));
+        var json = JsonUtils.parseObject(result.out());
+        assertEquals("release", json.getString("command"));
+        assertEquals(true, json.getBoolean("dryRun"));
+        assertEquals(false, json.getBoolean("uploaded"));
+        assertEquals("app", json.getObject("project").getString("name"));
+        assertTrue(json.getArray("files").size() >= 2);
+        assertTrue(json.getArray("wouldUpload").size() > 0);
+    }
+
+    @Test
+    void jsonReleaseReportsPreparedFilesWithoutATarget() throws Exception {
+        Result result = runRaw("--json", "--allow-unsigned");
+
+        assertEquals(0, result.exit(), result.err());
+        assertTrue(Files.exists(dir.resolve("target/dist/release/setup.sh")));
+        var json = JsonUtils.parseObject(result.out());
+        assertEquals(false, json.getBoolean("dryRun"));
+        assertEquals(false, json.getBoolean("uploaded"));
+        assertTrue(json.getArray("files").size() >= 4);
+    }
+
+    @Test
+    void jsonRemoteReleaseUnderOfflineIsRefusedBeforeUpload() throws Exception {
+        ArtifactStore.goOffline();
+        try {
+            Result result = runRaw("--json", "--allow-unsigned", "gh:owner/repo");
+
+            assertEquals(2, result.exit());
+            var json = JsonUtils.parseObject(result.out());
+            assertEquals("OFFLINE_FORBIDDEN",
+                    json.getArray("diagnostics").getObject(0).getString("code"));
+        } finally {
+            resetOffline();
+        }
     }
 
     @Test
@@ -291,6 +339,16 @@ class ReleaseCommandTest {
         assertEquals(1, result.exit());
         assertTrue(result.err().contains("signing"), result.err());
         assertFalse(Files.exists(repo), "nothing is uploaded after a signing failure");
+    }
+
+    private static void resetOffline() {
+        try {
+            var field = ArtifactStore.class.getDeclaredField("offline");
+            field.setAccessible(true);
+            field.set(null, false);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
     }
 
     private Result run(String... args) {

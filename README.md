@@ -14,7 +14,7 @@ curl -fsSL https://raw.githubusercontent.com/dzb/mjm-cargo/master/setup.sh | bas
 mjm --version          # mjm <version> — modern java manager
 ```
 
-**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D16, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
+**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D21, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
 
 ---
 
@@ -71,8 +71,11 @@ compile classpath, `mjm run`, `mjm package`, `mjm bundle`, or a **published
 descriptor**. Production use wins: an artifact reachable from both scopes is
 main.
 
-This is what makes mjm's own toolchain honest — junit is a dev dependency, so it
-can never leak into what mjm publishes.
+In mjm's own manifest JUnit is a main dependency because `MjmTestFork` (part of
+the production CLI surface) compiles against the JUnit Platform API. Packaging
+metadata in `[toolchain]` marks those same artifacts as test machinery, so
+`mjm bundle --toolchain` ships them under `lib/toolchain/` instead of merging
+them into the launcher jar.
 
 ## Quick start
 
@@ -165,10 +168,31 @@ which mjm does not have. A dependency names its repository in the value
 `gh` is a reserved name — the `gh:` prefix wins, so a repository cannot take it.
 `MJM_PUBLISH_TOKEN` adds a bearer token when the mjm-layout host wants one.
 
+Before publishing, run the local preflight:
+
+```bash
+mjm verify
+```
+
+It checks that every direct declaration still matches `mjm.lock`, that the
+lock's jar and metadata bytes are still present and hash-correct in the store,
+and that any already-built `target/dist` publish triple or bundle
+`SHA256SUMS` is internally consistent. It never resolves, downloads or
+modifies project files.
+
 Publishing accepts only targets mjm can read back — a GitHub release, an mjm
 layout over HTTPS, or an mjm layout on disk. GitHub gets native upload because
 its release API is stable and public; everything else is the three files over a
-plain PUT, and nothing else is promised.
+plain PUT followed by a GET read-back of every file.
+
+PUT is deliberate, not an implementation accident. The final artifact URLs are
+deterministic, PUT is idempotent, and a retry cannot create duplicates or make
+the server choose a different name. POST would require a host-specific upload
+endpoint, multipart field names and response parsing; that is a narrower,
+non-portable contract. WebDAV servers, nginx `dav_module`, Apache `mod_dav` and
+object-storage gateways accept PUT. A plain static server accepts neither PUT
+nor POST, so it remains read-only. A POST-only host can front the repository
+with a PUT-capable gateway.
 
 The descriptor travels with the jar, so a published library is a **full
 citizen**: its dependencies participate in the consumer's closure and depth
@@ -194,13 +218,15 @@ mjm builds mjm, and freeway (the framework mjm is built on) is built by mjm too.
         └──────────────────────────────────────────────┘
 ```
 
-The lifecycle is explicit steps, and that is deliberate: **mjm has no `release`
-command.** Deciding when to build, what to name it, and where to upload it is a
-project's CI job; mjm provides the mechanics one step at a time.
+The lifecycle is explicit steps, and that is deliberate: **mjm has no release
+lifecycle command.** `mjm release` exists, but it only uploads an installer that
+`mjm bundle` already produced — it never builds, tests or bundles implicitly.
+Deciding when to run those steps, what to name the release, and where to upload
+it remains a project's CI job.
 
 ```bash
 mjm lock && mjm build && mjm test   # verify the code under test
-mjm bundle                          # assemble the installable distribution (mjm itself: --toolchain)
+mjm bundle --toolchain              # assemble mjm's installable distribution
 gh release create vX.Y.Z ...        # the CI decides to publish
 ```
 
@@ -241,9 +267,10 @@ production run never loads a single byte of it.
 `[project].main` and targets the JDK from `[java].version` (or the build JDK).
 `setup.sh` verifies `SHA256SUMS`, swaps `lib/` and `bin/` through a staging
 directory, and leaves `${XDG_CACHE_HOME:-~/.cache}/mjm/store` (your entire
-dependency cache) untouched; `uninstall.sh` removes the install. Test toolchain
-jars ship only with `--toolchain`. `mjm upgrade` (alias `mjm update`) upgrades in place and takes effect on
-the next invocation.
+dependency cache) untouched; `uninstall.sh` removes the install. Artifacts named
+in `[toolchain].jars` ship only with `bundle --toolchain`, under
+`lib/toolchain/`. `mjm upgrade` (alias `mjm update`) upgrades in place and
+takes effect on the next invocation.
 
 mjm's own release tarball is signed: each release carries
 `mjm-bin-{version}.tar.gz.minisig` and `minisign.pub`. Verify manually before
@@ -274,6 +301,8 @@ mjm package --uber
 mjm bundle
 mjm classpath --test
 mjm audit
+mjm doctor
+mjm verify
 mjm publish gh:owner/repo
 
 # applications: installer + bootstrap
@@ -310,10 +339,242 @@ Unknown arguments are usage errors (exit 2), never silently ignored. `--` ends
 mjm's own options: after it, arguments belong to the command — for `run`, to the
 program (`mjm run app.Main -- --offline` passes `--offline` through).
 
+### Output and colour
+
+Human output adapts to the destination. A terminal gets colour, check marks and
+a grouped help page; status lines keep their historical plain text when stdout
+is piped, so scripts do not need to parse ANSI escapes.
+
+```bash
+MJM_COLOR=always mjm --help   # force colour
+MJM_COLOR=never  mjm build    # force plain text
+NO_COLOR=1       mjm doctor   # the conventional opt-out
+```
+
+`MJM_COLOR` accepts `always`, `never`, or the default `auto`. `mjm doctor`,
+`mjm tree`, lifecycle status lines and errors use the same palette; completion
+lines also include elapsed time on a terminal. Commands that support `--json`
+keep stdout as one pure JSON document regardless of the colour setting;
+diagnostics still go to stderr.
+
+### Agent command catalog
+
+Machine-discovery starts with one document:
+
+```bash
+mjm --json --help
+mjm --json verify --help    # one command descriptor
+mjm --json --version
+```
+
+The catalog is generated from each command's declared capabilities, not a
+second hand-maintained list. Every entry states whether JSON output is already
+supported, whether the command can use the network, which scopes it writes, its
+workspace mode, destructive/confirmation flags, and whether it passes arguments
+through to a program:
+
+```json
+{
+  "schemaVersion": 1,
+  "kind": "commandCatalog",
+  "commandCount": 22,
+  "commands": [
+    {
+      "name": "verify",
+      "supportsJson": true,
+      "network": "never",
+      "writes": [],
+      "workspace": "aggregate",
+      "passThrough": false
+    }
+  ]
+}
+```
+
+`run` is the one deliberate `supportsJson: false` command: its stdout, stderr,
+and exit code belong to the child program. `mjm --json run ...` returns a
+structured `JSON_UNSUPPORTED` error; `mjm run app --json` passes `--json` to the
+program because everything after the target is the program's.
+
+`mjm info --json` is the consumer-facing artifact export:
+
+```json
+{
+  "artifact": {
+    "id": "acme:widget",
+    "group": "acme",
+    "artifact": "widget",
+    "version": "1.2.0",
+    "sha256": "...",
+    "metaSha256": "..."
+  },
+  "provenance": {
+    "source": "gh:acme/widget",
+    "layout": "github-release",
+    "metadata": {"kind": "descriptor", "path": "...", "sha256": "..."},
+    "jar": {"path": "...", "local": false}
+  },
+  "descriptor": {
+    "license": "Apache-2.0",
+    "javaVersion": 21,
+    "dependencies": [{"id": "org.slf4j:slf4j-api", "version": "2.0.18"}]
+  },
+  "context": {"scope": "main", "depth": 1, "local": false},
+  "source": {"page": "...", "archive": "...", "fetched": false}
+}
+```
+
+This is the node-level contract for downstream tools: hashes and provenance are
+artifact facts, while `scope`, `depth`, and local substitution stay under
+`context`. `info --source --json` currently returns a structured
+`JSON_SOURCE_UNSUPPORTED` error; local metadata export does not write a source
+tree.
+
+Artifact-producing commands expose the same module envelope. In single-project
+mode `modules` has one entry; at a workspace root it has every module in
+dependency order. Each module entry contains an optional `result` object:
+
+```json
+{
+  "kind": "commandResult",
+  "command": "package",
+  "status": "ok",
+  "modules": [
+    {
+      "module": ".",
+      "status": "ok",
+      "result": {
+        "artifacts": [
+          {
+            "kind": "jar",
+            "variant": "plain",
+            "path": "/abs/project/target/dist/demo-0.1.0.jar",
+            "sha256": "...",
+            "bytes": 1234
+          }
+        ]
+      }
+    }
+  ],
+  "summary": {"modules": 1, "passedModules": 1, "failedModules": 0}
+}
+```
+
+`build` reports a `classes` artifact; `package` reports a jar (plain or uber);
+`bundle` reports a `bundle-directory` plus the `tar.gz` archive; `clean` reports
+the removed paths, byte counts, and file counts.
+
+Mutation commands report the actual project change:
+
+```json
+{
+  "command": "add",
+  "mode": "mutate",
+  "dependency": {"id": "com.example:lib", "value": "1.0.0"},
+  "manifest": "/abs/project/mjm.toml",
+  "lock": "/abs/project/mjm.lock",
+  "artifactCount": 1,
+  "lockUpdated": true
+}
+```
+
+`init --json` reports `mode=project|pom|workspace`, the written file, whether it
+overwrote an existing file, project identity or workspace module list.
+`add --json` without a value is the remote discovery mode and returns a
+structured `JSON_DISCOVERY_UNSUPPORTED`; pass an explicit version to get the
+mutation contract. `remove --json` reports the removed id and updated lock.
+`upgrade --json --check` reports `currentVersion`, `latestVersion`,
+`updateAvailable`, `checkOnly`, and never downloads or installs.
+
+`test --json` keeps console test output off stdout and returns the summary plus
+the JUnit XML paths:
+
+```json
+{
+  "command": "test",
+  "status": "failed",
+  "exitCode": 1,
+  "modules": [{
+    "module": ".",
+    "status": "failed",
+    "exitCode": 1,
+    "result": {
+      "tests": 2,
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0,
+      "reportFormat": "junit-xml",
+      "reportsDir": "/abs/project/target/test-results",
+      "reportFiles": ["/abs/project/target/test-results/TEST-demo.Tests.xml"]
+    }
+  }],
+  "diagnostics": [{"code": "TEST_FAILED"}]
+}
+```
+
+See [docs/agent-workflows.md](docs/agent-workflows.md) for the complete
+discovery and golden-path recipes.
+
+Publishing and releasing have side-effect-free dry-run plans:
+
+```bash
+mjm --json publish --dry-run mjm:local:../repo
+mjm --json release --dry-run --allow-unsigned mjm:local:../releases
+```
+
+`publish --dry-run` reports the existing jar plus the descriptor/checksum it
+would write and the URLs it would upload. `release --dry-run` reports the
+installer, generated files, signing mode, and would-upload URLs. Neither writes
+`target/dist`, creates the remote target, signs a file, or performs a network
+request.
+
+`--offline` is target-aware for the publish path: no target and
+`mjm:local:` targets are allowed; `gh:` and remote mjm targets return structured
+`OFFLINE_FORBIDDEN` before upload. Remote release targets follow the same rule.
+
+The current JSON commands are `tree`, `outdated`, `audit`, `doctor`, `verify`,
+`lock` (both normal locking and `--check`), `why`, `classpath`, `info`, `cache`
+(including `dir`, `size`, `prune`, and `purge`), `build`, `package`, `bundle`,
+`clean`, `init`, `add`, `remove`, `upgrade`, `publish`, `release`, and `test`.
+Their root objects all carry:
+
+```json
+{
+  "schemaVersion": 1,
+  "kind": "commandResult",
+  "command": "verify",
+  "status": "ok",
+  "exitCode": 0,
+  "dryRun": false,
+  "offline": false,
+  "diagnostics": []
+}
+```
+
+`doctor`, `verify`, and `lock --check` also expose a stable `checks[]` or
+module report with machine `id`, `status`, and message fields. Workspace-mode
+results are one document with a `modules[]` array and a summary, never several
+concatenated JSON documents.
+
 Deliverables moved: `dist/` is now `target/dist/` (it is build output, and
 `mjm clean` removes the whole `target/` tree). Scripts that read `dist/` need
 one edit; an existing `dist/` is no longer read and `publish` tells you so.
 
+
+### Migrating from the old `mj` names
+
+Current mjm only reads `mjm.toml`, `mjm.lock`, and `mjm.ws.toml`. It does **not**
+fall back to the older `mj.toml` / `mj.lock` names. Diagnose a checkout with:
+
+```bash
+mjm doctor
+```
+
+At a workspace root it checks every module; elsewhere it checks the current
+project. It reports legacy names, missing manifests/locks, malformed files and
+unwritable XDG roots without resolving dependencies or touching the network.
+`mjm init --ws` also names legacy `mj.toml` directories and points at the
+migration path instead of silently omitting them.
 
 ### Local workspaces
 
@@ -368,13 +629,12 @@ make someone re-decide.
 ## Status
 
 **Self-hosting end to end.** mjm builds, tests, packages, publishes and
-upgrades itself, and builds every freeway module in CI. The test suite is
-green on every push that touches code — the badge above tracks the release.
-
-Not yet done, and known: JUnit XML reports for CI tooling, multi-module
-(workspace) builds. A discovery/index layer is deliberately deferred until
-there is an ecosystem worth indexing — knowing a package's coordinates has to
-work first.
+upgrades itself, and builds every freeway module in CI. The test suite is green
+on every push that touches code — the badge above tracks the release. JUnit XML
+reports and local multi-module workspaces are implemented; the remaining known
+gaps are tracked in [REMINDS.md](REMINDS.md) and the release notes. A
+discovery/index layer is deliberately deferred until there is an ecosystem
+worth indexing — knowing a package's coordinates has to work first.
 
 ## License
 

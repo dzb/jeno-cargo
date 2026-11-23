@@ -1,5 +1,7 @@
 package com.jujin.mjm.cli;
 
+import com.jujin.freeway.commons.json.JsonArray;
+import com.jujin.freeway.commons.json.JsonUtils;
 import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.mjm.project.MjProject;
 import com.jujin.mjm.project.ProjectReader;
@@ -63,7 +65,35 @@ public final class ClasspathCommand implements Command {
     }
 
     @Override
+    public Command.Category category() {
+        return Command.Category.INSPECT;
+    }
+
+    @Override
+    public int order() {
+        return 40;
+    }
+
+    @Override
+    public CommandCapabilities capabilities() {
+        return CommandCapabilities.builder()
+                .json()
+                .network(CommandCapabilities.NetworkMode.OPTIONAL)
+                .writes(CommandCapabilities.WriteScope.CACHE,
+                        CommandCapabilities.WriteScope.PROJECT)
+                .workspace(CommandCapabilities.WorkspaceMode.MODULE)
+                .build();
+    }
+
+    @Override
     public int execute(List<String> args) {
+        boolean json = args.contains("--json");
+        if (json && Workspaces.rootAt(projectDir).isPresent() && !hasModuleOption(args)) {
+            JsonResult.error("classpath", 2, "MODULE_REQUIRED",
+                    "this directory is a workspace root — say which module: --module <path>")
+                    .emit(2);
+            return 2;
+        }
         Integer workspace = WorkspaceRun.requireModule(projectDir, args,
                 (dir, rest) -> new ClasspathCommand(store, dir).execute(rest));
         if (workspace != null) {
@@ -73,17 +103,28 @@ public final class ClasspathCommand implements Command {
         Path file = null;
         for (int i = 0; i < args.size(); i++) {
             switch (args.get(i)) {
+                case "--json" -> { }
                 case "--test" -> test = true;
                 case "--file" -> {
                     if (i + 1 >= args.size()) {
-                        System.err.println("mjm: --file needs a path");
+                        String message = "--file needs a path";
+                        if (json) {
+                            JsonResult.error("classpath", 2, "USAGE", message).emit(2);
+                        } else {
+                            System.err.println(Ui.errPrefix() + message);
+                        }
                         return 2;
                     }
                     file = projectDir.resolve(args.get(++i));
                 }
                 default -> {
-                    System.err.println("mjm: unknown classpath option '" + args.get(i)
-                            + "' — use --test or --file <path>");
+                    String message = "unknown classpath option '" + args.get(i)
+                            + "' — use --test or --file <path>";
+                    if (json) {
+                        JsonResult.error("classpath", 2, "USAGE", message).emit(2);
+                    } else {
+                        System.err.println(Ui.errPrefix() + message);
+                    }
                     return 2;
                 }
             }
@@ -94,17 +135,30 @@ public final class ClasspathCommand implements Command {
         try {
             project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
             if (!Files.exists(projectDir.resolve("mjm.lock"))) {
-                System.err.println("mjm: no mjm.lock in " + projectDir
-                        + " — run mjm lock first");
+                String message = "no mjm.lock in " + projectDir + " — run mjm lock first";
+                if (json) {
+                    JsonResult.error("classpath", 1, "LOCK_MISSING", message).emit(1);
+                } else {
+                    System.err.println(Ui.errPrefix() + message);
+                }
                 return 1;
             }
             locked = LockFileReader.read(Files.readString(projectDir.resolve("mjm.lock")));
         } catch (IOException e) {
-            System.err.println("mjm: no mjm.toml in " + projectDir
-                    + " — run mjm init to create one");
+            String message = "no mjm.toml in " + projectDir + " — run mjm init to create one";
+            if (json) {
+                JsonResult.error("classpath", 1, "MANIFEST_MISSING", message).emit(1);
+            } else {
+                System.err.println(Ui.errPrefix() + message);
+            }
             return 1;
         } catch (RuntimeException e) {
-            System.err.println("mjm: " + e.getMessage());
+            if (json) {
+                JsonResult.error("classpath", 1, "MANIFEST_OR_LOCK_INVALID",
+                        e.getMessage()).emit(1);
+            } else {
+                System.err.println(Ui.errPrefix() + e.getMessage());
+            }
             return 1;
         }
 
@@ -115,7 +169,12 @@ public final class ClasspathCommand implements Command {
                             : ClasspathAssembler.Mode.EXPORT_MAIN,
                     projectDir, store, ClasspathAssembler.Input.export(project, locked));
         } catch (ClasspathAssembler.ClasspathException e) {
-            System.err.println("mjm: " + e.getMessage());
+            if (json) {
+                JsonResult.error("classpath", 1, "CLASSPATH_FAILED",
+                        e.getMessage()).emit(1);
+            } else {
+                System.err.println(Ui.errPrefix() + e.getMessage());
+            }
             return 1;
         }
 
@@ -128,12 +187,44 @@ public final class ClasspathCommand implements Command {
                 }
                 Files.writeString(file, line + System.lineSeparator());
             } catch (IOException e) {
-                System.err.println("mjm: cannot write " + file + " — " + e.getMessage());
+                String message = "cannot write " + file + " — " + e.getMessage();
+                if (json) {
+                    JsonResult.error("classpath", 1, "WRITE_FAILED", message).emit(1);
+                } else {
+                    System.err.println(Ui.errPrefix() + message);
+                }
                 return 1;
+            }
+            if (json) {
+                emitJson(test, classpath, file);
             }
             return 0;
         }
-        System.out.println(line);
+        if (json) {
+            emitJson(test, classpath, null);
+        } else {
+            System.out.println(line);
+        }
         return 0;
+    }
+
+    private static void emitJson(boolean test, ClasspathAssembler.Classpath classpath,
+                                 Path file) {
+        JsonArray entries = JsonUtils.array();
+        classpath.strings().forEach(entries::add);
+        JsonResult result = JsonResult.start("classpath")
+                .put("mode", test ? "test" : "compile")
+                .put("classpath", classpath.joined())
+                .put("entries", entries);
+        if (file != null) {
+            result.put("file", file.toAbsolutePath().normalize().toString())
+                    .put("written", true);
+        }
+        result.emit(0);
+    }
+
+    private static boolean hasModuleOption(List<String> args) {
+        return args.stream().anyMatch(arg ->
+                arg.equals("--module") || arg.startsWith("--module="));
     }
 }

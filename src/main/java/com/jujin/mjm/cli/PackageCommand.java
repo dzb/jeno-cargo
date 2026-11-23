@@ -1,5 +1,8 @@
 package com.jujin.mjm.cli;
 
+import com.jujin.freeway.commons.json.JsonArray;
+import com.jujin.freeway.commons.json.JsonObject;
+import com.jujin.freeway.commons.json.JsonUtils;
 import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.mjm.project.MjProject;
 import com.jujin.mjm.project.ProjectReader;
@@ -69,7 +72,89 @@ public final class PackageCommand implements Command {
 
 
     @Override
+    public Command.Category category() {
+        return Command.Category.BUILD;
+    }
+
+    @Override
+    public int order() {
+        return 40;
+    }
+
+    @Override
+    public CommandCapabilities capabilities() {
+        return CommandCapabilities.builder()
+                .json()
+                .network(CommandCapabilities.NetworkMode.OPTIONAL)
+                .writes(CommandCapabilities.WriteScope.TARGET)
+                .workspace(CommandCapabilities.WorkspaceMode.AGGREGATE)
+                .build();
+    }
+
+    @Override
     public int execute(List<String> args) {
+        boolean json = args.contains("--json");
+        List<String> cleaned = args.stream().filter(arg -> !arg.equals("--json")).toList();
+        if (json) {
+            return JsonWorkspace.run("package", projectDir, cleaned, this::jsonModule);
+        }
+        return executeHuman(cleaned);
+    }
+
+    private JsonWorkspace.ModuleResult jsonModule(Path moduleDir, List<String> args) {
+        long started = System.nanoTime();
+        JsonCapture.Result captured = JsonCapture.run(() ->
+                new PackageCommand(store, moduleDir).executeHuman(args));
+        if (captured.exitCode() != 0) {
+            return JsonWorkspace.ModuleResult.failed(captured.exitCode(),
+                    "PACKAGE_FAILED", captured.message());
+        }
+        try {
+            MjProject project = ProjectReader.parse(
+                    Files.readString(moduleDir.resolve("mjm.toml")));
+            boolean uber = args.contains("--uber");
+            String main = requestedMain(args, project);
+            String fileName = project.name() + "-" + project.version()
+                    + (uber ? "-uber" : "") + ".jar";
+            Path jar = moduleDir.resolve("target/dist").resolve(fileName)
+                    .toAbsolutePath().normalize();
+            if (!Files.isRegularFile(jar)) {
+                return JsonWorkspace.ModuleResult.failed(1, "ARTIFACT_MISSING",
+                        "package reported success but did not write " + jar);
+            }
+            JsonObject data = JsonUtils.object();
+            data.put("variant", uber ? "uber" : "plain");
+            data.put("durationMs", (System.nanoTime() - started) / 1_000_000L);
+            JsonArray artifacts = JsonUtils.array();
+            JsonObject artifact = JsonUtils.object();
+            artifact.put("kind", "jar");
+            artifact.put("variant", uber ? "uber" : "plain");
+            artifact.put("path", jar.toString());
+            artifact.put("sha256", ArtifactStore.sha256(jar));
+            artifact.put("bytes", Files.size(jar));
+            if (main != null) {
+                artifact.put("mainClass", main);
+            }
+            artifacts.add(artifact);
+            data.put("artifacts", artifacts);
+            data.put("project", project.name() + "@" + project.version());
+            return JsonWorkspace.ModuleResult.ok(data);
+        } catch (IOException | RuntimeException e) {
+            return JsonWorkspace.ModuleResult.failed(1, "RESULT_UNREADABLE",
+                    "package finished but its result could not be described: " + e.getMessage());
+        }
+    }
+
+    private static String requestedMain(List<String> args, MjProject project) {
+        for (int i = 0; i < args.size(); i++) {
+            if (args.get(i).equals("--main") && i + 1 < args.size()) {
+                return args.get(i + 1);
+            }
+        }
+        return project.main();
+    }
+
+    private int executeHuman(List<String> args) {
         Integer workspace = WorkspaceRun.orchestrate(projectDir, args, "packaged", false,
                 (dir, rest) -> new PackageCommand(store, dir).execute(rest));
         if (workspace != null) {
@@ -83,12 +168,12 @@ public final class PackageCommand implements Command {
                 uber = true;
             } else if (arg.equals("--main")) {
                 if (i + 1 >= args.size()) {
-                    System.err.println("mjm: --main needs the main class name");
+                    System.err.println(Ui.errPrefix() + "--main needs the main class name");
                     return 2;
                 }
                 mainClass = args.get(++i);
             } else {
-                System.err.println("mjm: unknown package option '" + arg + "'");
+                System.err.println(Ui.errPrefix() + "unknown package option '" + arg + "'");
                 return 2;
             }
         }
@@ -110,13 +195,13 @@ public final class PackageCommand implements Command {
             var mjToml = projectDir.resolve("mjm.toml");
             var mjLock = projectDir.resolve("mjm.lock");
             if (!Files.exists(mjToml)) {
-                System.err.println("mjm: no mjm.toml in " + projectDir
+                System.err.println(Ui.errPrefix() + "no mjm.toml in " + projectDir
                     + " — run mjm init to create one");
                 return 1;
             }
             project = ProjectReader.parse(Files.readString(mjToml));
             if (!Files.exists(mjLock)) {
-                System.err.println("mjm: no mjm.lock — run mjm lock first");
+                System.err.println(Ui.errPrefix() + "no mjm.lock — run mjm lock first");
                 return 1;
             }
             locked = LockFileReader.read(Files.readString(mjLock));
@@ -124,7 +209,7 @@ public final class PackageCommand implements Command {
             jars = store.verifiedJars(locked,
                     artifact -> substitutions.find(artifact.id()) != null);
         } catch (IOException | RuntimeException e) {
-            System.err.println("mjm: " + e.getMessage());
+            System.err.println(Ui.errPrefix() + e.getMessage());
             return 1;
         }
 
@@ -153,13 +238,13 @@ public final class PackageCommand implements Command {
         try {
             output = DistOutput.dist(projectDir).resolve(name + "-" + version + ".jar");
         } catch (IOException e) {
-            System.err.println("mjm: cannot prepare target/dist/ — " + e.getMessage());
+            System.err.println(Ui.errPrefix() + "cannot prepare target/dist/ — " + e.getMessage());
             return 1;
         }
         Path classes = projectDir.resolve(CLASSES);
 
         if (!Files.isDirectory(classes)) {
-            System.err.println("mjm: " + CLASSES + " is missing — run mjm build first");
+            System.err.println(Ui.errPrefix() + CLASSES + " is missing — run mjm build first");
             return 1;
         }
 
@@ -193,12 +278,12 @@ public final class PackageCommand implements Command {
                 }
             }
         } catch (IOException e) {
-            System.err.println("mjm: packaging failed: " + e.getMessage());
+            System.err.println(Ui.errPrefix() + "packaging failed: " + e.getMessage());
             return 1;
         }
 
-        System.out.println("packaged " + output + " — plain jar (project classes only, "
-                + "use --uber to merge dependencies)");
+        System.out.println(Ui.ok("packaged " + output
+                + " — plain jar (project classes only, use --uber to merge dependencies)"));
         return 0;
     }
 
@@ -215,13 +300,13 @@ public final class PackageCommand implements Command {
         try {
             output = DistOutput.dist(projectDir).resolve(name + "-" + version + "-uber.jar");
         } catch (IOException e) {
-            System.err.println("mjm: cannot prepare target/dist/ — " + e.getMessage());
+            System.err.println(Ui.errPrefix() + "cannot prepare target/dist/ — " + e.getMessage());
             return 1;
         }
         Path classes = projectDir.resolve(CLASSES);
 
         if (!Files.isDirectory(classes)) {
-            System.err.println("mjm: " + CLASSES + " is missing — run mjm build first");
+            System.err.println(Ui.errPrefix() + CLASSES + " is missing — run mjm build first");
             return 1;
         }
         // the closure in lock order: a workspace module contributes its classes,
@@ -249,14 +334,14 @@ public final class PackageCommand implements Command {
                     new UberJar.Input(classes, mergeJars, mergeDirs, UberJar.labels(locked)),
                     new UberJar.Header(name, version, mainClass));
         } catch (IOException e) {
-            System.err.println("mjm: packaging failed: " + e.getMessage());
+            System.err.println(Ui.errPrefix() + "packaging failed: " + e.getMessage());
             return 1;
         }
 
-        System.out.println("packaged " + output + " — uber-jar ("
+        System.out.println(Ui.ok("packaged " + output + " — uber-jar ("
                 + locked.stream().filter(LockedArtifact::isMain).count() + " dependencies merged, "
                 + locked.stream().filter(a -> !a.isMain()).count() + " dev excluded)"
-                + (mainClass != null ? " — java -jar " + output : ""));
+                + (mainClass != null ? " — java -jar " + output : "")));
         return 0;
     }
 

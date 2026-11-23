@@ -119,6 +119,45 @@ class ClasspathCommandTest {
     }
 
     @Test
+    void jsonReportCarriesTheSameEntriesAndMode() throws Exception {
+        String out = run("--json");
+
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(out);
+        assertEquals(1, json.getInt("schemaVersion"));
+        assertEquals("classpath", json.getString("command"));
+        assertEquals("compile", json.getString("mode"));
+        assertEquals(entries().size(), json.getArray("entries").size());
+        assertEquals(String.join(File.pathSeparator, entries()),
+                json.getString("classpath"));
+    }
+
+    @Test
+    void jsonMissingLockIsOneStructuredError() throws Exception {
+        Files.delete(dir.resolve("mjm.lock"));
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        int exit;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
+            exit = new ClasspathCommand(store, dir).execute(List.of("--json"));
+        } finally {
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+        }
+
+        assertEquals(1, exit);
+        assertEquals("", err.toString(StandardCharsets.UTF_8));
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                out.toString(StandardCharsets.UTF_8));
+        assertEquals("failed", json.getString("status"));
+        assertEquals("LOCK_MISSING",
+                json.getArray("diagnostics").getObject(0).getString("code"));
+    }
+
+    @Test
     void aMissingLockSaysWhatToRun() throws Exception {
         Files.delete(dir.resolve("mjm.lock"));
 

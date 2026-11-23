@@ -25,6 +25,16 @@ class StoreTest {
     Path temp;
 
     @Test
+    void constructingAStoreDoesNotTouchTheFilesystem() {
+        Path root = temp.resolve("untouched-store");
+
+        new ArtifactStore(root);
+
+        assertTrue(!Files.exists(root),
+                "a store handle is cheap until the first write; read-only commands must not create it");
+    }
+
+    @Test
     void downloadsOncePerUrlAndStoresByDigest() throws Exception {
         byte[] jar = "jar-bytes-1".getBytes();
         HttpServer server = serve("/lib-a-1.0.0.jar", jar);

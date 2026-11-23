@@ -111,12 +111,12 @@ final class WorkspaceRun {
         } catch (Workspaces.UsageException e) {
             return usage(e.getMessage());
         } catch (Workspaces.WorkspaceException e) {
-            System.err.println("mjm: " + e.getMessage());
+            System.err.println(Ui.errPrefix() + e.getMessage());
             return 1;
         }
         if (run == null) {
             if (namesModule(args)) {
-                System.err.println("mjm: --module is only used at a workspace root");
+                System.err.println(Ui.errPrefix() + "--module is only used at a workspace root");
                 return 2;
             }
             return null;
@@ -127,7 +127,7 @@ final class WorkspaceRun {
                     ? List.of(run.module())
                     : Workspaces.topological(run.workspace());
         } catch (Workspaces.WorkspaceException e) {
-            System.err.println("mjm: " + e.getMessage());
+            System.err.println(Ui.errPrefix() + e.getMessage());
             return 1;
         }
         List<String> failed = new ArrayList<>();
@@ -142,7 +142,7 @@ final class WorkspaceRun {
             } catch (ShutdownAfterBuildOutput e) {
                 throw e;  // the process is about to exit on purpose
             } catch (RuntimeException e) {
-                System.err.println("mjm: " + e.getMessage());
+                System.err.println(Ui.errPrefix() + e.getMessage());
                 code = 1;
             }
             if (code == 0) {
@@ -178,7 +178,7 @@ final class WorkspaceRun {
             return null;  // ordinary single-project invocation
         }
         if (!namesModule) {
-            System.err.println("mjm: this directory is a workspace root — say which module:"
+            System.err.println(Ui.errPrefix() + "this directory is a workspace root — say which module:"
                     + " --module <path>");
             return 2;
         }
@@ -188,11 +188,11 @@ final class WorkspaceRun {
         } catch (Workspaces.UsageException e) {
             return usage(e.getMessage());
         } catch (Workspaces.WorkspaceException e) {
-            System.err.println("mjm: " + e.getMessage());
+            System.err.println(Ui.errPrefix() + e.getMessage());
             return 1;
         }
         if (run == null) {
-            System.err.println("mjm: --module is only used at a workspace root");
+            System.err.println(Ui.errPrefix() + "--module is only used at a workspace root");
             return 2;
         }
         return inModule(run.module(), () -> child.run(run.module(), run.args()));
@@ -238,7 +238,7 @@ final class WorkspaceRun {
     }
 
     private static int usage(String message) {
-        System.err.println("mjm: " + message);
+        System.err.println(Ui.errPrefix() + message);
         return 2;
     }
 

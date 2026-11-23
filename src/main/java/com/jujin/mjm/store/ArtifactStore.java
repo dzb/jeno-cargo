@@ -98,15 +98,17 @@ public final class ArtifactStore {
         return offline;
     }
 
+    /**
+     * Creates a non-mutating handle. The store directories are created on the
+     * first write ({@link #ensure}), not here: {@code mjm --help} and other
+     * read-only startup paths must work even when the user's cache root is not
+     * writable, and a command that only inspects a lock must not leave an empty
+     * store behind.
+     */
     public ArtifactStore(Path root) {
         this.root = root.toAbsolutePath().normalize();
         this.locks = this.root.resolve("locks");
         this.index = new UrlIndex(this.root);
-        try {
-            Files.createDirectories(this.locks);
-        } catch (IOException e) {
-            throw new StoreException("cannot create the store at " + this.root, e);
-        }
     }
 
     /** The user's store, wherever {@link Paths} decided it lives. */
@@ -169,7 +171,7 @@ public final class ArtifactStore {
         }
         Path lockFile = locks.resolve(sha256(url.getBytes()) + ".lock");
         try {
-            Files.createDirectories(root);
+            Files.createDirectories(locks);
             try (FileChannel channel = FileChannel.open(lockFile,
                     StandardOpenOption.CREATE, StandardOpenOption.WRITE,
                     StandardOpenOption.READ);

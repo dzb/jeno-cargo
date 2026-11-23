@@ -10,8 +10,11 @@ import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -99,6 +102,62 @@ class TestReportsTest {
         assertEquals("2", jupiter.getDocumentElement().getAttribute("tests"));
         assertEquals("0", jupiter.getDocumentElement().getAttribute("failures"));
         assertEquals("1", jupiter.getDocumentElement().getAttribute("skipped"));
+    }
+
+    @Test
+    void jsonTestReportsSummaryAndXmlPaths(@TempDir Path storeDir) throws Exception {
+        project();
+        Files.writeString(dir.resolve("src/test/java/demo/Tests.java"), """
+            package demo;
+
+            import com.jujin.mjm.test.MjmAssert;
+            import com.jujin.mjm.test.MjmTest;
+
+            public class Tests {
+                @MjmTest
+                void passes() { MjmAssert.equals("a", "a"); }
+
+                @MjmTest
+                void fails() { MjmAssert.equals("expected", "actual"); }
+            }
+            """);
+        lock();
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
+        int exit;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
+            try (var central = VendoredToolchain.start()) {
+                exit = new TestCommand(new ArtifactStore(storeDir), dir)
+                        .execute(List.of("--json"));
+            }
+        } finally {
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+        }
+
+        assertEquals(1, exit);
+        assertTrue(err.toString(StandardCharsets.UTF_8).contains("FAIL"),
+                "test process logs go to stderr, not JSON stdout");
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                out.toString(StandardCharsets.UTF_8));
+        assertEquals("test", json.getString("command"));
+        assertEquals("failed", json.getString("status"));
+        var result = json.getArray("modules").getObject(0).getObject("result");
+        assertEquals(2, result.getInt("tests"));
+        assertEquals(1, result.getInt("passed"));
+        assertEquals(1, result.getInt("failed"));
+        assertEquals(0, result.getInt("skipped"));
+        assertEquals("junit-xml", result.getString("reportFormat"));
+        assertEquals(1, result.getArray("reportFiles").size());
+        assertTrue(Files.isRegularFile(Path.of(
+                result.getArray("reportFiles").getString(0))));
+        assertEquals("TEST_FAILED",
+                json.getArray("diagnostics").getObject(0).getString("code"));
     }
 
     @Test

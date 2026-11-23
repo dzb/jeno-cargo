@@ -38,6 +38,8 @@ public final class MjModule implements ModuleEx {
                 c -> new RunCommand(c.get(ArtifactStore.class), projectDir));
         binder.contribute(Command.class).addDeferred("release",
                 c -> new ReleaseCommand(projectDir));
+        binder.contribute(Command.class).addDeferred("verify",
+                c -> new VerifyCommand(c.get(ArtifactStore.class), projectDir));
         binder.contribute(Command.class).addDeferred("publish",
                 c -> new PublishCommand(projectDir));
         binder.contribute(Command.class).addDeferred("package",
@@ -71,6 +73,8 @@ public final class MjModule implements ModuleEx {
                 c -> new AuditCommand(projectDir));
         binder.contribute(Command.class).addDeferred("outdated",
                 c -> new OutdatedCommand(projectDir));
+        binder.contribute(Command.class).addDeferred("doctor",
+                c -> new DoctorCommand(projectDir));
         binder.contribute(Command.class).addDeferred("upgrade",
                 c -> new UpdateCommand());
     }

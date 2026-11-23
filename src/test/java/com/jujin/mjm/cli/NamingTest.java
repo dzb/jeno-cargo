@@ -32,7 +32,9 @@ class NamingTest {
     private static final List<String> ALLOWED = List.of(
             "mj-native",    // the species name for gh: releases — a term, not the CLI
             "mj-manifest-", // temp file prefix for the jar manifest
-            "----mj");      // multipart boundary prefix in the upload request
+            "----mj",       // multipart boundary prefix in the upload request
+            "mj.toml",      // the legacy file name; doctor/migration messages must name it
+            "mj.lock");     // the legacy lock name; never read by mjm
 
     private static final Pattern BARE_MJ = Pattern.compile("\\bmj\\b");
 

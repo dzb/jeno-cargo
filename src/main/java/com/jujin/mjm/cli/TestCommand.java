@@ -1,5 +1,8 @@
 package com.jujin.mjm.cli;
 
+import com.jujin.freeway.commons.json.JsonArray;
+import com.jujin.freeway.commons.json.JsonObject;
+import com.jujin.freeway.commons.json.JsonUtils;
 import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.mjm.project.MjProject;
 import com.jujin.mjm.resolve.ArtifactLocations;
@@ -65,18 +68,68 @@ public final class TestCommand implements Command {
     }
 
     @Override
+    public Command.Category category() {
+        return Command.Category.BUILD;
+    }
+
+    @Override
+    public int order() {
+        return 20;
+    }
+
+    @Override
+    public CommandCapabilities capabilities() {
+        return CommandCapabilities.builder()
+                .json()
+                .network(CommandCapabilities.NetworkMode.OPTIONAL)
+                .writes(CommandCapabilities.WriteScope.TARGET)
+                .workspace(CommandCapabilities.WorkspaceMode.AGGREGATE)
+                .build();
+    }
+
+    @Override
     public int execute(List<String> args) {
+        boolean json = args.contains("--json");
+        List<String> cleaned = args.stream().filter(arg -> !arg.equals("--json")).toList();
+        if (json) {
+            return JsonWorkspace.run("test", projectDir, cleaned, this::jsonModule);
+        }
+        return executeHuman(cleaned, false);
+    }
+
+    private JsonWorkspace.ModuleResult jsonModule(Path moduleDir, List<String> args) {
+        if (!args.isEmpty()) {
+            return JsonWorkspace.ModuleResult.failed(2, "USAGE",
+                    "test takes no arguments — got '" + args.getFirst() + "'");
+        }
+        long started = System.nanoTime();
+        JsonCapture.Result captured = JsonCapture.runStdout(() ->
+                new TestCommand(store, moduleDir).executeHuman(args, true));
+        TestSummary summary = summarize(moduleDir);
+        JsonObject data = summary.json(moduleDir, started);
+        if (captured.exitCode() == 0) {
+            return JsonWorkspace.ModuleResult.ok(data);
+        }
+        if (summary.tests() > 0 || summary.files().size() > 0) {
+            return JsonWorkspace.ModuleResult.completed(captured.exitCode(), data,
+                    "TEST_FAILED", summary.failed() + " test(s) failed");
+        }
+        return JsonWorkspace.ModuleResult.failed(captured.exitCode(),
+                "TEST_FAILED", "test run failed before producing reports — see stderr");
+    }
+
+    private int executeHuman(List<String> args, boolean machineOutput) {
         Integer workspace = WorkspaceRun.orchestrate(projectDir, args, "modules", true,
                 (dir, rest) -> new TestCommand(store, dir).execute(rest));
         if (workspace != null) {
             return workspace;
         }
         if (!args.isEmpty()) {
-            System.err.println("mjm: test takes no arguments — got '" + args.getFirst() + "'");
+            System.err.println(Ui.errPrefix() + "test takes no arguments — got '" + args.getFirst() + "'");
             return 2;
         }
         if (!Files.exists(projectDir.resolve("mjm.lock"))) {
-            System.err.println("mjm: no mjm.lock in " + projectDir + " — run mjm lock first");
+            System.err.println(Ui.errPrefix() + "no mjm.lock in " + projectDir + " — run mjm lock first");
             return 1;
         }
         Filter filter = Filter.from(projectDir);
@@ -94,7 +147,8 @@ public final class TestCommand implements Command {
                 return 1;
             }
             if (testSources.isEmpty()) {
-                System.out.println("no tests under " + projectDir.resolve(TEST_SOURCES));
+                System.out.println(Ui.warn("no tests under "
+                        + projectDir.resolve(TEST_SOURCES)));
                 return 0;
             }
             // Tests compile against the project's own classes. Without them javac
@@ -103,10 +157,10 @@ public final class TestCommand implements Command {
             // target/classes (package/bundle/publish/run) already say the latter.
             // A pure-test project has no main sources and needs no target/classes.
             if (hasMainSources() && !Files.exists(projectDir.resolve(MAIN_OUTPUT))) {
-                System.err.println("mjm: " + MAIN_OUTPUT + " is missing — run mjm build first");
+                System.err.println(Ui.errPrefix() + MAIN_OUTPUT + " is missing — run mjm build first");
                 return 1;
             }
-            return runTests(testSources);
+            return runTests(testSources, machineOutput);
         });
     }
 
@@ -116,7 +170,7 @@ public final class TestCommand implements Command {
             DistOutput.clear(projectDir.resolve(RESULTS));
             return true;
         } catch (IOException e) {
-            System.err.println("mjm: cannot clear " + RESULTS + " — " + e.getMessage());
+            System.err.println(Ui.errPrefix() + "cannot clear " + RESULTS + " — " + e.getMessage());
             return false;
         }
     }
@@ -136,7 +190,8 @@ public final class TestCommand implements Command {
     }
 
     /** Compile and fork; the caller holds the project's lock. */
-    private int runTests(List<String> testSources) {
+    private int runTests(List<String> testSources, boolean machineOutput) {
+        long started = System.nanoTime();
         List<Path> toolchain = toolchainPaths();
         ClasspathAssembler.Classpath compileClasspath = classpath(toolchain, false);
         if (!compile(testSources, compileClasspath.joined(), processorPath())) {
@@ -158,10 +213,21 @@ public final class TestCommand implements Command {
 
         int exit;
         try {
-            Process process = new ProcessBuilder(command).inheritIO().start();
+            ProcessBuilder builder = new ProcessBuilder(command);
+            // A forked test JVM sees stdout as a pipe; force deterministic output
+            // even if the outer invocation used MJM_COLOR=always.
+            builder.environment().put("MJM_COLOR", "never");
+            Process process = machineOutput
+                    ? builder.redirectErrorStream(true).start()
+                    : builder.inheritIO().start();
+            if (machineOutput) {
+                try (var childOutput = process.getInputStream()) {
+                    childOutput.transferTo(System.err);
+                }
+            }
             exit = process.waitFor();
         } catch (IOException e) {
-            System.err.println("mjm: cannot fork test JVM: " + e.getMessage());
+            System.err.println(Ui.errPrefix() + "cannot fork test JVM: " + e.getMessage());
             return 1;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -174,9 +240,64 @@ public final class TestCommand implements Command {
             } catch (IOException e) {
                 files = 0;
             }
-            System.out.println("results: " + RESULTS + " (" + files + " files)");
+            System.out.println(Ui.dim("results: " + RESULTS + " (" + files + " files)")
+                    + Ui.duration(started));
         }
         return exit;
+    }
+
+    // ------------------------------------------------------------------
+    // JSON test summary
+    // ------------------------------------------------------------------
+
+    private record TestSummary(int tests, int failed, int skipped, List<Path> files) {
+        JsonObject json(Path moduleDir, long started) {
+            JsonObject data = JsonUtils.object();
+            data.put("reportsDir", moduleDir.resolve(RESULTS)
+                    .toAbsolutePath().normalize().toString());
+            data.put("reportFormat", "junit-xml");
+            data.put("tests", tests);
+            data.put("passed", tests - failed - skipped);
+            data.put("failed", failed);
+            data.put("skipped", skipped);
+            data.put("noTests", tests == 0);
+            data.put("durationMs", (System.nanoTime() - started) / 1_000_000L);
+            JsonArray reports = JsonUtils.array();
+            files.forEach(path -> reports.add(path.toAbsolutePath().normalize().toString()));
+            data.put("reportFiles", reports);
+            return data;
+        }
+    }
+
+    private static TestSummary summarize(Path moduleDir) {
+        Path reportsDir = moduleDir.resolve(RESULTS);
+        if (!Files.isDirectory(reportsDir)) {
+            return new TestSummary(0, 0, 0, List.of());
+        }
+        int tests = 0;
+        int failed = 0;
+        int skipped = 0;
+        List<Path> files = new ArrayList<>();
+        try (Stream<Path> entries = Files.list(reportsDir)) {
+            for (Path file : entries.filter(path -> path.toString().endsWith(".xml"))
+                    .sorted().toList()) {
+                files.add(file);
+                String text = Files.readString(file);
+                tests += attribute(text, "tests");
+                failed += attribute(text, "failures") + attribute(text, "errors");
+                skipped += attribute(text, "skipped");
+            }
+        } catch (IOException e) {
+            return new TestSummary(0, 0, 0, List.of());
+        }
+        return new TestSummary(tests, failed, skipped, List.copyOf(files));
+    }
+
+    private static int attribute(String xml, String name) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("\\b" + java.util.regex.Pattern.quote(name) + "=\"(\\d+)\"")
+                .matcher(xml);
+        return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
     }
 
     // ------------------------------------------------------------------
@@ -358,14 +479,14 @@ public final class TestCommand implements Command {
                     }
                 });
             } catch (IOException e) {
-                System.err.println("mjm: cannot clean " + output + ": " + e.getMessage());
+                System.err.println(Ui.errPrefix() + "cannot clean " + output + ": " + e.getMessage());
                 return false;
             }
         }
         try {
             Files.createDirectories(output);
         } catch (IOException e) {
-            System.err.println("mjm: cannot create " + output);
+            System.err.println(Ui.errPrefix() + "cannot create " + output);
             return false;
         }
         javax.tools.JavaCompiler compiler = javax.tools.ToolProvider.getSystemJavaCompiler();
@@ -389,7 +510,7 @@ public final class TestCommand implements Command {
         command.addAll(sources);
         int exit = compiler.run(null, null, null, command.toArray(String[]::new));
         if (exit != 0) {
-            System.err.println("mjm: test compilation failed");
+            System.err.println(Ui.errPrefix() + "test compilation failed");
             return false;
         }
         SourceResources.copy(projectDir.resolve("src/test/resources"), output);

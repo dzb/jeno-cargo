@@ -114,6 +114,37 @@ class PublishToHostTest {
     }
 
     @Test
+    void anAcceptedPutThatCannotBeReadBackIsNotASuccessfulPublish() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        server.createContext("/", exchange -> {
+            if ("PUT".equals(exchange.getRequestMethod())) {
+                exchange.getRequestBody().readAllBytes();
+                exchange.sendResponseHeaders(201, -1);
+            } else {
+                exchange.sendResponseHeaders(404, -1);
+            }
+            exchange.close();
+        });
+        server.start();
+        String base = "mjm:http://localhost:" + server.getAddress().getPort() + "/repo/";
+
+        try {
+            project();
+            ArtifactStore store = new ArtifactStore(dir.resolve("store"));
+            assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
+            assertEquals(0, new PackageCommand(store, dir).execute(List.of()));
+
+            Result result = publish(base);
+
+            assertEquals(1, result.exit(), "an unreadable repository is not a publish");
+            assertTrue(result.err().contains("could not read it back"), result.err());
+            assertTrue(result.err().contains("anonymously readable"), result.err());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void aNonLoopbackPlainHttpMjmRepositoryIsRejected() throws Exception {
         project();
         ArtifactStore store = new ArtifactStore(dir.resolve("store"));

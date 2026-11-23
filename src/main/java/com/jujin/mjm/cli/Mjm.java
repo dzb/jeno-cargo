@@ -38,7 +38,8 @@ public final class Mjm {
 
     public static void main(String[] args) {
         if (args.length == 1 && (args[0].equals("--version") || args[0].equals("-v"))) {
-            System.out.println("mjm " + VERSION + " — modern java manager");
+            System.out.println(Ui.heading("mjm " + VERSION)
+                    + Ui.dim(" — modern java manager"));
             return;
         }
         int exit;
@@ -57,7 +58,7 @@ public final class Mjm {
             return;
         } catch (RuntimeException e) {
             container.close();
-            System.err.println("mjm: " + describe(e));
+            System.err.println(Ui.error(describe(e)));
             System.exit(1);
             return;
         }

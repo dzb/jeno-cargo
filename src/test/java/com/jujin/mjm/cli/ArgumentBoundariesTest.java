@@ -104,6 +104,23 @@ class ArgumentBoundariesTest {
         assertEquals("--help", argsSeen(), "after --, --help belongs to the program");
     }
 
+    @Test
+    void topLevelHelpGroupsCommandsByRole() {
+        CommandRunner runner = new CommandRunner(List.of(
+                stub("init", "start a project", Command.Category.PROJECT),
+                stub("build", "compile sources", Command.Category.BUILD),
+                stub("doctor", "diagnose the project", Command.Category.INSPECT)));
+
+        Result help = run(runner, "--help");
+
+        assertEquals(0, help.exit());
+        assertTrue(help.out().contains("Project"), help.out());
+        assertTrue(help.out().contains("Build & run"), help.out());
+        assertTrue(help.out().contains("Inspect"), help.out());
+        assertTrue(help.out().contains("Global flags"), help.out());
+        assertTrue(help.out().contains("Run 'mjm <command> --help'"), help.out());
+    }
+
     // ------------------------------------------------------------------
 
     private String argsSeen() {
@@ -140,6 +157,35 @@ class ArgumentBoundariesTest {
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("cannot reset the offline flag", e);
         }
+    }
+
+    private static Command stub(String name, String summary, Command.Category category) {
+        return new Command() {
+            @Override
+            public String name() {
+                return name;
+            }
+
+            @Override
+            public Command.Category category() {
+                return category;
+            }
+
+            @Override
+            public String summary() {
+                return summary;
+            }
+
+            @Override
+            public CommandCapabilities capabilities() {
+                return CommandCapabilities.builder().build();
+            }
+
+            @Override
+            public int execute(List<String> args) {
+                return 0;
+            }
+        };
     }
 
     private record Result(int exit, String out, String err) {}

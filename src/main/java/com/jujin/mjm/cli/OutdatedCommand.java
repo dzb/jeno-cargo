@@ -68,21 +68,50 @@ public final class OutdatedCommand implements Command {
     private record Failed(String id, String error) {}
 
     @Override
+    public Command.Category category() {
+        return Command.Category.INSPECT;
+    }
+
+    @Override
+    public int order() {
+        return 50;
+    }
+
+    @Override
+    public CommandCapabilities capabilities() {
+        return CommandCapabilities.builder()
+                .json()
+                .network(CommandCapabilities.NetworkMode.ALWAYS)
+                .workspace(CommandCapabilities.WorkspaceMode.MODULE)
+                .build();
+    }
+
+    @Override
     public int execute(List<String> args) {
+        boolean json = args.contains("--json");
+        if (json && Workspaces.rootAt(projectDir).isPresent() && !hasModuleOption(args)) {
+            JsonResult.error("outdated", 2, "MODULE_REQUIRED",
+                    "this directory is a workspace root — say which module: --module <path>")
+                    .emit(2);
+            return 2;
+        }
         Integer workspace = WorkspaceRun.requireModule(projectDir, args,
                 (dir, rest) -> new OutdatedCommand(dir).execute(rest));
         if (workspace != null) {
             return workspace;
         }
-        boolean json = false;
         boolean includeDev = false;
         for (String arg : args) {
             switch (arg) {
-                case "--json" -> json = true;
+                case "--json" -> { }
                 case "--dev" -> includeDev = true;
                 default -> {
-                    System.err.println("mjm: outdated takes --json and --dev only — got '"
-                            + arg + "'");
+                    String message = "outdated takes --json and --dev only — got '" + arg + "'";
+                    if (json) {
+                        JsonResult.error("outdated", 2, "USAGE", message).emit(2);
+                    } else {
+                        System.err.println(Ui.errPrefix() + message);
+                    }
                     return 2;
                 }
             }
@@ -91,17 +120,31 @@ public final class OutdatedCommand implements Command {
         // it outlives any particular manifest wording.
         Path lock = projectDir.resolve("mjm.lock");
         if (!Files.exists(lock)) {
-            System.err.println("mjm: no mjm.lock in " + projectDir + " — run mjm lock first");
+            String message = "no mjm.lock in " + projectDir + " — run mjm lock first";
+            if (json) {
+                JsonResult.error("outdated", 1, "LOCK_MISSING", message).emit(1);
+            } else {
+                System.err.println(Ui.errPrefix() + message);
+            }
             return 1;
         }
         List<LockedArtifact> locked;
         try {
             locked = LockFileReader.read(Files.readString(lock));
         } catch (IOException e) {
-            System.err.println("mjm: cannot read mjm.lock in " + projectDir);
+            String message = "cannot read mjm.lock in " + projectDir;
+            if (json) {
+                JsonResult.error("outdated", 1, "LOCK_UNREADABLE", message).emit(1);
+            } else {
+                System.err.println(Ui.errPrefix() + message);
+            }
             return 1;
         } catch (RuntimeException e) {
-            System.err.println("mjm: " + e.getMessage());
+            if (json) {
+                JsonResult.error("outdated", 1, "LOCK_INVALID", e.getMessage()).emit(1);
+            } else {
+                System.err.println(Ui.errPrefix() + e.getMessage());
+            }
             return 1;
         }
 
@@ -193,6 +236,14 @@ public final class OutdatedCommand implements Command {
                            List<Skipped> unchecked, List<Failed> failures,
                            boolean upToDate) {
         var root = com.jujin.freeway.commons.json.JsonUtils.object();
+        root.put("schemaVersion", CommandCatalog.SCHEMA_VERSION);
+        root.put("kind", "commandResult");
+        root.put("command", "outdated");
+        root.put("status", "ok");
+        root.put("exitCode", 0);
+        root.put("dryRun", false);
+        root.put("offline", com.jujin.mjm.store.ArtifactStore.isOffline());
+        root.put("diagnostics", com.jujin.freeway.commons.json.JsonUtils.array());
         root.put("upToDate", upToDate);
 
         var updateArray = com.jujin.freeway.commons.json.JsonUtils.array();
@@ -232,6 +283,7 @@ public final class OutdatedCommand implements Command {
         }
         root.put("failures", failedArray);
 
+        JsonResult.markEmitted();
         System.out.println(root);
     }
 
@@ -241,10 +293,10 @@ public final class OutdatedCommand implements Command {
         // for every row. Nothing checked (all gh:/url/local:), a skipped source,
         // or a failed lookup each make the honest answer the section below.
         if (upToDate) {
-            System.out.println("everything is up to date");
+            System.out.println(Ui.ok("everything is up to date"));
         }
         if (!updates.isEmpty()) {
-            System.out.println("updates available:");
+            System.out.println(Ui.heading("updates available:"));
             for (Update update : updates) {
                 System.out.println("  " + update.id() + "  " + update.pinned()
                         + " → " + update.available());
@@ -252,7 +304,8 @@ public final class OutdatedCommand implements Command {
         }
         if (!majorJumps.isEmpty()) {
             System.out.println();
-            System.out.println("major version changes (the resolver refuses these silently):");
+            System.out.println(Ui.warn(
+                    "major version changes (the resolver refuses these silently):"));
             for (Update update : majorJumps) {
                 System.out.println("  " + update.id() + "  " + update.pinned()
                         + " → " + update.available());
@@ -260,21 +313,21 @@ public final class OutdatedCommand implements Command {
         }
         if (!unchecked.isEmpty()) {
             System.out.println();
-            System.out.println("not checked:");
+            System.out.println(Ui.dim("not checked:"));
             for (Skipped skipped : unchecked) {
                 System.out.println("  " + skipped.id() + " (" + skipped.detail() + ")");
             }
         }
         if (!failures.isEmpty()) {
             System.out.println();
-            System.out.println("could not check:");
+            System.out.println(Ui.fail("could not check:"));
             for (Failed failure : failures) {
                 System.out.println("  " + failure.id() + " — " + failure.error());
             }
         }
         if (!updates.isEmpty()) {
             System.out.println();
-            System.out.println("to apply: edit mjm.toml, then run mjm lock");
+            System.out.println(Ui.dim("to apply: edit mjm.toml, then run mjm lock"));
         }
     }
 
@@ -344,4 +397,9 @@ public final class OutdatedCommand implements Command {
         int second = id.indexOf(':', first + 1);
         return second < 0 ? id.substring(first + 1) : id.substring(first + 1, second);
     }
+    private static boolean hasModuleOption(List<String> args) {
+        return args.stream().anyMatch(arg ->
+                arg.equals("--module") || arg.startsWith("--module="));
+    }
+
 }

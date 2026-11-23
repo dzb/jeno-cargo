@@ -6,7 +6,9 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -81,6 +83,118 @@ class InfoCommandTest {
         assertTrue(output.contains("https://github.com/acme/widget/tree/v1.2.0"),
                 "the browsable source address: " + output);
         assertTrue(output.contains("--source"), "the fetch hint: " + output);
+    }
+
+    @Test
+    void jsonExportsConsumerFacingArtifactFacts(@TempDir Path storeDir) throws Exception {
+        String descriptor = """
+            [project]
+            name = "widget"
+            version = "1.2.0"
+            summary = "A tiny reactive widget toolkit"
+            homepage = "https://github.com/acme/widget"
+            license = "Apache-2.0"
+
+            [java]
+            version = 21
+
+            [deps]
+            "org.slf4j:slf4j-api" = "2.0.18"
+            """;
+        Path meta = placeInStore(storeDir, ArtifactStore.Kind.DESCRIPTOR,
+                descriptor.getBytes(StandardCharsets.UTF_8));
+        String metaSha = ArtifactStore.sha256(meta);
+        Files.writeString(dir.resolve("mjm.lock"), """
+            [[artifacts]]
+            id = "acme:widget"
+            version = "1.2.0"
+            source = "gh:acme/widget"
+            url = "https://github.com/acme/widget/releases/download/v1.2.0/widget-1.2.0.jar"
+            sha256 = "%s"
+            meta-sha256 = "%s"
+            depth = 1
+            """.formatted("a".repeat(64), metaSha));
+
+        System.setProperty("mjm.color", "always");
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
+        int exit;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
+            exit = new InfoCommand(new ArtifactStore(storeDir), dir)
+                    .execute(List.of("acme:widget", "--json"));
+        } finally {
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+            System.clearProperty("mjm.color");
+        }
+
+        assertEquals(0, exit);
+        assertEquals("", err.toString(StandardCharsets.UTF_8));
+        String raw = out.toString(StandardCharsets.UTF_8);
+        assertFalse(raw.contains("\u001B["), "JSON stdout must not contain ANSI");
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(raw);
+        assertEquals(1, json.getInt("schemaVersion"));
+        assertEquals("info", json.getString("command"));
+        assertEquals("ok", json.getString("status"));
+
+        var artifact = json.getObject("artifact");
+        assertEquals("acme:widget", artifact.getString("id"));
+        assertEquals("acme", artifact.getString("group"));
+        assertEquals("widget", artifact.getString("artifact"));
+        assertEquals("1.2.0", artifact.getString("version"));
+        assertEquals("a".repeat(64), artifact.getString("sha256"));
+        assertEquals(metaSha, artifact.getString("metaSha256"));
+
+        var provenance = json.getObject("provenance");
+        assertEquals("gh:acme/widget", provenance.getString("source"));
+        assertEquals("github-release", provenance.getString("layout"));
+        assertEquals("descriptor", provenance.getObject("metadata").getString("kind"));
+
+        var descriptorJson = json.getObject("descriptor");
+        assertEquals("Apache-2.0", descriptorJson.getString("license"));
+        assertEquals(21, descriptorJson.getInt("javaVersion"));
+        assertEquals("org.slf4j:slf4j-api",
+                descriptorJson.getArray("dependencies").getObject(0).getString("id"));
+
+        var source = json.getObject("source");
+        assertEquals("https://github.com/acme/widget/tree/v1.2.0",
+                source.getString("page"));
+        assertEquals("https://github.com/acme/widget/archive/refs/tags/v1.2.0.tar.gz",
+                source.getString("archive"));
+
+        var context = json.getObject("context");
+        assertEquals("main", context.getString("scope"));
+        assertEquals(1, context.getInt("depth"));
+        assertEquals(0, json.getArray("diagnostics").size());
+    }
+
+    @Test
+    void jsonSourceModeIsExplicitlyUnsupportedForNow(@TempDir Path storeDir) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
+        int exit;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
+            exit = new InfoCommand(new ArtifactStore(storeDir), dir)
+                    .execute(List.of("acme:widget", "--json", "--source"));
+        } finally {
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+        }
+
+        assertEquals(2, exit);
+        assertEquals("", err.toString(StandardCharsets.UTF_8));
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                out.toString(StandardCharsets.UTF_8));
+        assertEquals("JSON_SOURCE_UNSUPPORTED",
+                json.getArray("diagnostics").getObject(0).getString("code"));
     }
 
     @Test

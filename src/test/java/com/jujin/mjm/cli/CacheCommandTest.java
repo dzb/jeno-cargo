@@ -65,6 +65,83 @@ class CacheCommandTest {
     }
 
     @Test
+    void jsonDirNamesTheThreeRoots() throws Exception {
+        Result result = execute("dir", "--json");
+
+        assertEquals(0, result.exit(), result.out());
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(result.out());
+        assertEquals("cache", json.getString("command"));
+        assertEquals("dir", json.getString("subcommand"));
+        assertEquals(store.toString(), json.getObject("paths").getString("store"));
+        assertEquals(sources.toString(), json.getObject("paths").getString("sources"));
+        assertEquals(locks.toString(), json.getObject("paths").getString("locks"));
+        assertEquals("", result.err());
+    }
+
+    @Test
+    void jsonSizeReportsBytesAndHumanSizes() throws Exception {
+        Files.createDirectories(store);
+        Files.write(store.resolve("a.jar"), new byte[2048]);
+        Files.createDirectories(sources);
+        Files.write(sources.resolve("b.txt"), new byte[1024]);
+
+        Result result = execute("size", "--json");
+
+        assertEquals(0, result.exit(), result.out());
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(result.out());
+        var sizes = json.getObject("sizes");
+        assertEquals(2048L, sizes.getObject("store").getLong("bytes"));
+        assertEquals("2.0 KiB", sizes.getObject("store").getString("human"));
+        assertEquals(3072L, sizes.getObject("total").getLong("bytes"));
+        assertEquals("3.0 KiB", sizes.getObject("total").getString("human"));
+    }
+
+    @Test
+    void jsonPurgeWithoutYesIsRefusedWithoutDeleting() throws Exception {
+        Files.createDirectories(store);
+        Files.write(store.resolve("a.jar"), new byte[16]);
+
+        Result result = execute("purge", "--json");
+
+        assertEquals(2, result.exit());
+        assertTrue(Files.exists(store), "nothing is deleted");
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(result.out());
+        assertEquals("CONFIRMATION_REQUIRED",
+                json.getArray("diagnostics").getObject(0).getString("code"));
+        assertEquals(true, json.getBoolean("requiresYes"));
+    }
+
+    @Test
+    void jsonDryRunReportsRootsAndStillDeletesNothing() throws Exception {
+        Files.createDirectories(store);
+        Files.write(store.resolve("a.jar"), new byte[16]);
+
+        Result result = execute("purge", "--json", "--dry-run");
+
+        assertEquals(0, result.exit());
+        assertTrue(Files.exists(store), "dry-run deletes nothing");
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(result.out());
+        assertEquals(true, json.getBoolean("dryRun"));
+        assertEquals(2, json.getArray("roots").size());
+        assertEquals(16L, json.getArray("roots").getObject(0).getLong("bytes"));
+    }
+
+    @Test
+    void jsonPruneReportsTheRemovedFileCount() throws Exception {
+        Files.createDirectories(locks);
+        Path gone = dir.resolve("gone-project");
+        Files.writeString(locks.resolve("gone.lock"), "project=" + gone + "\n");
+
+        Result result = execute("prune", "--json");
+
+        assertEquals(0, result.exit(), result.out());
+        assertFalse(Files.exists(locks.resolve("gone.lock")));
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(result.out());
+        assertEquals("prune", json.getString("subcommand"));
+        assertEquals(1, json.getInt("removedFiles"));
+    }
+
+    @Test
     void pruneRemovesOnlyTheLocksWhoseProjectIsGone() throws Exception {
         Files.createDirectories(locks);
         Path live = Files.createDirectories(dir.resolve("live-project"));

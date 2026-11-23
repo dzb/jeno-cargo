@@ -123,6 +123,18 @@ class TreeWhyTest {
                 "the through-lib-d path is named too, got: " + whyOut);
         assertTrue(whyOut.contains("2 introduction paths"), "got: " + whyOut);
 
+        System.out.flush();
+        buffer.reset();
+        assertEquals(0, why.execute(List.of("--json", "com.example:lib-c")));
+        System.out.flush();
+        var whyJson = com.jujin.freeway.commons.json.JsonUtils.parseObject(buffer.toString());
+        assertEquals("why", whyJson.getString("command"));
+        assertEquals(true, whyJson.getBoolean("found"));
+        var pathsJson = whyJson.getArray("paths");
+        assertEquals(2, pathsJson.size());
+        assertEquals(3, whyJson.getObject("artifact").getInt("depth"));
+
+        buffer.reset();
         assertEquals(0, why.execute(List.of("org.unknown:ghost")));
         System.out.flush();
         buffer.reset();  // the tree output must not bleed into the absent-id read
@@ -473,6 +485,10 @@ class TreeWhyTest {
 
         String json = readConsole();
         var root = com.jujin.freeway.commons.json.JsonUtils.parseObject(json);
+        assertEquals(1, root.getInt("schemaVersion"));
+        assertEquals("tree", root.getString("command"));
+        assertEquals("ok", root.getString("status"));
+        assertEquals(0, root.getInt("exitCode"));
         var roots = root.getArray("roots");
         assertEquals(2, roots.size(), "one entry per declaration");
         assertEquals("com.example:lib-a", roots.getString(0), "declaration order");

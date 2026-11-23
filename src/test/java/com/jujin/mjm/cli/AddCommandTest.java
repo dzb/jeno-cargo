@@ -13,8 +13,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -137,6 +140,33 @@ class AddCommandTest {
             assertFalse(files.anyMatch(path -> path.getFileName().toString().endsWith(".tmp")),
                     "a successful add leaves no temporary file behind");
         }
+    }
+
+    @Test
+    void jsonAddReportsTheDependencyAndUpdatedLock() throws Exception {
+        serveCentralPom(LIB_A_POM);
+        AddCommand command = add();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        PrintStream original = System.out;
+        int exit;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            exit = command.execute(List.of("com.example:lib-a", "1.0.0", "--json"));
+        } finally {
+            System.setOut(original);
+        }
+
+        assertEquals(0, exit);
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                out.toString(StandardCharsets.UTF_8));
+        assertEquals("add", json.getString("command"));
+        assertEquals("mutate", json.getString("mode"));
+        assertEquals("com.example:lib-a", json.getObject("dependency").getString("id"));
+        assertEquals("1.0.0", json.getObject("dependency").getString("value"));
+        assertEquals(1, json.getInt("artifactCount"));
+        assertEquals(true, json.getBoolean("lockUpdated"));
+        assertTrue(Files.readString(dir.resolve("mjm.toml"))
+                .contains("\"com.example:lib-a\" = \"1.0.0\""));
     }
 
     @Test
