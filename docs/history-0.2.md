@@ -1,11 +1,11 @@
 # 0.2 线小史
 
-状态:**记录**(2026-11-22 整理,2026-11-23 补 0.2.14–0.2.19)
+状态:**记录**(2026-11-22 整理,2026-11-23 补 0.2.14–0.2.20)
 读法:这份文档解释**为什么**,不解释**是什么**。命令与格式的现状见 `README.md` 与 `SPEC.md`;
 每一次发布的完整说明在对应的 git tag 注释里(`gh release view vX.Y.Z`),不在这里重复。
 
-起点是 `v0.1.0`(169 个测试、16 个命令、构建带 87 条警告)。终点是 `v0.2.19`
-(445 个测试、20 个命令、零警告)。中间 164 个提交,分 21 次发布。
+起点是 `v0.1.0`(169 个测试、16 个命令、构建带 87 条警告)。终点是 `v0.2.20`
+(445 个测试、20 个命令、零警告)。中间 166 个提交,分 22 次发布。
 
 ---
 
@@ -46,6 +46,7 @@
 | **v0.2.17** | 一致性与 release | P0/P1/命名/safety;`upgrade`/`cache purge` 主名;`bundle` 通用化 + `mjm release`;测试 392→410 |
 | **v0.2.18** | 兼容矩阵与迁移 | 15 个主流库 Central lock/build 全过;真实 gh release + clean-HOME 安装;init --pom 本地/远端 parent、BOM import、[java] 推导;point-domain 全流程迁移;测试 410→442 |
 | **v0.2.19** | 发布签名 | minisign 默认签名 tar/setup/release.json;bootstrap 验签;`--allow-unsigned` 显式逃生;真实 signed local/gh E2E;测试 442→445 |
+| **v0.2.20** | mjm 自身发布签名 | CI 用 `MJM_MINISIGN_KEY` 签 `mjm-bin-*.tar.gz`,上传 `.minisig` 与 `minisign.pub`,发布后下载回读验签;`mjm update` 仍只校验完整性 |
 
 ---
 

@@ -5,7 +5,7 @@
 # Every byte is sha256-pinned in mjm.lock.
 [project]
 name = "mjm"
-version = "0.2.19"
+version = "0.2.20"
 main = "com.jujin.mjm.cli.Mjm"
 
 [java]
