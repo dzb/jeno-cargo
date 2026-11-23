@@ -121,7 +121,7 @@ public final class PomMigration {
 
         noteParent(project, pomFile, pomSource, properties, managed, notes, chain,
                 remoteChain);
-        collect(project, properties, managed, notes);
+        collect(project, properties, managed, notes, pomSource, new LinkedHashSet<>(), 0);
         return project;
     }
 
@@ -231,7 +231,7 @@ public final class PomMigration {
         // the remote parent may have its own parent: resolve that first
         noteParent(remote, null, pomSource, properties, managed, notes,
                 new LinkedHashSet<>(), remoteChain);
-        collect(remote, properties, managed, notes);
+        collect(remote, properties, managed, notes, pomSource, new LinkedHashSet<>(), 0);
     }
 
     private static boolean remoteCoordinatesMatch(PomXml.Node remote, String group,
@@ -275,8 +275,16 @@ public final class PomMigration {
         return declared == null || declared.isBlank() || declared.equals(actual);
     }
 
+    private static final int MAX_BOM_DEPTH = 8;
+
     private static void collect(PomXml.Node project, Map<String, String> properties,
                                 Map<String, String> managed, List<String> notes) {
+        collect(project, properties, managed, notes, null, new LinkedHashSet<>(), 0);
+    }
+
+    private static void collect(PomXml.Node project, Map<String, String> properties,
+                                Map<String, String> managed, List<String> notes,
+                                PomSource pomSource, Set<String> bomChain, int depth) {
         // ${project.version} inside dependencyManagement must resolve to this
         // module's version while its chain is being read, not to whatever a
         // previously-read module set.
@@ -312,9 +320,12 @@ public final class PomMigration {
                         + interpolate(dependency.text("artifactId"), properties);
                 String version = interpolate(dependency.text("version"), properties);
                 if ("import".equals(dependency.text("scope"))) {
-                    addNote(notes, "BOM " + id + (version == null ? "" : ":" + version)
-                            + " is imported but not fetched — mjm does not recurse into BOMs;"
-                            + " the versions it pins are not applied, pin them by hand");
+                    String bomVersion = version;
+                    if (bomVersion == null || bomVersion.isBlank()) {
+                        bomVersion = managed.get(id);
+                    }
+                    importBom(id, bomVersion, dependency.text("type"), managed, notes,
+                            pomSource, bomChain, depth);
                     continue;
                 }
                 if (version != null && !version.isBlank()) {
@@ -484,6 +495,100 @@ public final class PomMigration {
             addNote(notes, "profiles are not migrated — mjm has no profile activation; choose"
                     + " one set of values or use [overrides]/environment-specific manifests");
         }
+    }
+
+    /**
+     * Fetches one imported BOM (Central/store only) and merges the versions it
+     * manages into {@code managed} with putIfAbsent — an explicit entry in the
+     * child always wins. The BOM's properties are used for its own resolution
+     * and never leak into the child's interpolation namespace.
+     */
+    private static void importBom(String id, String version, String type,
+                                  Map<String, String> managed, List<String> notes,
+                                  PomSource pomSource, Set<String> bomChain, int depth) {
+        if (version == null || version.isBlank()) {
+            addNote(notes, "BOM " + id + " has no resolvable version — it is not fetched;"
+                    + " pin its libraries by hand");
+            return;
+        }
+        if (version.contains("${")) {
+            addNote(notes, "BOM " + id + " version '" + version + "' is unresolved —"
+                    + " it is not fetched; pin its libraries by hand");
+            return;
+        }
+        if (version.endsWith("-SNAPSHOT")) {
+            addNote(notes, "BOM " + id + " is a snapshot — Central lookup is skipped;"
+                    + " use a released BOM or pin its libraries by hand");
+            return;
+        }
+        if (type != null && !type.equals("pom") && !type.equals("jar")) {
+            addNote(notes, "BOM " + id + " has type=" + type + " — unsupported; pin its"
+                    + " libraries by hand");
+            return;
+        }
+        if (pomSource == null) {
+            addNote(notes, "BOM " + id + ":" + version + " is imported but no source is"
+                    + " available — its versions are not applied; pin them by hand");
+            return;
+        }
+        if (depth >= MAX_BOM_DEPTH) {
+            addNote(notes, "BOM " + id + ":" + version + " exceeds the BOM import depth ("
+                    + MAX_BOM_DEPTH + ") — its versions are not applied; pin them by hand");
+            return;
+        }
+        String key = id + ":" + version;
+        Set<String> chain = new LinkedHashSet<>(bomChain);
+        if (!chain.add(key)) {
+            addNote(notes, "BOM import cycle at " + key + " — the chain stops here");
+            return;
+        }
+        String text;
+        try {
+            text = pomSource.pomXml(group(id), artifact(id), version,
+                    ArtifactLocations.CENTRAL_BASE);
+        } catch (RuntimeException e) {
+            addNote(notes, "BOM " + key + " could not be fetched (" + e.getMessage()
+                    + ") — its versions are not applied; pin them by hand");
+            return;
+        }
+        if (text == null || text.isBlank()) {
+            addNote(notes, "BOM " + key + " was not found on Central — its versions are not"
+                    + " applied; pin them by hand");
+            return;
+        }
+        PomXml.Node bom;
+        try {
+            bom = PomXml.parse(text);
+        } catch (RuntimeException e) {
+            addNote(notes, "BOM " + key + " could not be parsed (" + e.getMessage()
+                    + ") — pin its libraries by hand");
+            return;
+        }
+        if (!remoteCoordinatesMatch(bom, group(id), artifact(id), version)) {
+            addNote(notes, "Central returned different coordinates for BOM " + key
+                    + " — not merged; pin its libraries by hand");
+            return;
+        }
+        addNote(notes, "BOM " + key + " read from Central");
+
+        // The BOM resolves in its own namespace: its parent chain and its own
+        // imports use bomProperties/bomManaged, and only versions come back.
+        Map<String, String> bomProperties = new LinkedHashMap<>();
+        Map<String, String> bomManaged = new LinkedHashMap<>();
+        noteParent(bom, null, pomSource, bomProperties, bomManaged, notes,
+                new LinkedHashSet<>(), new LinkedHashSet<>());
+        collect(bom, bomProperties, bomManaged, notes, pomSource, chain, depth + 1);
+        bomManaged.forEach(managed::putIfAbsent);
+    }
+
+    private static String group(String id) {
+        int colon = id.indexOf(':');
+        return colon < 0 ? id : id.substring(0, colon);
+    }
+
+    private static String artifact(String id) {
+        int colon = id.indexOf(':');
+        return colon < 0 ? "" : id.substring(colon + 1);
     }
 
     private static void addNote(List<String> notes, String note) {

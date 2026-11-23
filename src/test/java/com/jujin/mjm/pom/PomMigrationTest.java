@@ -659,4 +659,295 @@ class PomMigrationTest {
         assertTrue(result.mjToml().contains("\"com.example:lib\" = \"4.0.0\""),
                 result.mjToml());
     }
+
+    // ------------------------------------------------------------------
+    // BOM imports
+    // ------------------------------------------------------------------
+
+    private static String bom(String group, String artifact, String version, String extra) {
+        return """
+            <project>
+              <groupId>%s</groupId><artifactId>%s</artifactId><version>%s</version>
+              <packaging>pom</packaging>
+              %s
+            </project>
+            """.formatted(group, artifact, version, extra);
+    }
+
+    private static String childImporting(String bomVersion, String extraDeps) {
+        return """
+            <project>
+              <groupId>com.example</groupId><artifactId>child</artifactId>
+              <version>1.0.0</version>
+              <dependencyManagement>
+                <dependencies>
+                  <dependency>
+                    <groupId>com.example</groupId><artifactId>bom</artifactId>
+                    <version>%s</version><type>pom</type><scope>import</scope>
+                  </dependency>
+                </dependencies>
+              </dependencyManagement>
+              <dependencies>
+                %s
+              </dependencies>
+            </project>
+            """.formatted(bomVersion, extraDeps);
+    }
+
+    private static String dep(String group, String artifact, String version) {
+        return "<dependency><groupId>" + group + "</groupId><artifactId>" + artifact
+                + "</artifactId>" + (version == null ? "" : "<version>" + version
+                + "</version>") + "</dependency>";
+    }
+
+    @Test
+    void anImportedBomSuppliesManagedVersions(@org.junit.jupiter.api.io.TempDir Path root)
+            throws Exception {
+        Map<String, String> poms = poms("com.example:bom:1.0.0", bom("com.example", "bom",
+                "1.0.0", """
+                    <dependencyManagement><dependencies>
+                      <dependency>
+                        <groupId>com.example</groupId><artifactId>lib</artifactId>
+                        <version>5.0.0</version>
+                      </dependency>
+                    </dependencies></dependencyManagement>
+                    """));
+        Path pom = child(root, childImporting("1.0.0", dep("com.example", "lib", null)));
+
+        PomMigration.Result result = PomMigration.translate(pom, source(poms));
+
+        assertTrue(result.mjToml().contains("\"com.example:lib\" = \"5.0.0\""),
+                result.mjToml());
+        assertTrue(result.notes().stream().anyMatch(n -> n.contains("BOM com.example:bom:1.0.0"
+                + " read from Central")), result.notes().toString());
+    }
+
+    @Test
+    void aBomCanImportAnotherBom(@org.junit.jupiter.api.io.TempDir Path root) throws Exception {
+        Map<String, String> poms = poms(
+                "com.example:bom:1.0.0", bom("com.example", "bom", "1.0.0", """
+                    <dependencyManagement><dependencies>
+                      <dependency>
+                        <groupId>com.example</groupId><artifactId>nested</artifactId>
+                        <version>2.0.0</version><type>pom</type><scope>import</scope>
+                      </dependency>
+                    </dependencies></dependencyManagement>
+                    """),
+                "com.example:nested:2.0.0", bom("com.example", "nested", "2.0.0", """
+                    <dependencyManagement><dependencies>
+                      <dependency>
+                        <groupId>com.example</groupId><artifactId>lib</artifactId>
+                        <version>6.0.0</version>
+                      </dependency>
+                    </dependencies></dependencyManagement>
+                    """));
+        Path pom = child(root, childImporting("1.0.0", dep("com.example", "lib", null)));
+
+        PomMigration.Result result = PomMigration.translate(pom, source(poms));
+
+        assertTrue(result.mjToml().contains("\"com.example:lib\" = \"6.0.0\""),
+                result.mjToml());
+    }
+
+    @Test
+    void aBomParentSuppliesItsOwnProperty(@org.junit.jupiter.api.io.TempDir Path root)
+            throws Exception {
+        Map<String, String> poms = poms(
+                "com.example:bom-parent:9.0.0", bom("com.example", "bom-parent", "9.0.0", """
+                    <properties><lib.version>7.0.0</lib.version></properties>
+                    """),
+                "com.example:bom:1.0.0", """
+                    <project>
+                      <parent>
+                        <groupId>com.example</groupId><artifactId>bom-parent</artifactId>
+                        <version>9.0.0</version>
+                      </parent>
+                      <artifactId>bom</artifactId><version>1.0.0</version>
+                      <packaging>pom</packaging>
+                      <dependencyManagement><dependencies>
+                        <dependency>
+                          <groupId>com.example</groupId><artifactId>lib</artifactId>
+                          <version>${lib.version}</version>
+                        </dependency>
+                      </dependencies></dependencyManagement>
+                    </project>
+                    """);
+        Path pom = child(root, childImporting("1.0.0", dep("com.example", "lib", null)));
+
+        PomMigration.Result result = PomMigration.translate(pom, source(poms));
+
+        assertTrue(result.mjToml().contains("\"com.example:lib\" = \"7.0.0\""),
+                result.mjToml());
+    }
+
+    @Test
+    void aMissingBomIsANoteButMigrationContinues(@org.junit.jupiter.api.io.TempDir Path root)
+            throws Exception {
+        Path pom = child(root, childImporting("1.0.0", dep("com.example", "lib", null)));
+
+        PomMigration.Result result = PomMigration.translate(pom, source(Map.of()));
+
+        assertTrue(result.notes().stream().anyMatch(n -> n.contains("was not found on Central")),
+                result.notes().toString());
+        assertTrue(result.mjToml().contains("name = \"child\""), result.mjToml());
+    }
+
+    @Test
+    void aBomCycleIsReported(@org.junit.jupiter.api.io.TempDir Path root) throws Exception {
+        Map<String, String> poms = poms(
+                "com.example:bom:1.0.0", bom("com.example", "bom", "1.0.0", """
+                    <dependencyManagement><dependencies><dependency>
+                      <groupId>com.example</groupId><artifactId>other</artifactId>
+                      <version>1.0.0</version><type>pom</type><scope>import</scope>
+                    </dependency></dependencies></dependencyManagement>
+                    """),
+                "com.example:other:1.0.0", bom("com.example", "other", "1.0.0", """
+                    <dependencyManagement><dependencies><dependency>
+                      <groupId>com.example</groupId><artifactId>bom</artifactId>
+                      <version>1.0.0</version><type>pom</type><scope>import</scope>
+                    </dependency></dependencies></dependencyManagement>
+                    """));
+        Path pom = child(root, childImporting("1.0.0", dep("com.example", "lib", null)));
+
+        PomMigration.Result result = PomMigration.translate(pom, source(poms));
+
+        assertTrue(result.notes().stream().anyMatch(n -> n.contains("BOM import cycle")),
+                result.notes().toString());
+    }
+
+    @Test
+    void anExplicitManagementEntryBeatsTheBom(@org.junit.jupiter.api.io.TempDir Path root)
+            throws Exception {
+        Map<String, String> poms = poms("com.example:bom:1.0.0", bom("com.example", "bom",
+                "1.0.0", """
+                    <dependencyManagement><dependencies>
+                      <dependency>
+                        <groupId>com.example</groupId><artifactId>lib</artifactId>
+                        <version>5.0.0</version>
+                      </dependency>
+                    </dependencies></dependencyManagement>
+                    """));
+        Path pom = child(root, """
+            <project>
+              <groupId>com.example</groupId><artifactId>child</artifactId>
+              <version>1.0.0</version>
+              <dependencyManagement><dependencies>
+                <dependency>
+                  <groupId>com.example</groupId><artifactId>bom</artifactId>
+                  <version>1.0.0</version><type>pom</type><scope>import</scope>
+                </dependency>
+                <dependency>
+                  <groupId>com.example</groupId><artifactId>lib</artifactId>
+                  <version>9.9.9</version>
+                </dependency>
+              </dependencies></dependencyManagement>
+              <dependencies>
+                <dependency><groupId>com.example</groupId><artifactId>lib</artifactId></dependency>
+              </dependencies>
+            </project>
+            """);
+
+        PomMigration.Result result = PomMigration.translate(pom, source(poms));
+
+        assertTrue(result.mjToml().contains("\"com.example:lib\" = \"9.9.9\""),
+                result.mjToml());
+    }
+
+    @Test
+    void aSnapshotBomIsNotRequested(@org.junit.jupiter.api.io.TempDir Path root) throws Exception {
+        java.util.concurrent.atomic.AtomicBoolean called = new java.util.concurrent.atomic.AtomicBoolean();
+        PomSource source = (group, artifact, version, base) -> {
+            called.set(true);
+            return null;
+        };
+        Path pom = child(root, childImporting("1.0.0-SNAPSHOT", dep("com.example", "lib", null)));
+
+        PomMigration.Result result = PomMigration.translate(pom, source);
+
+        assertFalse(called.get(), "a snapshot BOM is never requested");
+        assertTrue(result.notes().stream().anyMatch(n -> n.contains("BOM com.example:bom is a"
+                + " snapshot")), result.notes().toString());
+    }
+
+    @Test
+    void anUnresolvedBomVersionIsNotRequested(@org.junit.jupiter.api.io.TempDir Path root)
+            throws Exception {
+        java.util.concurrent.atomic.AtomicBoolean called = new java.util.concurrent.atomic.AtomicBoolean();
+        PomSource source = (group, artifact, version, base) -> {
+            called.set(true);
+            return null;
+        };
+        Path pom = child(root, childImporting("${bom.version}",
+                dep("com.example", "lib", null)));
+
+        PomMigration.Result result = PomMigration.translate(pom, source);
+
+        assertFalse(called.get(), "an unresolved BOM version is never requested");
+        assertTrue(result.notes().stream().anyMatch(n -> n.contains("BOM com.example:bom version"
+                + " '${bom.version}' is unresolved")), result.notes().toString());
+    }
+
+    @Test
+    void aLocalOnlyMigrationReportsTheBomWithoutFetching(
+            @org.junit.jupiter.api.io.TempDir Path root) throws Exception {
+        Path pom = child(root, childImporting("1.0.0", dep("com.example", "lib", null)));
+
+        PomMigration.Result result = PomMigration.translate(pom);
+
+        assertTrue(result.notes().stream().anyMatch(n -> n.contains("no source is available")),
+                result.notes().toString());
+    }
+
+    @Test
+    void aBomFetchFailureIsANote(@org.junit.jupiter.api.io.TempDir Path root) throws Exception {
+        PomSource offline = (group, artifact, version, base) -> {
+            throw new IllegalStateException("offline: not in the store");
+        };
+        Path pom = child(root, childImporting("1.0.0", dep("com.example", "lib", null)));
+
+        PomMigration.Result result = PomMigration.translate(pom, offline);
+
+        assertTrue(result.notes().stream().anyMatch(n -> n.contains("offline: not in the store")),
+                result.notes().toString());
+        assertTrue(result.mjToml().contains("name = \"child\""), result.mjToml());
+    }
+
+    @Test
+    void bomImportsStopAtTheDepthLimit(@org.junit.jupiter.api.io.TempDir Path root) throws Exception {
+        Map<String, String> poms = new java.util.LinkedHashMap<>();
+        for (int i = 0; i < 12; i++) {
+            String importNext = i == 11 ? "" : """
+                <dependencyManagement><dependencies><dependency>
+                  <groupId>com.example</groupId><artifactId>bom%d</artifactId>
+                  <version>1.0.0</version><type>pom</type><scope>import</scope>
+                </dependency></dependencies></dependencyManagement>
+                """.formatted(i + 1);
+            poms.put("com.example:bom" + i + ":1.0.0",
+                    bom("com.example", "bom" + i, "1.0.0", importNext));
+        }
+        Path pom = child(root, childImportingWithGroup("com.example", "bom0",
+                "1.0.0", dep("com.example", "lib", null)));
+
+        PomMigration.Result result = PomMigration.translate(pom, source(poms));
+
+        assertTrue(result.notes().stream().anyMatch(n -> n.contains("BOM import depth")),
+                result.notes().toString());
+    }
+
+    private static String childImportingWithGroup(String group, String bom, String version,
+                                                  String deps) {
+        return """
+            <project>
+              <groupId>com.example</groupId><artifactId>child</artifactId>
+              <version>1.0.0</version>
+              <dependencyManagement><dependencies>
+                <dependency>
+                  <groupId>%s</groupId><artifactId>%s</artifactId>
+                  <version>%s</version><type>pom</type><scope>import</scope>
+                </dependency>
+              </dependencies></dependencyManagement>
+              <dependencies>%s</dependencies>
+            </project>
+            """.formatted(group, bom, version, deps);
+    }
 }
