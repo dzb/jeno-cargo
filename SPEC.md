@@ -341,7 +341,7 @@ scope = "dev"             # 可选:[dev-deps] 可达的工件。缺省 = main
 ## 5. `mjm.ws.toml`(本地工作区文件)
 
 列出同一目录树里的若干模块,让彼此依赖时用本地的 `target/classes` 取代已发布的 jar。
-**只影响字节来源,不影响解析与锁**(见 DESIGN.md §8 与 `docs/workspace-design.md`)。
+**只影响字节来源,不影响解析与锁**(设计记录见 `docs/workspace-design.md`)。
 
 ```toml
 [ws]
@@ -384,23 +384,23 @@ modules = ["libs/core", "apps/web"]
 
 | 命令 | 契约 |
 |---|---|
-| `mjm init [--pom] [--ws] [--force]` | 写 `mjm.toml` 骨架;`--pom` 从 `pom.xml` 迁移并逐条报告不可表达的事实;`--ws` 写 `mjm.ws.toml`(§5)。**工作区根目录拒绝 `init`/`--pom`/`--force`**(exit 1),`--ws` 仍可用 |
-| `mjm add <dep> [ver]` | 写一行 `[deps]` 并立即重锁;值形态:精确版本、`<repo>:<version>`、`gh:owner/repo@tag`、裸名搜索(联网) |
+| `mjm init [--pom] [--ws] [--force] [paths...]` | 写 `mjm.toml` 骨架;`--pom` 从 `pom.xml` 迁移并逐条报告不可表达的事实;`--ws` 写 `mjm.ws.toml`(§5),此时 `paths...` 可显式指定模块目录。**工作区根目录拒绝 `init`/`--pom`/`--force`**(exit 1),`--ws` 仍可用 |
+| `mjm add <dep> [ver]` | 写一行 `[deps]` 并立即重锁;值形态:精确版本、`<repo>:<version>`、`gh:owner/repo@tag`、简写 `owner/repo@tag`、裸 `https://...jar` 叶子。**无值只查询**(列版本或搜索),不修改 `mjm.toml`;查询成功当前仍 exit 1(known gap,§9) |
 | `mjm remove <id>` | 删除一行声明并重锁 |
 | `mjm lock [--check]` | 解析并写出 `mjm.lock`;**总是重解**。`--check` 只在内存生成并与磁盘逐字节比较,不写文件。legacy `--refresh` 是 no-op,不在契约内 |
-| `mjm build` | javac 编译 `src/main/java`,严格可见性 classpath(只含 MAIN 声明);`--release` 取 `[java].version`;processor 走 `-processorpath` |
-| `mjm test` | fork JVM:`@MjmTest` + JUnit Platform;classpath 含 MAIN + dev;XML 报告写 `target/test-results/` |
-| `mjm run [<main>] [args…]` | 在 runtime classpath(排除 dev)上运行;无参数时用 `[project].main`;`[scripts]` 优先于同名主类。mjm 旗标只在 target 之前生效(§6.2) |
+| `mjm build` | javac 编译 `src/main/java`,严格可见性 classpath(只含 MAIN 声明);`--release` 取 `[java].version`;processor 走 `-processorpath`。**当前要求至少一个 Java 源**;resource-only 模块会失败(报没有 sources) |
+| `mjm test` | fork JVM:`@MjmTest` + JUnit Platform;当前 classpath 含 MAIN + dev + **processor**;XML 报告写 `target/test-results/` |
+| `mjm run [<main>] [args…]` | 在 runtime classpath(排除 dev)上运行;无参数时用 `[project].main`;`[scripts]` 优先于同名主类。target 在 `--` 之前(可省略);mjm 旗标只在 target 之前生效;`--` 之后**全部**是程序参数(§6.2) |
 | `mjm tree [--json]` | 依赖树 + 深度;**以 `mjm.lock` 为准**:先读锁,再解析 manifest 只为补父子边;id/version/source/depth/scope 任一不一致 → exit 1、至多 10 行差异、不输出图 |
 | `mjm why <id>` | 每个引入路径与深度;同样以锁为准,漂移拒绝画图 |
 | `mjm info <id> [--source]` | 身份/来源/依赖/源码地址;`--source` 取源码树 |
-| `mjm classpath [--test] [--file <path>]` | IDE 用 classpath;默认编译可见性,`--test` 为测试闭包;路径指向 store 内容寻址 jar,不拷贝 |
-| `mjm package [--uber]` | `target/dist/<name>-<version>.jar`;`--uber` 合并闭包输出 `...-uber.jar` |
-| `mjm bundle` | `target/dist/<name>-<version>/`(bin/lib/setup.sh/SHA256SUMS)+ `.tar.gz` |
+| `mjm classpath [--test] [--file <path>]` | IDE 用 classpath;默认编译可见性;`--test` 为测试闭包(MAIN + dev,**排除 processor**——与 `mjm test` 一致性的差异见 REMINDS §14);路径指向 store 内容寻址 jar,不拷贝 |
+| `mjm package [--uber] [--main <class>]` | `target/dist/<name>-<version>.jar`;`--uber` 合并闭包输出 `...-uber.jar`;`--main` 只影响本 jar 的 MANIFEST,不影响 `bundle`/`run` 的 `[project].main` |
+| `mjm bundle` | `target/dist/<name>-<version>/`(bin/lib/setup.sh/SHA256SUMS)+ `.tar.gz`。**当前是 mjm 专用安装器**:setup.sh 要求 JDK 25,launcher 是 mjm 品牌(`[project].main` 缺失时用 UsageStub 兜底),`lib/toolchain` 带 test 工具链;不是通用 app bundler |
 | `mjm clean [--target (default) \| --dist]` | 默认整棵删 `target/`;`--dist` 只删 `target/dist/` 保留 classes;永不触碰 store |
 | `mjm cache dir \| size \| prune \| clean` | `dir`/`size` 只读;`prune` 删可证明无用之物;`clean` 删 store 与 sources |
-| `mjm outdated [--json]` | 已钉版本 vs 仓库可用版本;`gh:`/`url`/`local:`/`mjm:` 列为未检查;跨 major 单列 |
-| `mjm audit [--json] [--dev]` | OSV 漏洞查询;只查 Central 坐标,其余列 `notChecked` 并给原因;漏洞或查询失败 exit 1 |
+| `mjm outdated [--json]` | 已钉版本 vs 仓库可用版本;**当前遍历全部锁行**(含 dev/processor);`gh:`/`url`/`local:`/`mjm:` 列为未检查;跨 major 单列 |
+| `mjm audit [--json] [--dev]` | OSV 漏洞查询;默认只查 MAIN,`--dev` 才含 dev/processor;只查 Central 坐标,其余列 `notChecked` 并给原因;漏洞或查询失败 exit 1 |
 | `mjm publish [target]` | 写三件套;目标只接受 `gh:`、`mjm:https:`、`mjm:local:`(§6.6) |
 | `mjm update` / `mjm upgrade` | 自升级(同一实现) |
 
@@ -415,9 +415,9 @@ modules = ["libs/core", "apps/web"]
 
 | 码 | 含义 |
 |---|---|
-| 0 | 成功;或查询完成且结果干净(`outdated`/`audit`)、`tree`/`why` 一致 |
-| 1 | 失败:构建/测试/解析错误,锁与 manifest 漂移,发现漏洞,查询失败 |
-| 2 | 用法错误:未知命令/参数、`--offline` 用于联网命令、工作区根缺 `--module` |
+| 0 | 成功;`outdated` 完成(有更新也是 0);`audit` 无漏洞;`tree`/`why` 一致 |
+| 1 | 失败;`audit` 有漏洞;`lock --check`/`tree`/`why` 漂移;查询失败 |
+| 2 | 用法错误 |
 
 ### 6.4 工作区策略
 
@@ -430,7 +430,33 @@ modules = ["libs/core", "apps/web"]
 ### 6.5 输出与 JSON
 
 `tree`、`outdated`、`audit` 支持 `--json`:stdout 只有**一个** JSON 文档,诊断/警告走 stderr。
-其余命令是人类可读输出。`--json` 的字段集合是契约的一部分,新增字段向后兼容,删改需新版本。
+字段集合如下(新增字段向后兼容;删改需新版本)。
+
+**tree**
+
+| 字段 | 类型 |
+|---|---|
+| `project` | `{name, version}` |
+| `budget` | 整数(`max-depth`) |
+| `roots[]` | 声明根 id,按声明顺序 |
+| `artifacts[]` | `{id, version, depth, declared, dev, children[]}`;按 id 排序,`children` 排序。当前没有 `local`/`scope` 标记 |
+
+**outdated**
+
+| 字段 | 类型 |
+|---|---|
+| `upToDate` | 布尔 |
+| `updates[]` | `{id, pinned, available, major}` |
+| `notChecked[]` | `{id, reason}` |
+| `failures[]` | `{id, error}` |
+
+**audit**
+
+| 字段 | 类型 |
+|---|---|
+| `vulnerabilities[]` | `{id, version, advisories[]}`,其中 advisory 为 `{id, severity?, summary?, fixed?, aliases[]}` |
+| `notChecked[]` | `{id, reason}` |
+| `failures[]` | `{id, error}` |
 
 ### 6.6 publish 目标
 
@@ -452,9 +478,6 @@ Maven 布局仓库仍可**读取**(`[repos]` 的 `type = "maven"`,§2.1)。
 **`add` 的 discover 形态**：不带显式版本时（列举版本 = 读 `maven-metadata.xml`，或裸名走 Central 索引搜索）是联网操作，`--offline` 下报用法错误（退出码 2）——要离线就带上显式版本：`mjm add "<id>" <version>` 只读 store，`--offline` 下照常可用。
 
 **为什么可行**：store 有持久化的 URL → digest 索引（`store/index/<sha256(url)>.url`）。没有它，索引未命中会是常态（每个 pom 都被当作"没见过"），`--offline` 必然失败。
-
----
-
 
 ---
 
@@ -495,8 +518,15 @@ target/dist/<name>-<version>.tar.gz
 
 ## 9. 本 spec 未决项
 
+**已记录的 known gap(行为修复各自独立成单)**:
+
+- `lock --refresh`:当前二进制仍接受并在 usage 中显示,但它是 **no-op**;契约只列 `--check`。移除是行为单。
+- `add` 无值查询:查询成功的退出码当前是 **1**,与 §6.3 的"成功/查询完成 = 0"不一致;修复是行为单。
+
+**其他**:
+
 - `[repos]` 回退链语法与私库排除(V2)
-- ~~`mjm jdk` toolchain 管理~~ —— 2026-11-22 决定不做(见 DESIGN.md §8):只校验、不管理
+- ~~`mjm jdk` toolchain 管理~~ —— 2026-11-22 决定不做(见 DESIGN.md §12 Q5):只校验、不管理
 
 ---
 

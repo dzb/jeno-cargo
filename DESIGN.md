@@ -265,7 +265,7 @@ IoC 接缝(未来扩展点,不引入插件机制):
 > 本节是**历史快照**:每条记录该里程碑完成当天的事实,包括当时的测试数与产物大小。
 > 这些数字不随代码演进更新,它们的作用是让人能回溯"那一刻是什么样"。
 > 描述**当前**能力时不要引用这里的计数——当前状态看命令的 usage 输出与 CI。
-> ※ 已快照:其中部分事实已被后续推翻(`gitee:` 通道已删除、交付物从 `target/{name}-{version}.jar` 迁到 `target/dist/`),权威定义见 §8;此处保留完成当天的原记录,不重写历史。
+> ※ 已快照:其中部分事实已被后续推翻(`gitee:` 通道已删除、交付物从 `target/{name}-{version}.jar` 迁到 `target/dist/`),当前状态看 SPEC §6 与 `mjm --help`;此处保留完成当天的原记录,不重写历史。
 
 - **M1a** ✅ 完成(2026-11-21):freeway-commons `toml` 包(SPEC §1 文法,40 测试)+ boot 配置级联接入 `.toml`;freeway 全仓 7 模块测试绿
 - **M1b** ✅ 完成(2026-11-21):mjm 骨架(groupId `com.jujin8.mjm`,JDK 25,依赖 freeway-commons)+ pom 解码器(`Poms`/`PomXml`/模型,23 测试)——parent 链递归、属性插值 fixpoint(`${revision}` 支持)、DM/BOM 合并、依赖过滤(compile/runtime、非 optional)、子集拒绝(ranges/snapshots/打包类型/坐标不一致/循环父链/DOCTYPE)全部落地
@@ -288,10 +288,8 @@ Q5(JDK 只校验不管理,`mjm jdk` 取消)、Q6(daemon = M6)、Q7(token 环境�
 
 ### 待定
 
-| # | 问题 | 说明 |
-|---|------|------|
-| Q8 | Gitee 附件 URL 实测 | ✅ **已结论(2026-11-22)**:真机实测发现匿名下载 403(需 Bearer 令牌),于是 `gitee:` 物种**已移除**——携带令牌违背零配置原则。需要 Gitee 构件时用裸 URL 叶子或自建主机 `[repos]` |
-| Q9 | 自举期 freeway 依赖来源 | ✅ 已解决(2026-11-21):**`local:` 仓库类型**(本地 Maven 布局目录,`~` 展开与相对路径均支持)+ **vendor 自举**——mjm 的 `vendor/` 目录放 freeway-commons/freeway-ioc/slf4j-api 的 jar 与"独立声明 pom"(无 parent 链,版本重钉去 snapshot 后缀),字节与其他仓库同等 sha256 钉定。snapshot 全局仍然禁止,无需例外 |
+暂无。已知行为缺口(如 `lock --refresh` no-op、`add` 无值查询退出码)记录在
+[SPEC.md](SPEC.md) §9,修复各自独立成单。
 
 ---
 
