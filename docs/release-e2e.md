@@ -104,3 +104,33 @@ clean HOME 安装（PATH 含 minisign）成功，launcher 输出 `signed-app-ok`
 安装仍成功。无 key 且未加 flag：exit 1，目标目录未创建。
 
 完整日志：`logs/g246-signed-local.log`、`logs/g246-signed-install.log`。
+
+### Real signed `gh:` release (v0.1.1)
+
+同一 demo repo 又发了一次签名版 `v0.1.1`（8 个 asset）：
+
+```text
+minisign.pub
+release-demo-0.1.1.tar.gz
+release-demo-0.1.1.tar.gz.minisig
+release-demo-0.1.1.tar.gz.sha256
+release.json
+release.json.minisig
+setup.sh
+setup.sh.minisig
+```
+
+发布时使用 `/tmp/minisign-pkg/root/usr/bin/minisign` 和临时 `-W` 密钥；发布后
+`mjm release` 用本地公钥验签。干净 HOME 安装时 `PATH` 同时包含 minisign 和本机
+curl DNS 修正 wrapper：
+
+```text
+$ curl -fsSL https://github.com/dzb/mjm-release-demo/releases/latest/download/setup.sh | bash
+installing release-demo 0.1.1 ...
+release-demo 0.1.1 installed
+$ .release-demo/bin/release-demo
+release-demo 0.1.1 ok
+```
+
+bootstrap 的 sha256 + minisign 验签都通过后才解压安装。curl wrapper 仅修正本机
+`github.com` 路由，不修改发布资产；详见上面的网络条件节。

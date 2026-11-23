@@ -146,6 +146,7 @@ final class ReleaseSigner {
         java.io.ByteArrayOutputStream errors = new java.io.ByteArrayOutputStream();
         try {
             process = new ProcessBuilder(command)
+                    .redirectInput(ProcessBuilder.Redirect.INHERIT)
                     .redirectErrorStream(true)
                     .redirectOutput(ProcessBuilder.Redirect.PIPE)
                     .start();

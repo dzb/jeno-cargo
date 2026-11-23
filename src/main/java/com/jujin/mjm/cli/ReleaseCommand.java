@@ -47,7 +47,7 @@ public final class ReleaseCommand implements Command {
 
     @Override
     public String usage() {
-        return "[target] [--dry-run]";
+        return "[target] [--dry-run] [--allow-unsigned]";
     }
 
     @Override
@@ -59,6 +59,8 @@ public final class ReleaseCommand implements Command {
     public String help() {
         return """
                needs target/dist/<name>-<version>.tar.gz (run mjm bundle first);
+               signed with minisign by default: set MJM_MINISIGN_KEY, and optionally
+               MJM_MINISIGN_PUBKEY/MJM_MINISIGN; --allow-unsigned is the explicit opt-out.
                no target prepares target/dist/release/ and prints the upload list.
                --dry-run prepares the same files and shows the URLs without uploading.""";
     }

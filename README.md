@@ -276,7 +276,8 @@ curl -fsSL https://host/app/setup.sh | bash
 unless you explicitly opt out:
 
 ```bash
-minisign -G                         # once: creates ~/.minisign/minisign.key + .pub
+minisign -G                         # interactive: encrypted key + .pub
+minisign -G -W                      # CI/automation: unencrypted key (treat it as a secret)
 export MJM_MINISIGN_KEY=~/.minisign/minisign.key
 export MJM_MINISIGN_PUBKEY=~/.minisign/minisign.pub   # optional; derived if omitted
 mjm bundle
