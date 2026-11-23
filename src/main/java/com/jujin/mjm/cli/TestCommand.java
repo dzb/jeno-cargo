@@ -139,7 +139,7 @@ public final class TestCommand implements Command {
     private int runTests(List<String> testSources) {
         List<Path> toolchain = toolchainPaths();
         ClasspathAssembler.Classpath compileClasspath = classpath(toolchain, false);
-        if (!compile(testSources, compileClasspath.joined())) {
+        if (!compile(testSources, compileClasspath.joined(), processorPath())) {
             return 1;
         }
 
@@ -182,6 +182,19 @@ public final class TestCommand implements Command {
     // ------------------------------------------------------------------
     // classpath assembly
     // ------------------------------------------------------------------
+
+    /** Processor-scope artifacts, resolved exactly as the compile classpath is. */
+    private List<String> processorPath() {
+        Substitutions substitutions = Substitutions.forProject(projectDir);
+        List<String> paths = new ArrayList<>();
+        for (LockedArtifact artifact : lock()) {
+            if (artifact.scope() == com.jujin.mjm.resolve.Scope.PROCESSOR) {
+                paths.add(ClasspathAssembler.artifactPath(
+                        artifact, store, substitutions, false).toString());
+            }
+        }
+        return paths;
+    }
 
     private ClasspathAssembler.Classpath classpath(List<Path> toolchain,
                                                   boolean includeTestOutput) {
@@ -329,7 +342,8 @@ public final class TestCommand implements Command {
         }
     }
 
-    private boolean compile(List<String> sources, String classpath) {
+    private boolean compile(List<String> sources, String classpath,
+                            List<String> processorPath) {
         Path output = projectDir.resolve(TEST_OUTPUT);
         // a stale test-classes tree makes deleted tests run forever: the fork
         // scans whatever is on disk, so `NoClassDefFoundError` from a removed
@@ -360,6 +374,12 @@ public final class TestCommand implements Command {
         command.add(output.toString());
         command.add("-cp");
         command.add(classpath);
+        // annotation processors ride on -processorpath, never the classpath:
+        // they are build tools, not something the tests run against
+        if (!processorPath.isEmpty()) {
+            command.add("-processorpath");
+            command.add(ClasspathAssembler.join(processorPath));
+        }
         // test code compiles for the same target as the code under test
         Integer javaVersion = projectJavaVersion();
         if (javaVersion != null) {

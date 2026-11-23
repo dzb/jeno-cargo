@@ -143,8 +143,8 @@ class ClasspathAssemblerTest {
         assertTrue(compile.get(0).endsWith(".jar"));
 
         assertEquals(List.of(testClasses, classes), test.subList(0, 2));
-        assertEquals(6, test.size(),
-                "test classes + main classes + three closure jars + the running mjm location");
+        assertEquals(5, test.size(),
+                "test classes + main classes + two non-processor jars + the running mjm location");
         assertTrue(test.get(2).endsWith(".jar"));
         assertEquals(classes, test.get(test.size() - 1),
                 "runtimeLocation is target/classes in the development layout");
@@ -158,9 +158,10 @@ class ClasspathAssemblerTest {
         assertEquals(List.of(testClasses, classes), exportTest.subList(0, 2));
         assertEquals(4, exportTest.size(), "MAIN + DEV jars, processor excluded");
 
-        // the known difference: TEST carries the processor, EXPORT_TEST does not
+        // both test-shaped classpaths exclude the processor: it compiles code,
+        // it is not linked against; mjm test puts it on -processorpath instead
         String procJar = jarOf("com.example:lib-proc");
-        assertTrue(test.contains(procJar));
+        assertFalse(test.contains(procJar));
         assertFalse(exportTest.contains(procJar));
     }
 

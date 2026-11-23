@@ -23,8 +23,9 @@ import java.util.Map;
  * <ul>
  *   <li>{@link Mode#COMPILE} — the declared MAIN dependencies only (strict
  *       visibility), no {@code target/classes}; used by {@code build}.</li>
- *   <li>{@link Mode#TEST} — test classes, main classes, every artifact in the
- *       lock, the running mjm classes, then the toolchain jars.</li>
+ *   <li>{@link Mode#TEST} — test classes, main classes, every non-processor
+ *       artifact in the lock, the running mjm classes, then the toolchain
+ *       jars.</li>
  *   <li>{@link Mode#RUN} — main classes, then every MAIN artifact (dev and
  *       processor skipped).</li>
  *   <li>{@link Mode#EXPORT_MAIN} — main classes plus the declared MAIN jars;
@@ -38,10 +39,10 @@ import java.util.Map;
  * that does not is looked up in the store. The decision lives in one method
  * ({@link #artifactPath}) so every mode — and packaging — cannot disagree.
  *
- * <p><b>Known inconsistency, deliberately unchanged:</b> {@code TEST} includes
- * processor-scope artifacts while {@code EXPORT_TEST} excludes them. Both
- * behaviours predate this class; deciding which is right is its own change
- * (REMINDS.md).
+ * <p>{@code TEST} and {@code EXPORT_TEST} both exclude processor-scope
+ * artifacts: processors compile code, they are not something tests link
+ * against. {@code mjm test} passes them on javac's {@code -processorpath}
+ * instead (REMINDS.md §14).
  */
 final class ClasspathAssembler {
 
@@ -113,6 +114,9 @@ final class ClasspathAssembler {
                 }
                 entries.add(projectDir.resolve("target/classes"));
                 for (LockedArtifact artifact : input.locked()) {
+                    if (artifact.scope() == Scope.PROCESSOR) {
+                        continue;  // processors compile code; they are not an API
+                    }
                     Path jar = artifactPath(artifact, store, substitutions, true);
                     if (jar != null) {
                         entries.add(jar);
