@@ -270,6 +270,28 @@ mjm release mjm:local:../releases      # or gh:owner/repo / mjm:https://host/
 curl -fsSL https://host/app/setup.sh | bash
 ```
 
+### Signing a release
+
+`mjm release` signs the installer with [minisign](https://jedisct1.github.io/minisign/)
+unless you explicitly opt out:
+
+```bash
+minisign -G                         # once: creates ~/.minisign/minisign.key + .pub
+export MJM_MINISIGN_KEY=~/.minisign/minisign.key
+export MJM_MINISIGN_PUBKEY=~/.minisign/minisign.pub   # optional; derived if omitted
+mjm bundle
+mjm release mjm:https://my.host/
+```
+
+`MJM_MINISIGN` points at the binary (default `minisign`). Every release carries
+`<tar>.minisig`, `setup.sh.minisig`, `release.json.minisig` and `minisign.pub`;
+the bootstrap embeds the public key, verifies the tar's signature after the
+sha256 check, and refuses to install if minisign is missing or the signature is
+wrong. Unsigned releases need `--allow-unsigned`, print a warning, and their
+bootstrap only checks sha256. A host can still alter the setup and key together:
+check the key fingerprint from this README or the release tag out of band — a
+signature proves the artifact came from that key, not that the host is honest.
+
 Unknown arguments are usage errors (exit 2), never silently ignored. `--` ends
 mjm's own options: after it, arguments belong to the command — for `run`, to the
 program (`mjm run app.Main -- --offline` passes `--offline` through).

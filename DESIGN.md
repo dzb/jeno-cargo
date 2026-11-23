@@ -79,6 +79,7 @@ mjm 又用严格可见性约束用户项目的依赖边界——**这个工具�
 | D14 | TOML 解析器落在 freeway-commons(新 `toml` 包),freeway 配置同步支持 `.toml` | 实测配置层:`ConfigFilePlan.Reader` 按扩展名分派,下游全是扁平 `Map<String,String>`(JSON 走 `Maps.flatten`);TOML 展平规则相同,一个分支接入。commons 已有 `json` 包,`toml` 并列;mjm 仅依赖 Freeway,解析器放 mjm 会倒挂;一次实现四处共用(mjm.toml / 描述符 / mjm.lock / application.toml) |
 | D15 | 发布只写 mjm 布局,Maven 布局只读 | mjm 不生成 POM;发一个自己读不回来的目标等于把"发布"变成"丢文件"。同一台静态主机可以装任一布局,协议由 `[repos]` 的 `type` 显式声明,发布侧只接受能回读的三种目标 |
 | D16 | `tree`/`why` 以 `mjm.lock` 为准 | 锁是 `build`/`run`/`package` 实际消费的东西;只解析 manifest 会画出没人构建的图。锁是平表,边由 manifest 补,但 id/version/source/depth/scope 必须逐项一致,否则拒绝出图 |
+| D18 | 签名是发布步骤的一部分;mjm 不托管密钥 | sha256 只证明字节完整,不证明来源;minisign 让"推着发布的人"与"构建产物"之间有一条可验证的签名链。密钥属于用户(minisign -G),mjm 只调用本地二进制,不生成、不上传、不打印 secret。「host 被攻破也安全」不成立:公钥与 setup 可被一起替换,需带外核对 fingerprint |
 | D17 | `mjm release` 是单步文件分发,不做 CI/生命周期 | 构建、测试、何时发版都属于项目的 CI/flow;工具只负责"把已打好的安装包发出去并读回验证"。它会拒绝隐式 build/test/bundle,否则"发布"就变成"重新构建一个没人审过的产物" |
 
 ---

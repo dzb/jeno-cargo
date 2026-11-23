@@ -403,7 +403,7 @@ modules = ["libs/core", "apps/web"]
 | `mjm audit [--json] [--dev]` | OSV 漏洞查询;默认只查 MAIN,`--dev` 才含 dev/processor;只查 Central 坐标,其余列 `notChecked` 并给原因;漏洞或查询失败 exit 1 |
 | `mjm publish [target]` | 写三件套;目标只接受 `gh:`、`mjm:https:`、`mjm:local:`(§6.6) |
 | `mjm upgrade` / `mjm update`(alias) | 自升级(同一实现) |
-| `mjm release [target] [--dry-run]` | 发布 `mjm bundle` 产生的安装包:`gh:<owner>/<repo>`、`mjm:https://host/`(loopback `http://` 仅供测试)、`mjm:local:<dir>`;无 target 只准备 `target/dist/release/` 并打印上传清单。**不隐式 build/test/bundle**;发布后回读并校验 tar 的 sha256(§7.3) |
+| `mjm release [target] [--dry-run] [--allow-unsigned]` | 发布 `mjm bundle` 产生的安装包(默认用 minisign 签名,`--allow-unsigned` 才允许无签名):`gh:<owner>/<repo>`、`mjm:https://host/`(loopback `http://` 仅供测试)、`mjm:local:<dir>`;无 target 只准备 `target/dist/release/` 并打印上传清单。**不隐式 build/test/bundle**;发布后回读并校验 tar 的 sha256(§7.3) |
 
 ### 6.2 参数约定
 
@@ -592,8 +592,16 @@ mjm:https://host/      <base>/<name>/<version>/release/
 mjm:local:<dir>        同一目录结构,file: 写入,无网络
 ```
 
+**签名**:`MJM_MINISIGN_KEY`(secret key,必需除非 `--allow-unsigned`)、`MJM_MINISIGN_PUBKEY`(可选,
+缺失时用 `minisign -R` 派生)、`MJM_MINISIGN`(二进制)。tar、`setup.sh`、`release.json` 各生成
+`<file>.minisig`,并上传 `minisign.pub`;`release.json` 增加 `signed`、`minisign.publicKey`、
+`signatures`。签名失败 → exit 1,不上传。无签名只能显式 `--allow-unsigned`。
+
 bootstrap `setup.sh` 下载 tar(curl,缺则 wget)→ 校验 sha256(`sha256sum` 或 `shasum -a 256`)→
-解压到临时目录 → 执行包内 `setup.sh`;失败即退出并清理临时目录。URL 写入 bootstrap 时必须是最终可用地址。
+(签名 release)要求 `minisign`,下载 `<tar>.minisig` 并用内嵌公钥 `minisign -V` 验签,缺失/失败即退出 →
+解压到临时目录 → 执行包内 `setup.sh`。unsigned release 只校验 sha256 并打印警告。
+bootstrap 必须带内嵌公钥;host 可同时篡改 setup 与公钥,用户需从 README/tag 带外核对 fingerprint。
+失败即退出并清理临时目录。URL 写入 bootstrap 时必须是最终可用地址。
 
 **回读校验**:发布后必须从目标读回 tar(`local:` 读文件;`mjm:` GET;`gh:` GET asset,允许短暂重试),
 sha256 与 manifest 一致才算成功;失败 exit 1 并报告具体 URL/文件。

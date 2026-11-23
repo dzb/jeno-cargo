@@ -83,3 +83,24 @@ exec /usr/bin/curl --resolve github.com:443:140.82.113.3 --http1.1 -4 "$@"
 - 未发现 release command 的功能缺口；本机 GitHub 公共下载的路由问题属于网络环境。
 - `releases/latest/download/setup.sh` 是稳定入口；版本化 `releases/download/v0.1.0/setup.sh`
   等价可用，可作为网络排查时的备选。
+
+## Signed releases（minisign，2026-11-23）
+
+本机没有系统 minisign，使用解包的 0.12 二进制：`/tmp/minisign-pkg/root/usr/bin/minisign`。
+密钥临时生成在 `/tmp/mjm-sig`（`minisign -G -W`），未写入仓库；安装用干净 HOME。
+
+```text
+$ MJM_MINISIGN_KEY=/tmp/mjm-sig/minisign.key   MJM_MINISIGN_PUBKEY=/tmp/mjm-sig/minisign.pub   MJM_MINISIGN=/tmp/minisign-pkg/root/usr/bin/minisign   mjm release mjm:local:/tmp/mjm-sig/repo
+released mjm:local:/tmp/mjm-sig/repo; installer:
+  curl -fsSL file:///tmp/mjm-sig/repo/sigapp/setup.sh | bash
+```
+
+产物包含 tar、`setup.sh`、`release.json`、三个 `.minisig` 与 `minisign.pub`（版本级与稳定入口各一份）。
+`release.json` 的 `signed=true`、`minisign.publicKey`、`signatures` 与实际文件一致。
+clean HOME 安装（PATH 含 minisign）成功，launcher 输出 `signed-app-ok`；篡改 `.minisig` 后 bootstrap
+在 `minisign -V` 处退出 2，未创建安装目录。
+
+`--allow-unsigned`（无 key）：打印 `warning: releasing unsigned`，bootstrap 只校验 sha256 并再次警告，
+安装仍成功。无 key 且未加 flag：exit 1，目标目录未创建。
+
+完整日志：`logs/g246-signed-local.log`、`logs/g246-signed-install.log`。
