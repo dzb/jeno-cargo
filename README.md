@@ -179,7 +179,8 @@ It checks that every direct declaration still matches `mjm.lock`, that the
 lock's jar and metadata bytes are still present and hash-correct in the store,
 and that a complete `target/dist` publish triple or bundle `SHA256SUMS` is
 internally consistent (a package-only jar is skipped as not prepared; a partial
-triple still fails). It never resolves, downloads or modifies project files.
+triple or a bundle directory without `SHA256SUMS` still fails). It never
+resolves, downloads or modifies project files.
 
 Publishing accepts only targets mjm can read back — a GitHub release, an mjm
 layout over HTTPS, or an mjm layout on disk. GitHub gets native upload because
@@ -346,7 +347,8 @@ program (`mjm run app.Main -- --offline` passes `--offline` through).
 
 Human output adapts to the destination. A terminal gets colour, check marks and
 a grouped help page; status lines keep their historical plain text when stdout
-is piped, so scripts do not need to parse ANSI escapes.
+is piped, so scripts do not need to parse ANSI escapes. `--json` has the
+long-form alias `--format=json`; `--format=text` switches back.
 
 ```bash
 MJM_COLOR=always mjm --help   # force colour

@@ -233,7 +233,7 @@ url = "vendor"
 - `mjm bundle` 永不把这些 id 合并进 launcher jar;
 - `mjm bundle --toolchain` 把它们原样复制到 `lib/toolchain/`(本地 workspace 替换时打包对应 classes),默认不带;
 - `mjm lock` 后发现 id 不在锁图 → `bundle` 报错并提示重新 `mjm lock`;
-- 清单里的工件可以来自 MAIN、DEV 或 PROCESSOR 的锁闭包;PROCESSOR 仍不会被 `bundle` 打包。
+- 清单里的工件可以来自 MAIN、DEV 或 PROCESSOR 的锁闭包;PROCESSOR 不会被合并进 launcher jar,但列入清单且带 `--toolchain` 时会复制到 `lib/toolchain/`。
 
 未知节、未知键 → 报错。
 
@@ -419,7 +419,7 @@ modules = ["libs/core", "apps/web"]
 | `mjm outdated [--json] [--dev]` | **只读 `mjm.lock`**(不需要 `mjm.toml`);已钉版本 vs 仓库可用版本;默认只查 MAIN,`--dev` 含 dev/processor;`gh:`/`url`/`local:`/`mjm:` 列为未检查;跨 major 单列;完成即 exit 0(有更新也是 0) |
 | `mjm doctor` | **只读**本地诊断:检查当前项目或 workspace 每个模块的 `mjm.toml`/`mjm.lock` 是否存在且可解析,报告旧 `mj.toml`/`mj.lock`(mjm **不会**读取它们),并检查 XDG store/sources/locks 路径可写性;不解析依赖、不写文件、不访问网络。健康 exit 0,有问题 exit 1,带参数 exit 2 |
 | `mjm audit [--json] [--dev]` | OSV 漏洞查询;默认只查 MAIN,`--dev` 才含 dev/processor;只查 Central 坐标,其余列 `notChecked` 并给原因;漏洞或查询失败 exit 1 |
-| `mjm verify` | **只读本地发布预检**:解析 `mjm.toml`/`mjm.lock`,核对每一条直接声明与锁定行的 id/version/source/MAIN scope;按 sha256 校验 store 中每个 jar 与元数据(workspace 本地替换则校验 classes 与版本戳);若 `target/dist/` 已有完整发布三件套,校验其内部一致性与 bundle `SHA256SUMS`;只有 package 产物(仅 jar)视为未准备(skipped),部分三件套仍失败。不解析依赖、不下载、不修改项目文件、不访问网络。通过 exit 0,失败 exit 1,带参数 exit 2 |
+| `mjm verify` | **只读本地发布预检**:解析 `mjm.toml`/`mjm.lock`,核对每一条直接声明与锁定行的 id/version/source/MAIN scope;按 sha256 校验 store 中每个 jar 与元数据(workspace 本地替换则校验 classes 与版本戳);若 `target/dist/` 已有完整发布三件套,校验其内部一致性与 bundle `SHA256SUMS`;只有 package 产物(仅 jar)视为未准备(skipped),部分三件套仍失败;bundle 目录存在但缺 `SHA256SUMS` 也失败(`artifacts.bundle-incomplete`)。不解析依赖、不下载、不修改项目文件、不访问网络。通过 exit 0,失败 exit 1,带参数 exit 2 |
 | `mjm publish [target] [--json] [--dry-run]` | 写三件套;目标只接受 `gh:`、`mjm:https:`、私有网络 `mjm:http://<literal-ip>…`、`mjm:local:`(§6.6)。mjm 布局逐文件 PUT 后立即 GET 回读,三个文件的字节必须完全一致,否则 exit 1;`--dry-run` 不写 descriptor/sha256、不创建目标、不上传 |
 | `mjm upgrade` / `mjm update`(alias) | 自升级(同一实现) |
 | `mjm release [target] [--json] [--dry-run] [--allow-unsigned]` | 发布 `mjm bundle` 产生的安装包(默认用 minisign 签名,`--allow-unsigned` 才允许无签名):`gh:<owner>/<repo>`、`mjm:https://host/`、私有网络 `mjm:http://<literal-ip>…`、`mjm:local:<dir>`;无 target 只准备 `target/dist/release/` 并打印上传清单。**不隐式 build/test/bundle**;发布后回读并校验 tar 的 sha256(§7.3) |
@@ -515,10 +515,12 @@ stdout/stderr/退出码属于用户程序,`mjm --json run` 会被 runner 以
 `doctor` 和 `verify` 的 workspace 结果统一为:
 
 ```text
-workspace: {root, mode: single|module|all}
+workspace: {root, mode: single|module|all|unknown}
 modules[]:  {module, path, status, exitCode, project?, checks[]}
 summary:    {modules, passedModules, failedModules, checks, ...}
 ```
+
+`unknown` 只由 `doctor` 产生（`mjm.ws.toml` 存在但读不了）；`doctor` 不接受 `--module`。
 
 `lock --check` 使用同样的 `workspace/modules/summary` 外壳;每个 module 额外有
 `lockFile`, `check`, `upToDate`, `artifacts`, `differences[]`。check 漂移时
@@ -665,7 +667,7 @@ HTTP mjm-layout 发布固定使用 **PUT**,不是 POST:
 
 每个 store 访问都经过同一个判定点（`ArtifactStore.ensure`），所以 `lock` / `build` / `test` / `info --source` 都自动遵守。
 
-**不适用的命令**：`upgrade`(alias `update`)、`publish`、`outdated`、`audit` —— 它们的存在就是联网操作。传入 `--offline` 报用法错误（退出码 2），而不是假装接受。
+**不因 `--offline` 接受的命令**：`upgrade`(alias `update`)、`outdated`、`audit` 总是联网，传入 `--offline` 报用法错误（退出码 2）。`publish`/`release` 由 target 决定：`mjm:local:` 离线可用；`gh:`、`mjm:https:` 与私有 http 目标在联网前以 `OFFLINE_FORBIDDEN` 拒绝（退出码 2），与实现一致。
 
 **`add` 的 discover 形态**：不带显式版本时（列举版本 = 读 `maven-metadata.xml`，或裸名走 Central 索引搜索）是联网操作，`--offline` 下报用法错误（退出码 2）——要离线就带上显式版本：`mjm add "<id>" <version>` 只读 store，`--offline` 下照常可用。
 
@@ -716,6 +718,7 @@ target/dist/<name>-<version>.tar.gz
 
 **已记录的 known gap(行为修复各自独立成单)**:
 
+- `mjm upgrade` 下载 release 资产时只校验完整性（sha256），不验 minisign 签名；升级链的信任来自下载源。
 
 **其他**:
 
