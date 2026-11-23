@@ -126,7 +126,17 @@ java -cp "target/classes:$VJARS" com.jujin.jeno.cli.Jeno lock
 java -cp "target/classes:$VJARS" com.jujin.jeno.cli.Jeno build
 java -cp "target/classes:$VJARS" com.jujin.jeno.cli.Jeno test
 java -cp "target/classes:$VJARS" com.jujin.jeno.cli.Jeno bundle --toolchain
-gh release create v{ver} dist/jeno-{ver}.tar.gz --title "jeno v{ver}" --notes "…"
+VERSION={ver}
+mkdir -p dist-release
+cp "target/dist/jeno-$VERSION.tar.gz" "dist-release/jeno-bin-$VERSION.tar.gz"
+minisign -S -s "$HOME/.jeno-signing/jeno.key" \
+  -m "dist-release/jeno-bin-$VERSION.tar.gz" \
+  -x "dist-release/jeno-bin-$VERSION.tar.gz.minisig"
+cp "$HOME/.jeno-signing/jeno.pub" dist-release/minisign.pub
+gh release create "v$VERSION" \
+  "dist-release/jeno-bin-$VERSION.tar.gz" \
+  "dist-release/jeno-bin-$VERSION.tar.gz.minisig" \
+  dist-release/minisign.pub --title "jeno v$VERSION" --notes "…"
 ```
 
 修好链条后跑一次 `jeno upgrade`,本机回到链条上。
@@ -135,5 +145,5 @@ gh release create v{ver} dist/jeno-{ver}.tar.gz --title "jeno v{ver}" --notes "�
 
 - `jeno publish` 与本管线无关:它是"把库发布给消费方"的三件套命令;
   jeno 自身的工具发行走 CI 的 bundle + Release,两个语义不混用
-- jeno 不提供 `release` 命令:CI 显式调用 `jeno lock` / `build` / `test` / `bundle`,
-  再自行 `gh release create`
+- jeno 自身的发行不走 `jeno release`(那是发布**应用安装包**的命令):CI 显式调用
+  `jeno lock` / `build` / `test` / `bundle`,再自行 `gh release create`
