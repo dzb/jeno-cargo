@@ -452,6 +452,10 @@ public final class PomMigration {
         if (groupId != null) {
             out.append("# migrated from Maven groupId ").append(groupId).append('\n');
         }
+        Integer javaVersion = javaVersion(properties, notes);
+        if (javaVersion != null) {
+            out.append("\n[java]\nversion = ").append(javaVersion).append('\n');
+        }
         if (!main.isEmpty()) {
             out.append("\n[deps]\n");
             main.forEach(line -> out.append(line).append('\n'));
@@ -589,6 +593,54 @@ public final class PomMigration {
     private static String artifact(String id) {
         int colon = id.indexOf(':');
         return colon < 0 ? "" : id.substring(colon + 1);
+    }
+
+    /**
+     * The target major Maven's properties declare, if they declare one.
+     * Precedence follows what actually drives javac: release, then java.version,
+     * then compiler target/source. A value that cannot be a number stays out of
+     * the output with a note — guessing a JDK here would be inventing a fact.
+     */
+    private static Integer javaVersion(Map<String, String> properties, List<String> notes) {
+        String[] keys = {"maven.compiler.release", "java.version",
+            "maven.compiler.target", "maven.compiler.source"};
+        for (String key : keys) {
+            String raw = properties.get(key);
+            if (raw == null || raw.isBlank()) {
+                continue;
+            }
+            String value = raw.strip();
+            if (value.contains("${")) {
+                addNote(notes, "cannot derive [java].version — " + key + " = '" + value
+                        + "' is an unresolved property; set [java].version by hand");
+                return null;
+            }
+            Integer major = javaMajor(value);
+            if (major == null) {
+                addNote(notes, "cannot derive [java].version — " + key + " = '" + value
+                        + "' is not a Java major; set [java].version by hand");
+                return null;
+            }
+            if (major < 1 || major > 100) {
+                addNote(notes, "cannot derive [java].version — " + key + " = '" + value
+                        + "' is outside 1..100; set [java].version by hand");
+                return null;
+            }
+            return major;
+        }
+        return null;
+    }
+
+    /** "1.8" and "1.7" are the pre-9 spellings of 8 and 7; "17" is itself. */
+    private static Integer javaMajor(String value) {
+        try {
+            if (value.startsWith("1.")) {
+                return Integer.parseInt(value.substring(2));
+            }
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private static void addNote(List<String> notes, String note) {

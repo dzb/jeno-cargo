@@ -950,4 +950,69 @@ class PomMigrationTest {
             </project>
             """.formatted(group, bom, version, deps);
     }
+
+    // ------------------------------------------------------------------
+    // [java].version from Maven properties
+    // ------------------------------------------------------------------
+
+    private static PomMigration.Result javaPom(String properties) {
+        return PomMigration.translate("""
+            <project>
+              <groupId>com.example</groupId><artifactId>demo</artifactId>
+              <version>1.0.0</version>
+              <properties>%s</properties>
+            </project>
+            """.formatted(properties));
+    }
+
+    @Test
+    void javaVersionComesFromJavaVersionProperty() {
+        PomMigration.Result result = javaPom("<java.version>21</java.version>");
+
+        assertTrue(result.mjToml().contains("[java]\nversion = 21"), result.mjToml());
+    }
+
+    @Test
+    void mavenCompilerReleaseWinsOverOtherProperties() {
+        PomMigration.Result result = javaPom(
+                "<maven.compiler.release>17</maven.compiler.release>"
+                        + "<java.version>21</java.version>"
+                        + "<maven.compiler.target>1.8</maven.compiler.target>");
+
+        assertTrue(result.mjToml().contains("[java]\nversion = 17"), result.mjToml());
+    }
+
+    @Test
+    void compilerTargetMapsLegacyOneDotEightToEight() {
+        PomMigration.Result result = javaPom(
+                "<maven.compiler.target>1.8</maven.compiler.target>");
+
+        assertTrue(result.mjToml().contains("[java]\nversion = 8"), result.mjToml());
+    }
+
+    @Test
+    void compilerSourceIsTheLastFallback() {
+        PomMigration.Result result = javaPom(
+                "<maven.compiler.source>1.7</maven.compiler.source>");
+
+        assertTrue(result.mjToml().contains("[java]\nversion = 7"), result.mjToml());
+    }
+
+    @Test
+    void noJavaPropertyWritesNoJavaSection() {
+        PomMigration.Result result = javaPom("");
+
+        assertFalse(result.mjToml().contains("[java]"), result.mjToml());
+        assertTrue(result.notes().isEmpty(), result.notes().toString());
+    }
+
+    @Test
+    void anUnresolvedJavaVersionIsANoteNotAGuess() {
+        PomMigration.Result result = javaPom(
+                "<java.version>${java.version}</java.version>");
+
+        assertFalse(result.mjToml().contains("[java]"), result.mjToml());
+        assertTrue(result.notes().stream().anyMatch(n -> n.contains("cannot derive [java].version")),
+                result.notes().toString());
+    }
 }
