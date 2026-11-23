@@ -79,15 +79,18 @@ parent 照常命中，缺的只记 note，不联网。
 ```
 note: parent org.springframework.boot:spring-boot-starter-parent:3.3.4 read from Central
 note: parent org.springframework.boot:spring-boot-dependencies:3.3.4 read from Central
-note: BOM org.springframework:spring-framework-bom:6.1.13 is imported but not fetched …
-note: org.springframework:spring-core has no version (and none is managed) — add one by hand
+note: BOM org.springframework:spring-framework-bom:6.1.13 read from Central
 [deps]
+    "org.springframework:spring-core" = "6.1.13"
     "org.slf4j:slf4j-api" = "2.0.16"
 ```
 
-**边界**：Boot 的 `spring-core` 版本由 `spring-framework-bom`（`scope=import`）提供；本次不支持 BOM 网络
-递归，因此它得到的是明确的 BOM note + 手工补版本，而不是具体版本。直接写在远端 DM 里的依赖（如
-`slf4j-api`）会解析出具体版本（`2.0.16`）。这是已知限制，不是静默丢失。
+**BOM import 递归（`4496a8d`）**：`spring-framework-bom` 会被继续从 Central 拉取，递归它自己的
+parent/import，并把其 managed 版本以 `putIfAbsent` 合入；现在 `spring-core` 得到 **6.1.13**，
+`mjm lock` 解析出 3 个工件（spring-core、spring-jcl、slf4j-api）。`--offline` 在 store 预热后结果相同。
+
+边界：只沿 Central 递归；私有 repository 的 BOM、local reactor BOM 不自动解析（note）；BOM 深度上限 8；
+BOM 自己的 properties 只用于解析它自己，不泄漏成子项目的插值属性。
 
 三个样本重跑（online，带 PomSource）：结果与仅本地 parent 时一致（soloncode-cli 4、point-web 3、
 solon-ai-core 1 个直接依赖）；`solon-parent:4.2.0-SNAPSHOT` 得到明确 note：
@@ -99,7 +102,7 @@ note: parent org.noear:solon-parent:4.2.0-SNAPSHOT is a snapshot — Central loo
 
 ## 修复内容
 
-`ce26430`（本地 parent / 多模块拒绝 / notes；合成 POM 单测）、`1aa2837`（远端 parent，8 条 fake PomSource 单测）：
+`ce26430`（本地 parent / 多模块拒绝 / notes）、`1aa2837`（远端 parent）、BOM 递归 commit（fake PomSource 单测）：
 
 - `PomMigration.translate(Path)`：递归读取本地 parent（缺省 `../pom.xml`；显式空 `<relativePath/>` 不本地查找），
   parent-first 合并 properties/dependencyManagement；校验目标文件坐标是否真是声明的 parent；缺失/循环均 note 后继续。
@@ -108,10 +111,13 @@ note: parent org.noear:solon-parent:4.2.0-SNAPSHOT is a snapshot — Central loo
 - 新增 note：build plugins、repositories、pluginRepositories、profiles、exclusions、非 jar packaging、模块列表、BOM import。
 - `translate(Path, PomSource)`：远端 parent 经 Central 递归解析；快照/未解析版本不请求；循环、缺失、异常均 note；
   `translate(Path)` 保持“仅本地”行为。
+- BOM import 递归：`scope=import`（type pom 或省略）经 PomSource 拉取，递归其 parent/嵌套 BOM，
+  managed 以 putIfAbsent 合并；快照/${...}/缺失/异常/循环/深度>8 均 note；BOM properties 不泄漏。
 
-测试（14，全部合成 POM/fake PomSource，无网络）：本地 parent 合并、缺失、循环、pom+modules、notes、
-`${project.version}`、init 多模块拒绝；远端 parent 合并、链式 parent、缺失、异常/offline、循环、快照、
-未解析版本、本地优先不调用 source。
+测试（25，全部合成 POM/fake PomSource，无网络）：本地 parent 合并、缺失、循环、pom+modules、notes、
+`${project.version}`、init 多模块拒绝；远端 parent 合并、链式、缺失、异常/offline、循环、快照、未解析版本、
+本地优先；BOM 直接 import、嵌套 import、BOM parent、缺失、异常/offline、循环、快照、未解析版本、
+显式条目优先、深度上限、本地-only note。
 
 ## 迁移建议
 

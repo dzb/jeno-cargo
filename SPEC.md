@@ -384,7 +384,7 @@ modules = ["libs/core", "apps/web"]
 
 | 命令 | 契约 |
 |---|---|
-| `mjm init [--pom] [--ws] [--force] [paths...]` | 写 `mjm.toml` 骨架;`--pom` 从 `pom.xml` 迁移并逐条报告不可表达的事实——本地 parent 从 `relativePath` 读取,本地不存在时经 store 从 Central 读取远端 parent(`--offline` 只用已缓存内容);BOM import/快照/私有仓库不自动解析;`--ws` 写 `mjm.ws.toml`(§5),此时 `paths...` 可显式指定模块目录。**工作区根目录拒绝 `init`/`--pom`/`--force`**(exit 1),`--ws` 仍可用 |
+| `mjm init [--pom] [--ws] [--force] [paths...]` | 写 `mjm.toml` 骨架;`--pom` 从 `pom.xml` 迁移并逐条报告不可表达的事实——本地 parent 从 `relativePath` 读取,本地不存在时经 store 从 Central 读取远端 parent 与 `scope=import` 的 BOM(递归其 parent/嵌套 BOM,`--offline` 只用已缓存内容,深度上限 8);快照/私有仓库 BOM 不自动解析;`--ws` 写 `mjm.ws.toml`(§5),此时 `paths...` 可显式指定模块目录。**工作区根目录拒绝 `init`/`--pom`/`--force`**(exit 1),`--ws` 仍可用 |
 | `mjm add <key> [value]` | key: `group:artifact`(Central)、裸名(搜索)、`owner/repo@tag`(原生简写)。value: `1.2.3`、`<repo>:1.2.3`、`gh:owner/repo@tag`、裸 `https://...jar`。无 value 时:`group:artifact`/裸名只查询,不写 `mjm.toml`(查询成功 exit 0);`owner/repo@tag` 会写入 `[deps]` 并重锁 |
 | `mjm remove <id>` | 删除一行声明并重锁 |
 | `mjm lock [--check]` | 解析并写出 `mjm.lock`;**总是重解**。`--check` 只在内存生成并与磁盘逐字节比较,不写文件。未知参数是用法错误(exit 2) |
