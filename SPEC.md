@@ -419,7 +419,7 @@ modules = ["libs/core", "apps/web"]
 | `mjm outdated [--json] [--dev]` | **只读 `mjm.lock`**(不需要 `mjm.toml`);已钉版本 vs 仓库可用版本;默认只查 MAIN,`--dev` 含 dev/processor;`gh:`/`url`/`local:`/`mjm:` 列为未检查;跨 major 单列;完成即 exit 0(有更新也是 0) |
 | `mjm doctor` | **只读**本地诊断:检查当前项目或 workspace 每个模块的 `mjm.toml`/`mjm.lock` 是否存在且可解析,报告旧 `mj.toml`/`mj.lock`(mjm **不会**读取它们),并检查 XDG store/sources/locks 路径可写性;不解析依赖、不写文件、不访问网络。健康 exit 0,有问题 exit 1,带参数 exit 2 |
 | `mjm audit [--json] [--dev]` | OSV 漏洞查询;默认只查 MAIN,`--dev` 才含 dev/processor;只查 Central 坐标,其余列 `notChecked` 并给原因;漏洞或查询失败 exit 1 |
-| `mjm verify` | **只读本地发布预检**:解析 `mjm.toml`/`mjm.lock`,核对每一条直接声明与锁定行的 id/version/source/MAIN scope;按 sha256 校验 store 中每个 jar 与元数据(workspace 本地替换则校验 classes 与版本戳);若 `target/dist/` 已存在,校验发布三件套内部一致性与 bundle `SHA256SUMS`。不解析依赖、不下载、不修改项目文件、不访问网络。通过 exit 0,失败 exit 1,带参数 exit 2 |
+| `mjm verify` | **只读本地发布预检**:解析 `mjm.toml`/`mjm.lock`,核对每一条直接声明与锁定行的 id/version/source/MAIN scope;按 sha256 校验 store 中每个 jar 与元数据(workspace 本地替换则校验 classes 与版本戳);若 `target/dist/` 已有完整发布三件套,校验其内部一致性与 bundle `SHA256SUMS`;只有 package 产物(仅 jar)视为未准备(skipped),部分三件套仍失败。不解析依赖、不下载、不修改项目文件、不访问网络。通过 exit 0,失败 exit 1,带参数 exit 2 |
 | `mjm publish [target] [--json] [--dry-run]` | 写三件套;目标只接受 `gh:`、`mjm:https:`、私有网络 `mjm:http://<literal-ip>…`、`mjm:local:`(§6.6)。mjm 布局逐文件 PUT 后立即 GET 回读,三个文件的字节必须完全一致,否则 exit 1;`--dry-run` 不写 descriptor/sha256、不创建目标、不上传 |
 | `mjm upgrade` / `mjm update`(alias) | 自升级(同一实现) |
 | `mjm release [target] [--json] [--dry-run] [--allow-unsigned]` | 发布 `mjm bundle` 产生的安装包(默认用 minisign 签名,`--allow-unsigned` 才允许无签名):`gh:<owner>/<repo>`、`mjm:https://host/`、私有网络 `mjm:http://<literal-ip>…`、`mjm:local:<dir>`;无 target 只准备 `target/dist/release/` 并打印上传清单。**不隐式 build/test/bundle**;发布后回读并校验 tar 的 sha256(§7.3) |

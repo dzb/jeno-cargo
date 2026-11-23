@@ -419,7 +419,12 @@ public final class VerifyCommand implements Command {
         Path descriptor = dist.resolve(stem + ".mjm.toml");
         Path sha = dist.resolve(stem + ".sha256");
         boolean anyTriple = Files.exists(jar) || Files.exists(descriptor) || Files.exists(sha);
-        if (anyTriple) {
+        if (Files.isRegularFile(jar) && !Files.exists(descriptor) && !Files.exists(sha)) {
+            // package writes only the jar; mjm publish adds the descriptor and sha256.
+            checks.add(CheckResult.skipped("artifacts.triple",
+                    "publish triple: not prepared (package artifact present;"
+                    + " mjm publish writes the descriptor and sha256)"));
+        } else if (anyTriple) {
             if (!Files.isRegularFile(jar) || !Files.isRegularFile(descriptor)
                     || !Files.isRegularFile(sha)) {
                 checks.add(CheckResult.failed("artifacts.triple-incomplete",

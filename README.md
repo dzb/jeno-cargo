@@ -177,9 +177,9 @@ mjm verify
 
 It checks that every direct declaration still matches `mjm.lock`, that the
 lock's jar and metadata bytes are still present and hash-correct in the store,
-and that any already-built `target/dist` publish triple or bundle
-`SHA256SUMS` is internally consistent. It never resolves, downloads or
-modifies project files.
+and that a complete `target/dist` publish triple or bundle `SHA256SUMS` is
+internally consistent (a package-only jar is skipped as not prepared; a partial
+triple still fails). It never resolves, downloads or modifies project files.
 
 Publishing accepts only targets mjm can read back — a GitHub release, an mjm
 layout over HTTPS, or an mjm layout on disk. GitHub gets native upload because

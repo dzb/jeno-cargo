@@ -104,6 +104,39 @@ class VerifyCommandTest {
     }
 
     @Test
+    void aPackageOnlyJarIsSkippedAsNotPrepared() throws Exception {
+        Fixture fixture = fixture("1.0.0", true);
+        Path dist = Files.createDirectories(fixture.project.resolve("target/dist"));
+        Files.writeString(dist.resolve("demo-0.1.0.jar"), "built-jar");
+
+        Result result = verify(fixture);
+
+        assertEquals(0, result.exit(), result.out());
+        assertTrue(result.out().contains(
+                "publish triple: not prepared (package artifact present;"),
+                result.out());
+        assertTrue(result.out().contains("mjm publish writes the descriptor and sha256"),
+                result.out());
+    }
+
+    @Test
+    void aJarWithADescriptorButNoShaIsStillIncomplete() throws Exception {
+        Fixture fixture = fixture("1.0.0", true);
+        Path dist = Files.createDirectories(fixture.project.resolve("target/dist"));
+        Files.writeString(dist.resolve("demo-0.1.0.jar"), "built-jar");
+        Files.writeString(dist.resolve("demo-0.1.0.mjm.toml"), """
+                [project]
+                name = "demo"
+                version = "0.1.0"
+                """);
+
+        Result result = verify(fixture);
+
+        assertEquals(1, result.exit(), result.out());
+        assertTrue(result.out().contains("publish triple is incomplete"), result.out());
+    }
+
+    @Test
     void jsonReportCarriesStableChecksAndSummary() throws Exception {
         Fixture fixture = fixture("1.0.0", true);
 
