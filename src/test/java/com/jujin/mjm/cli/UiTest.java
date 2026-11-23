@@ -45,6 +45,15 @@ class UiTest {
     }
 
     @Test
+    void propertyAlwaysOverridesNoColor() {
+        System.setProperty("mjm.color", "always");
+
+        // NO_COLOR may be set in the real environment; the programmatic
+        // property is an explicit override, not an environment choice.
+        assertTrue(Ui.enabled());
+    }
+
+    @Test
     void mjmColorAlwaysAloneEnablesColour() {
         assertTrue(Ui.enabled("always", false));
     }

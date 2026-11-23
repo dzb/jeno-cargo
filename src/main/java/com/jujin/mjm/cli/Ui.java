@@ -4,10 +4,11 @@ package com.jujin.mjm.cli;
  * Terminal-aware presentation for human output.
  *
  * <p>Modern terminals get colour and status glyphs; scripts, CI, test
- * harnesses and pipes keep the exact plain text they already parse. Colour is
- * enabled only when stdout is a terminal, or explicitly through
- * {@code MJM_COLOR=always} (or the {@code mjm.color} system property used by
- * tests/tools). {@code NO_COLOR} and {@code MJM_COLOR=never} always disable it.
+ * harnesses and pipes keep the exact plain text they already parse. The
+ * explicit {@code -Dmjm.color=always|never} system property wins over
+ * everything; it exists for programmatic embedding/tests and is never set by
+ * mjm itself. Otherwise {@code NO_COLOR} wins over {@code MJM_COLOR}, which
+ * wins over automatic terminal detection.
  *
  * <p>JSON commands never call this class: their stdout must stay one pure JSON
  * document.
@@ -29,7 +30,16 @@ final class Ui {
 
     /** Whether human presentation should include ANSI colour and glyphs. */
     static boolean enabled() {
-        return enabled(System.getProperty("mjm.color", System.getenv("MJM_COLOR")),
+        String override = System.getProperty("mjm.color");
+        if (override != null) {
+            if (override.equalsIgnoreCase("always")) {
+                return true;
+            }
+            if (override.equalsIgnoreCase("never")) {
+                return false;
+            }
+        }
+        return enabled(System.getenv("MJM_COLOR"),
                 System.getenv().containsKey("NO_COLOR"));
     }
 
