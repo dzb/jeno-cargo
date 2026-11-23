@@ -43,7 +43,7 @@ public final class Paths {
         }
         if (!legacy.isEmpty()) {
             System.err.println("mjm: still using the old ~/.mjm " + String.join(" and ", legacy)
-                    + " — run `mjm cache clean` once to move store/sources to the XDG "
+                    + " — run `mjm cache purge` once (alias: clean) to move store/sources to the XDG "
                     + "location (locks move after the old directory is removed)");
         }
     }

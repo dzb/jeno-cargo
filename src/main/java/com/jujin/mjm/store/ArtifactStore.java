@@ -229,7 +229,7 @@ public final class ArtifactStore {
             if (!sha256(jar).equals(artifact.sha256())) {
                 throw new StoreException("the store copy of " + artifact.id() + "@"
                         + artifact.version() + " does not match the locked sha256 — the store "
-                        + "is corrupted; run mjm cache clean, then mjm lock");
+                        + "is corrupted; run mjm cache purge, then mjm lock");
             }
             jars.put(artifact.id(), jar);
         }
