@@ -143,16 +143,16 @@ public final class PublishCommand implements Command {
                 System.err.println("mjm: " + e.getMessage());
                 return 1;
             }
-            if (publishTarget.isPlainHttp() && !publishTarget.isLoopbackNetwork()) {
-                System.err.println("warning: publishing over plain HTTP ("
-                        + publishTarget.declaration() + ") — the traffic and MJM_PUBLISH_TOKEN"
-                        + " are not encrypted");
-            }
             if (publishTarget.layout() == Repository.Layout.MAVEN) {
                 System.err.println("mjm: cannot publish to a Maven-layout target — mjm writes "
                         + "no POM, so neither mjm nor Maven can read it back; use "
                         + "gh:<owner>/<repo> or mjm:https://host/ (or mjm:local:<dir>)");
                 return 1;
+            }
+            if (publishTarget.isPlainHttp() && !publishTarget.isLoopbackNetwork()) {
+                System.err.println("warning: publishing over plain HTTP ("
+                        + publishTarget.declaration() + ") — the traffic and MJM_PUBLISH_TOKEN"
+                        + " are not encrypted");
             }
         }
         // A dependency in the repository we are publishing to is a sibling: the

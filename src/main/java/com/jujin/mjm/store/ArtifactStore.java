@@ -293,8 +293,8 @@ public final class ArtifactStore {
             }
         }
         URI uri = URI.create(url);
-        // https everywhere, except plain http on the loopback — the local
-        // test/dev channel never crosses a network.
+        // https everywhere, plus plain http only on literal private-network
+        // addresses (localhost/LAN) — the rule lives in Repository.
         boolean privateHttp = com.jujin.mjm.project.Repository.isLocalNetworkHttp(url);
         if (!url.startsWith("https://") && !privateHttp) {
             throw new StoreException("only https, file: and private-network http URLs are "

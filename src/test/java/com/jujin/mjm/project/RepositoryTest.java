@@ -80,6 +80,39 @@ class RepositoryTest {
                 Repository.parse("r", "mjm:https://repo.example/").transport());
     }
 
+
+    @Test
+    void ipv6AndIpv4BoundariesAreExactAndNeverThrow() {
+        record Case(String url, boolean local, boolean loopback) {}
+        List<Case> cases = List.of(
+                new Case("http://[fc0::1]/", false, false),
+                new Case("http://[fe8::1]/", false, false),
+                new Case("http://[fc::1]/", false, false),
+                new Case("http://[fd::1]/", false, false),
+                new Case("http://[fe80::1]/", true, false),
+                new Case("http://[fd00::1]/", true, false),
+                new Case("http://[fec0::1]/", false, false),
+                new Case("http://[::1]/", true, true),
+                new Case("http://[0:0:0:0:0:0:0:1]/", true, true),
+                new Case("http://010.0.0.1/", false, false),
+                new Case("http://192.168.001.001/", false, false),
+                new Case("http://192.168.1.1/", true, false),
+                new Case("http://127.0.0.1/", true, true),
+                new Case("http://8.8.8.8/", false, false),
+                new Case("http://[2001:db8::1]/", false, false));
+        for (Case c : cases) {
+            assertEquals(c.local(), Repository.isLocalNetworkHttp(c.url()), c.url());
+            assertEquals(c.loopback(), Repository.isLoopbackHttp(c.url()), c.url());
+        }
+        // malformed input is answered, never thrown
+        for (String bad : List.of("http://[fc0::1/", "http://[fc::1::2]/",
+                "http://[gg::1]/", "http://1.2.3/", "http://1.2.3.4.5/",
+                "http://256.1.1.1/", "http://example.com/")) {
+            assertFalse(Repository.isLocalNetworkHttp(bad), bad);
+            assertFalse(Repository.isLoopbackHttp(bad), bad);
+        }
+    }
+
     @Test
     void loopbackAndPrivateAreDistinguishedForWarnings() {
         assertTrue(Repository.isLoopbackHttp("http://localhost:1/"));
