@@ -692,4 +692,26 @@ class CleanOutdatedTest {
         assertEquals(3, withDev.getArray("notChecked").size(),
                 "--dev includes dev and processor rows");
     }
+
+    @Test
+    void anUnrecognizedSourceIsNotCheckedNotAFailure() throws Exception {
+        projectWithLock("""
+            [[artifacts]]
+            id = "acme:weird"
+            version = "1.0.0"
+            source = "something-unparseable"
+            url = "https://host/weird-1.0.0.jar"
+            sha256 = "%s"
+            depth = 1
+            """.formatted(SHA));
+
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                runOutdated(0, "--json"));
+
+        var skipped = json.getArray("notChecked");
+        assertEquals(1, skipped.size(), "the row is reported, not dropped");
+        assertEquals("acme:weird", skipped.getObject(0).getString("id"));
+        assertEquals("named-repository", skipped.getObject(0).getString("reason"));
+        assertEquals(0, json.getArray("failures").size(), "not a failure");
+    }
 }

@@ -139,7 +139,16 @@ public final class OutdatedCommand implements Command {
                         "mjm layout: no version index"));
                 continue;
             }
-            Repository repository = source.equals("central") ? null : Repository.parse(source);
+            Repository repository;
+            try {
+                repository = source.equals("central") ? null : Repository.parse(source);
+            } catch (IllegalArgumentException unrecognized) {
+                // ArtifactReasons already labels this named-repository; do not
+                // turn an unknown source into a command failure
+                unchecked.add(new Skipped(artifact.id(), "named-repository",
+                        "unrecognized source: " + source));
+                continue;
+            }
 
             List<String> available;
             try {
