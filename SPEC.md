@@ -156,17 +156,18 @@ url = "vendor"
 | `type` | `maven` \| `mjm`(封闭枚举;缺省 `maven`) |
 | `url` | `https://…`、私有网络内的 `http://<literal-ip>…`(不做 DNS;公网/主机名 http 拒绝)或文件系统路径。以 http 开头即 URL,否则即目录 |
 
-| 布局(由 `type` 决定) \ 位置(由 `url` 决定) | HTTPS | 本地路径 |
+| 布局(由 `type` 决定) \ 位置(由 `url` 决定) | 网络(https 或私有 http) | 本地路径 |
 |---|---|---|
-| **`type = "maven"`** | `https://host/…` | `url = "vendor"` |
-| **`type = "mjm"`** | `url = "https://host/"` | `url = "vendor"` |
+| **`type = "maven"`** | `https://host/…` 或 `http://192.168.1.39/…` | `url = "vendor"` |
+| **`type = "mjm"`** | `url = "https://host/"` 或私有 `http://…` | `url = "vendor"` |
 
 布局是声明的属性,不是 URL 的属性:同一台 https 主机可以装任一布局,所以协议必须由 `type`
 声明,不能从 URL 前缀猜。子表里只允许 `type`、`url` 两个键,未知键报错(带 `file:line:column`)。
 
 **legacy 字符串写法**(仍可读,等价于上表):
-`"https://…"` = maven+https;`"local:<dir>"` = maven+本地;`"mjm:https://…"` = mjm+https;
-`"mjm:local:<dir>"` = mjm+本地。写锁时两种写法都归一成这四个规范串,锁格式不变。
+`"https://…"` = maven+https;`"http://<私有 IP>…"` = maven+私有 http;`"local:<dir>"` = maven+本地;
+`"mjm:https://…"` = mjm+https;`"mjm:http://<私有 IP>…"` = mjm+私有 http;`"mjm:local:<dir>"` = mjm+本地。
+写锁时这些写法都归一成同样的规范声明,锁格式不变。
 
 查找顺序:**互不回退**——`[deps.{repo}]` 只查对应仓库,`[deps]` 只查 Central。
 `local:` 仓库的字节同样经过 store 的 sha256 钉定,与远程仓库同等可审计。
@@ -403,7 +404,7 @@ modules = ["libs/core", "apps/web"]
 | `mjm cache dir \| size \| prune \| purge [--dry-run] [--yes]` | `dir`/`size` 只读;`prune` 删可证明无用之物,无需确认;`purge` 删 store 与 sources,是**破坏性**命令——无 `--yes` 时打印路径/大小并 exit 2,`--dry-run` 只展示不删除(exit 0),`--yes` 才执行;`clean` 是兼容 alias,支持同样 flags |
 | `mjm outdated [--json] [--dev]` | **只读 `mjm.lock`**(不需要 `mjm.toml`);已钉版本 vs 仓库可用版本;默认只查 MAIN,`--dev` 含 dev/processor;`gh:`/`url`/`local:`/`mjm:` 列为未检查;跨 major 单列;完成即 exit 0(有更新也是 0) |
 | `mjm audit [--json] [--dev]` | OSV 漏洞查询;默认只查 MAIN,`--dev` 才含 dev/processor;只查 Central 坐标,其余列 `notChecked` 并给原因;漏洞或查询失败 exit 1 |
-| `mjm publish [target]` | 写三件套;目标只接受 `gh:`、`mjm:https:`、`mjm:local:`(§6.6) |
+| `mjm publish [target]` | 写三件套;目标只接受 `gh:`、`mjm:https:`、私有网络 `mjm:http://<literal-ip>…`、`mjm:local:`(§6.6) |
 | `mjm upgrade` / `mjm update`(alias) | 自升级(同一实现) |
 | `mjm release [target] [--dry-run] [--allow-unsigned]` | 发布 `mjm bundle` 产生的安装包(默认用 minisign 签名,`--allow-unsigned` 才允许无签名):`gh:<owner>/<repo>`、`mjm:https://host/`、私有网络 `mjm:http://<literal-ip>…`、`mjm:local:<dir>`;无 target 只准备 `target/dist/release/` 并打印上传清单。**不隐式 build/test/bundle**;发布后回读并校验 tar 的 sha256(§7.3) |
 
@@ -476,19 +477,20 @@ modules = ["libs/core", "apps/web"]
 | `local-repository` | 本地 Maven 布局目录(无版本索引) |
 | `named-repository` | 命名 HTTPS Maven 仓库;无法解析的 source 也归到这里 |
 
-### 6.6 publish 与 release
+### 6.6 publish 与 release 目标
 
-`publish` 发布**库**的三件套(jar/描述符/sha256,§7.1),目标只接受 `gh:`、`mjm:https://`、`mjm:local:`。
-`release` 发布**应用安装包**(`bundle` 的 tar.gz + bootstrap setup),目标是同一组三种;两者都不接受
-Maven 布局。区别在于产物:库给依赖解析用,安装包给最终用户 `curl | bash`。
+`publish` 发布**库**的三件套(jar/描述符/sha256,§7.1);`release` 发布**应用安装包**
+(`bundle` 的 tar.gz + bootstrap)。两者接受同一组目标:
 
-### 6.6 publish 目标
+- `gh:owner/repo`
+- `mjm:https://host/`
+- 私有网络 `mjm:http://<literal-ip>:<port>/…`(字面私有地址,不做 DNS)
+- `mjm:local:<dir>`
 
-只接受 mjm 自己能回读的目标:`gh:owner/repo`、`mjm:https://host/`、私有网络
-`mjm:http://<literal-ip>…`、`mjm:local:<dir>`;无 target 只准备 `target/dist/` 三件套。
+无 target 时只准备本地产物(`target/dist/` 三件套 / `target/dist/release/`),不上传。
 非 loopback 的明文 http 目标会在 stderr 打一行“流量与 token 不加密”的 warning。
-**Maven 布局不是发布目标**:mjm 不写 POM,`https://host/`、`http://host/`、`local:<dir>` 一律拒绝(exit 1);
-其中公网 `http://` 在仓库声明阶段就会被拒绝,私有网络 http 才可使用。
+**Maven 布局不是发布目标**:mjm 不写 POM,`https://host/`、`http://host/`、`local:<dir>` 一律拒绝
+(exit 1);其中公网 `http://` 在仓库声明阶段就会被拒绝,私有网络 http 才可使用。
 Maven 布局仓库仍可**读取**(`[repos]` 的 `type = "maven"`,§2.1)。
 
 ### 6.7 全局旗标 `--offline`
