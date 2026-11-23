@@ -86,7 +86,7 @@ class LockCheckTest {
     }
 
     @Test
-    void checkAndRefreshAreMutuallyExclusive() throws Exception {
+    void refreshIsAnUnknownOptionNow() throws Exception {
         lockProject();
 
         ByteArrayOutputStream errors = new ByteArrayOutputStream();
@@ -94,14 +94,15 @@ class LockCheckTest {
         int exit;
         try {
             System.setErr(new PrintStream(errors, true, StandardCharsets.UTF_8));
-            exit = command().execute(List.of("--check", "--refresh"));
+            exit = command().execute(List.of("--refresh"));
         } finally {
             System.setErr(original);
         }
 
         assertEquals(2, exit);
-        assertTrue(errors.toString(StandardCharsets.UTF_8)
-                .contains("mutually exclusive"), errors.toString(StandardCharsets.UTF_8));
+        String message = errors.toString(StandardCharsets.UTF_8);
+        assertTrue(message.contains("--refresh was removed"), message);
+        assertTrue(message.contains("use --check"), message);
     }
 
     private int run(ByteArrayOutputStream out, String... args) throws Exception {

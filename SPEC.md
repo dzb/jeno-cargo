@@ -332,8 +332,8 @@ scope = "dev"             # 可选:[dev-deps] 可达的工件。缺省 = main
 4. depth ≥ 1
 5. 按 id 字典序输出(稳定 diff)
 6. 一致性:lock 的依赖集合与 mjm.toml + 描述符闭包一致;不一致 → 拒绝 build/run,提示 `mjm lock`。`tree`/`why` 也以锁为权威:二者先读锁、再解析 manifest 只为补父子边,id/version/source/depth/scope 任一不一致即 exit 1(至多 10 行差异,不输出图);无锁 → exit 1
-7. 命中策略:lock 有效 → 直接采用(sha256 权威,不重新解析);`mjm lock` **总是重解**并重写锁。
-   `--refresh` 为 **legacy no-op**:仍被接受以兼容旧脚本,但不在本契约内,移除它是单独的行为单
+7. 命中策略:lock 有效 → 直接采用(sha256 权威,不重新解析);`mjm lock` **总是重解**并重写锁,
+   `--check` 只比较
 8. 兼容性:旧锁里 `source` 以 `gitee:` 开头的行,**读锁即报**可执行的迁移错误(gitee: 物种已移除),而不是留给下游命令各自报 URI 错误;`source` 以 `mjm:` 开头的行照常读
 
 ---
@@ -387,7 +387,7 @@ modules = ["libs/core", "apps/web"]
 | `mjm init [--pom] [--ws] [--force] [paths...]` | 写 `mjm.toml` 骨架;`--pom` 从 `pom.xml` 迁移并逐条报告不可表达的事实;`--ws` 写 `mjm.ws.toml`(§5),此时 `paths...` 可显式指定模块目录。**工作区根目录拒绝 `init`/`--pom`/`--force`**(exit 1),`--ws` 仍可用 |
 | `mjm add <key> [value]` | key: `group:artifact`(Central)、裸名(搜索)、`owner/repo@tag`(原生简写)。value: `1.2.3`、`<repo>:1.2.3`、`gh:owner/repo@tag`、裸 `https://...jar`。无 value 时:`group:artifact`/裸名只查询,不写 `mjm.toml`(查询成功 exit 0);`owner/repo@tag` 会写入 `[deps]` 并重锁 |
 | `mjm remove <id>` | 删除一行声明并重锁 |
-| `mjm lock [--check]` | 解析并写出 `mjm.lock`;**总是重解**。`--check` 只在内存生成并与磁盘逐字节比较,不写文件。legacy `--refresh` 是 no-op,不在契约内 |
+| `mjm lock [--check]` | 解析并写出 `mjm.lock`;**总是重解**。`--check` 只在内存生成并与磁盘逐字节比较,不写文件。未知参数是用法错误(exit 2) |
 | `mjm build` | javac 编译 `src/main/java`,严格可见性 classpath(只含 MAIN 声明);`--release` 取 `[java].version`;processor 走 `-processorpath`。**当前要求至少一个 Java 源**;resource-only 模块会失败(报没有 sources) |
 | `mjm test` | fork JVM:`@MjmTest` + JUnit Platform;当前 classpath 含 MAIN + dev + **processor**;每次运行先清空 `target/test-results/`(空测试/编译失败也会清空),XML 报告写该目录 |
 | `mjm run [<main>] [args…]` | 在 runtime classpath(排除 dev)上运行;无参数时用 `[project].main`;`[scripts]` 优先于同名主类。target 在 `--` 之前(可省略);mjm 旗标只在 target 之前生效;`--` 之后**全部**是程序参数(§6.2) |
@@ -523,7 +523,6 @@ target/dist/<name>-<version>.tar.gz
 
 **已记录的 known gap(行为修复各自独立成单)**:
 
-- `lock --refresh`:当前二进制仍接受并在 usage 中显示,但它是 **no-op**;契约只列 `--check`。移除是行为单。
 
 **其他**:
 

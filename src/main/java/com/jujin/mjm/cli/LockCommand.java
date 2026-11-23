@@ -32,7 +32,7 @@ public final class LockCommand implements Command {
 
     @Override
     public String usage() {
-        return "[--check] [--refresh]";
+        return "[--check]";
     }
 
     @Override
@@ -43,21 +43,17 @@ public final class LockCommand implements Command {
             return workspace;
         }
         boolean check = false;
-        boolean refresh = false;
         for (String arg : args) {
-            switch (arg) {
-                case "--check" -> check = true;
-                case "--refresh" -> refresh = true;
-                default -> {
-                    System.err.println("mjm: unknown lock option '" + arg
-                            + "' — use --check or --refresh");
-                    return 2;
-                }
+            if (arg.equals("--check")) {
+                check = true;
+            } else if (arg.equals("--refresh")) {
+                System.err.println("mjm: --refresh was removed — mjm lock always re-resolves; "
+                        + "use --check to only compare");
+                return 2;
+            } else {
+                System.err.println("mjm: unknown lock option '" + arg + "' — use --check");
+                return 2;
             }
-        }
-        if (check && refresh) {
-            System.err.println("mjm: --check and --refresh are mutually exclusive");
-            return 2;
         }
         // lock writes both files (or, with --check, reads the state it would
         // write), so it queues with add/remove/build/test/clean
