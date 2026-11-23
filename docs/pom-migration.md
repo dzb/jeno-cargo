@@ -54,7 +54,7 @@ note: build plugins are not migrated (org.noear:solon-maven-plugin, …:maven-as
 
 | 项 | 原文/现象 | 判定 | 处理 |
 |---|---|---|---|
-| 远端 parent | `solon-parent:4.2.0-SNAPSHOT`，`<relativePath/>` 为空 | **不应支持**（迁移不联网） | note 列出坐标；其 properties/DM 需手工补 |
+| 远端 parent | `solon-parent:4.2.0-SNAPSHOT`，`<relativePath/>` 为空 | **已支持 Central（非快照）** | 快照不请求，note 说明；已发布的 parent 经 store 递归合并 |
 | 本地 parent | `soloncode-parent` / `point-parent` / `solon-ai-parent` | **已修复** | `translate(Path)` 递归读取，合并 properties 与 DM，校验坐标 |
 | `packaging=pom` + modules | 三个根 POM | **不应压平成项目** | exit 1 + 模块列表 + 建议 `mjm init --ws` |
 | build plugins | `solon-maven-plugin`、assembly、notice、compiler、surefire | **不可表达** | note 列出插件名，建议在 mjm build 前/替代执行 |
@@ -63,21 +63,55 @@ note: build plugins are not migrated (org.noear:solon-maven-plugin, …:maven-as
 | exclusions | 三个样本的直接依赖均有 | **不可表达** | note；mjm.toml 无 exclusion 语法，需改依赖或接受传递闭包 |
 | provided | solon-ai-core 等 | 语义不同 | note；容器提供的编译契约，仅在需要编译时入 `[deps]` |
 | snapshot 依赖 | point-web 的 `freeway-* 2.0.1-SNAPSHOT` | 设计拒绝 | note；pin 已发布版本 |
-| unresolved property | `jansi.version`、`jline.version`、`snack4.version`、`jackson.version`（远端） | 不可表达 | note；手工填版本（mjm.toml 不插值） |
+| unresolved property | `jansi.version`、`jline.version`、`snack4.version`、`jackson.version` | 远端可读时由 parent 提供；仍缺则不可表达 | 合并后仍缺的只记 note；手工填版本 |
 | `${project.version}`（本地 parent DM） | point-web 的兄弟模块 | **已修复** | 读取每个模块时用其自身 version 解析 DM |
 | test include/exclude | surefire 配置 | 不可表达 | 由 build plugins note 覆盖；mjm 用 `[test]` 过滤器手工重写 |
 
+## 远端 parent（`1aa2837` 新增）
+
+本地 parent 不存在时，`init --pom` 会把声明的 parent 从 Central 经 store 拉下来（同一个 `PomSource`），
+递归处理它自己的 parent，parent-first 合并 properties 与 dependencyManagement；坐标不匹配、快照、
+`${...}` 版本、循环、抓取/解析失败都只记 note，迁移仍然产出可审阅的文件。`--offline` 时 store 已有的
+parent 照常命中，缺的只记 note，不联网。
+
+**Spring Boot 真机证据**（`spring-boot-starter-parent:3.3.4`，synthetic child，Central）：
+
+```
+note: parent org.springframework.boot:spring-boot-starter-parent:3.3.4 read from Central
+note: parent org.springframework.boot:spring-boot-dependencies:3.3.4 read from Central
+note: BOM org.springframework:spring-framework-bom:6.1.13 is imported but not fetched …
+note: org.springframework:spring-core has no version (and none is managed) — add one by hand
+[deps]
+    "org.slf4j:slf4j-api" = "2.0.16"
+```
+
+**边界**：Boot 的 `spring-core` 版本由 `spring-framework-bom`（`scope=import`）提供；本次不支持 BOM 网络
+递归，因此它得到的是明确的 BOM note + 手工补版本，而不是具体版本。直接写在远端 DM 里的依赖（如
+`slf4j-api`）会解析出具体版本（`2.0.16`）。这是已知限制，不是静默丢失。
+
+三个样本重跑（online，带 PomSource）：结果与仅本地 parent 时一致（soloncode-cli 4、point-web 3、
+solon-ai-core 1 个直接依赖）；`solon-parent:4.2.0-SNAPSHOT` 得到明确 note：
+
+```
+note: parent org.noear:solon-parent:4.2.0-SNAPSHOT is a snapshot — Central lookup is skipped;
+      use the released parent or copy the versions by hand
+```
+
 ## 修复内容
 
-`ce26430`（代码 + 合成 POM 单测；不依赖网络）：
+`ce26430`（本地 parent / 多模块拒绝 / notes；合成 POM 单测）、`1aa2837`（远端 parent，8 条 fake PomSource 单测）：
 
 - `PomMigration.translate(Path)`：递归读取本地 parent（缺省 `../pom.xml`；显式空 `<relativePath/>` 不本地查找），
   parent-first 合并 properties/dependencyManagement；校验目标文件坐标是否真是声明的 parent；缺失/循环均 note 后继续。
 - `${project.version}` 在 parent DM 中按子模块自身 version 解析（point-web 的兄弟模块依赖由此恢复）。
 - `packaging=pom` + modules → `Result.multiModuleRoot()`；`InitCommand` 不写 mjm.toml，exit 1 并列出 modules。
-- 新增 note：build plugins、repositories、pluginRepositories、profiles、exclusions、非 jar packaging、模块列表。
+- 新增 note：build plugins、repositories、pluginRepositories、profiles、exclusions、非 jar packaging、模块列表、BOM import。
+- `translate(Path, PomSource)`：远端 parent 经 Central 递归解析；快照/未解析版本不请求；循环、缺失、异常均 note；
+  `translate(Path)` 保持“仅本地”行为。
 
-新增测试（6）：本地 parent 合并 properties/DM、parent 缺失、parent 循环、pom+modules 报告、plugins/repos/profiles/exclusions note、`${project.version}` 管理解析、`init --pom` 多模块拒绝。全部用合成 POM，无网络。
+测试（14，全部合成 POM/fake PomSource，无网络）：本地 parent 合并、缺失、循环、pom+modules、notes、
+`${project.version}`、init 多模块拒绝；远端 parent 合并、链式 parent、缺失、异常/offline、循环、快照、
+未解析版本、本地优先不调用 source。
 
 ## 迁移建议
 
