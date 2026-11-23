@@ -20,7 +20,7 @@ import java.util.stream.Stream;
  *   mjm cache prune   only what is provably dead: lock files whose project is
  *                     gone, interrupted {@code part-*.tmp} downloads, and index
  *                     entries whose artifact is missing
- *   mjm cache clean   remove store and sources outright
+ *   mjm cache purge   remove store and sources outright (alias: clean)
  * </pre>
  *
  * <p>Everything here is local: no command in this group touches the network,
@@ -39,7 +39,7 @@ public final class CacheCommand implements Command {
 
     @Override
     public String usage() {
-        return "dir | size | prune | clean";
+        return "dir | size | prune | purge";
     }
 
     @Override
@@ -57,7 +57,7 @@ public final class CacheCommand implements Command {
             case "dir" -> dir();
             case "size" -> size();
             case "prune" -> prune();
-            case "clean" -> clean();
+            case "purge", "clean" -> purge();  // clean is the compatibility alias
             default -> {
                 System.err.println("mjm: unknown cache subcommand '" + args.getFirst()
                         + "' — " + usage());
@@ -155,7 +155,7 @@ public final class CacheCommand implements Command {
     }
 
     /** Deletes store and sources; locks, the project and mjm.lock stay. */
-    private int clean() {
+    private int purge() {
         long freed = 0;
         StringBuilder report = new StringBuilder();
         for (Path root : List.of(Paths.store(), Paths.sources())) {
@@ -172,7 +172,7 @@ public final class CacheCommand implements Command {
             }
         }
         if (report.isEmpty()) {
-            System.out.println("nothing to clean");
+            System.out.println("nothing to purge");
             return 0;
         }
         System.out.println(report.toString().strip());

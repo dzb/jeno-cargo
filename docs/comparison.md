@@ -251,7 +251,7 @@ uv 的 `.python-version` 本质是「工具链版本进仓库」;mjm 的 `[java]
 | 条目 | 状态 | 落在哪 |
 |---|---|---|
 | A1 `dist/` → `target/dist/` | ✅ 已实施 | 0.2.5,**唯一 breaking**:读 `dist/` 的脚本要改成 `target/dist/`;旧目录仍在时 `publish` 会明确报错而不是「文件找不到」 |
-| A2 `cache {dir,size,prune,clean}` | ✅ 已实施 | 0.2.5;`REMINDS §11`(锁文件不回收)随之解决 |
+| A2 `cache {dir,size,prune,purge}`(clean 为 alias) | ✅ 已实施 | 0.2.5;`REMINDS §11`(锁文件不回收)随之解决 |
 | A3 XDG 路径 | ✅ 已实施 | 0.2.5;旧 `~/.mjm` 存在则优先用它,不强行搬家 |
 | A4 缓存目录带格式版本号 | ⏸ 暂缓 | 等真要改 store 布局时再做,现在记着 |
 | A5 `lock --check` | ✅ 已实施 | 0.2.5 |
