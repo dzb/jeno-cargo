@@ -152,6 +152,8 @@ public final class ClasspathCommand implements Command {
                 System.err.println(Ui.errPrefix() + message);
             }
             return 1;
+        } catch (LegacyNames.LegacyException e) {
+            throw e;
         } catch (RuntimeException e) {
             if (json) {
                 JsonResult.error("classpath", 1, "MANIFEST_OR_LOCK_INVALID",

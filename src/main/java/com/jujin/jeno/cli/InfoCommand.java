@@ -151,6 +151,8 @@ public final class InfoCommand implements Command {
                 System.err.println(Ui.errPrefix() + message);
             }
             return 1;
+        } catch (LegacyNames.LegacyException e) {
+            throw e;
         } catch (RuntimeException e) {
             if (json) {
                 JsonResult.error("info", 1, "LOCK_INVALID", e.getMessage()).emit(1);
@@ -383,6 +385,8 @@ public final class InfoCommand implements Command {
                     .toLowerCase(java.util.Locale.ROOT));
             provenance.put("transport", repository.transport().name()
                     .toLowerCase(java.util.Locale.ROOT));
+        } catch (LegacyNames.LegacyException e) {
+            throw e;
         } catch (RuntimeException e) {
             provenance.put("layout", "unknown");
         }
@@ -491,6 +495,8 @@ public final class InfoCommand implements Command {
         Path tarGz;
         try {
             tarGz = store.ensure(archive, ArtifactStore.Kind.ARCHIVE);
+        } catch (LegacyNames.LegacyException e) {
+            throw e;
         } catch (RuntimeException e) {
             System.err.println(Ui.errPrefix() + "no source archive for " + owner + "/" + repo + "@" + tag
                     + " — " + e.getMessage());
@@ -522,6 +528,8 @@ public final class InfoCommand implements Command {
         Path jar;
         try {
             jar = store.ensure(url, ArtifactStore.Kind.JAR);
+        } catch (LegacyNames.LegacyException e) {
+            throw e;
         } catch (RuntimeException e) {
             System.err.println(Ui.errPrefix() + artifact.id() + "@" + artifact.version()
                     + " published no sources jar");

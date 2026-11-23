@@ -264,6 +264,8 @@ public final class VerifyCommand implements Command {
         } catch (IOException e) {
             return VerifyModule.fatal(dir, "MANIFEST_OR_LOCK_UNREADABLE",
                     "cannot read jeno.toml/jeno.lock — run jeno lock");
+        } catch (LegacyNames.LegacyException e) {
+            throw e;
         } catch (RuntimeException e) {
             return VerifyModule.fatal(dir, "MANIFEST_OR_LOCK_INVALID", e.getMessage());
         }

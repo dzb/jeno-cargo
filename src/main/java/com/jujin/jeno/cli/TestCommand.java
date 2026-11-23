@@ -149,6 +149,9 @@ public final class TestCommand implements Command {
             if (!clearResults()) {
                 return 1;
             }
+            // Read the lock before the empty-suite fast path: an old-name
+            // source must fail through the same migration path as a real run.
+            lock();
             if (testSources.isEmpty()) {
                 System.out.println(Ui.warn("no tests under "
                         + projectDir.resolve(TEST_SOURCES)));

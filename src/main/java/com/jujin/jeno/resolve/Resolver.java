@@ -433,7 +433,7 @@ public final class Resolver {
             if ((species == Species.GH || species == Species.NAMED)
                     && !Versions.isNativeSemver(version)) {
                 throw new ResolveException("[overrides]." + id + " = \"" + version
-                        + "\" — an jeno-native override must be semver (1.2.3, 1.2.3-rc1)");
+                        + "\" — a jeno-native override must be semver (1.2.3, 1.2.3-rc1)");
             }
             if (species == Species.CENTRAL
                     && (version.contains("${") || version.startsWith("[") || version.startsWith("(")

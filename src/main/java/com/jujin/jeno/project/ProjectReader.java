@@ -446,7 +446,7 @@ public final class ProjectReader {
             Matcher tagMatcher = TAG.matcher(tag);
             if (!tagMatcher.matches()) {
                 throw new ProjectException("[" + where + "] '" + key + "' uses tag '" + tag
-                        + "' — an jeno-native tag is an optional v plus semver (v1.2.3, 1.2.3-rc1)");
+                        + "' — a jeno-native tag is an optional v plus semver (v1.2.3, 1.2.3-rc1)");
             }
             if (!OWNER.matcher(owner).matches() || !OWNER.matcher(repo).matches()) {
                 throw new ProjectException("[" + where + "] '" + key

@@ -158,6 +158,8 @@ public final class AuditCommand implements Command {
                 System.err.println(Ui.errPrefix() + message);
             }
             return 1;
+        } catch (LegacyNames.LegacyException e) {
+            throw e;
         } catch (RuntimeException e) {
             if (json) {
                 JsonResult.error("audit", 1, "LOCK_INVALID", e.getMessage()).emit(1);
@@ -277,6 +279,8 @@ public final class AuditCommand implements Command {
         try {
             Object parsed = JsonUtils.parseObject(response.body()).toMap().get("results");
             results = parsed instanceof List<?> list ? list : List.of();
+        } catch (LegacyNames.LegacyException e) {
+            throw e;
         } catch (RuntimeException e) {
             for (LockedArtifact artifact : artifacts) {
                 failures.add(new Failed(artifact.id(), "unreadable querybatch response"));
@@ -320,6 +324,8 @@ public final class AuditCommand implements Command {
         Map<String, Object> map;
         try {
             map = JsonUtils.parseObject(response.body()).toMap();
+        } catch (LegacyNames.LegacyException e) {
+            throw e;
         } catch (RuntimeException e) {
             throw new IOException("unreadable advisory document");
         }

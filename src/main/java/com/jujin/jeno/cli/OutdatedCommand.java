@@ -140,6 +140,8 @@ public final class OutdatedCommand implements Command {
                 System.err.println(Ui.errPrefix() + message);
             }
             return 1;
+        } catch (LegacyNames.LegacyException e) {
+            throw e;
         } catch (RuntimeException e) {
             if (json) {
                 JsonResult.error("outdated", 1, "LOCK_INVALID", e.getMessage()).emit(1);
@@ -197,7 +199,9 @@ public final class OutdatedCommand implements Command {
                         repository == null ? ArtifactLocations.centralBase()
                                 : repository.networkBase(),
                         group(artifact.id()), artifactName(artifact.id()));
-            } catch (RuntimeException e) {
+            } catch (LegacyNames.LegacyException e) {
+            throw e;
+        } catch (RuntimeException e) {
                 failures.add(new Failed(artifact.id(), String.valueOf(e.getMessage())));
                 continue;
             }

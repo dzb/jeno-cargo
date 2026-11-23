@@ -59,6 +59,8 @@ final class LockedGraphView {
             locked = LockFileReader.read(Files.readString(lock));
         } catch (IOException e) {
             throw new OutOfDateException("cannot read jeno.lock in " + projectDir);
+        } catch (LegacyNames.LegacyException e) {
+            throw e;
         } catch (RuntimeException e) {
             throw new OutOfDateException(e.getMessage());
         }
