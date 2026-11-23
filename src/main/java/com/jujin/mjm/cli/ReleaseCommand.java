@@ -71,12 +71,16 @@ public final class ReleaseCommand implements Command {
             return workspace;
         }
         boolean dryRun = false;
+        boolean allowUnsigned = false;
         String target = null;
         for (String arg : args) {
             if (arg.equals("--dry-run")) {
                 dryRun = true;
+            } else if (arg.equals("--allow-unsigned")) {
+                allowUnsigned = true;
             } else if (arg.startsWith("-")) {
-                System.err.println("mjm: release takes [target] and --dry-run — got '" + arg + "'");
+                System.err.println("mjm: release takes [target], --dry-run and"
+                        + " --allow-unsigned — got '" + arg + "'");
                 return 2;
             } else if (target == null) {
                 target = arg;
@@ -114,6 +118,14 @@ public final class ReleaseCommand implements Command {
             return 1;
         }
 
+        ReleaseSigner.Preview signing;
+        try {
+            signing = ReleaseSigner.prepare(allowUnsigned);
+        } catch (ReleaseSigner.SigningException e) {
+            System.err.println("mjm: " + e.getMessage());
+            return 1;
+        }
+
         Plan plan;
         try {
             plan = plan(target, name, version, tag, project);
@@ -130,10 +142,31 @@ public final class ReleaseCommand implements Command {
             Path shaFile = releaseDir.resolve(tarName + ".sha256");
             Path setup = releaseDir.resolve("setup.sh");
             Path json = releaseDir.resolve("release.json");
+            List<String> signatureNames = signing.signed()
+                    ? List.of("setup.sh.minisig", "release.json.minisig", tarName + ".minisig")
+                    : List.of();
             Files.writeString(shaFile, sha + "\n");
-            Files.writeString(setup, bootstrap(name, version, plan.installerUrl, sha));
-            Files.writeString(json, releaseJson(name, version, tarName, sha, jdk));
-            files = List.of(setup, shaFile, json);
+            Files.writeString(setup, bootstrap(name, version, plan.installerUrl, sha,
+                    signing));
+            Files.writeString(json, releaseJson(name, version, tarName, sha, jdk,
+                    signing, signatureNames));
+
+            List<Path> signatures;
+            try {
+                signatures = ReleaseSigner.sign(releaseDir, List.of(setup, json, tar), signing);
+            } catch (ReleaseSigner.SigningException e) {
+                System.err.println("mjm: " + e.getMessage());
+                return 1;
+            }
+            List<Path> all = new ArrayList<>(List.of(setup, shaFile, json));
+            all.addAll(signatures);
+            if (signing.signed()) {
+                Path pub = releaseDir.resolve("minisign.pub");
+                Files.writeString(pub, "untrusted comment: minisign public key\n"
+                        + signing.publicKey() + "\n");
+                all.add(pub);
+            }
+            files = List.copyOf(all);
         } catch (IOException e) {
             System.err.println("mjm: cannot prepare " + releaseDir + " — " + e.getMessage());
             return 1;
@@ -160,8 +193,8 @@ public final class ReleaseCommand implements Command {
         }
 
         return plan.repository == null
-                ? publishToGitHub(plan, tar, files, name, version, tag, sha)
-                : publishToRepository(plan, tar, files, sha);
+                ? publishToGitHub(plan, tar, files, name, version, tag, sha, signing)
+                : publishToRepository(plan, tar, files, sha, signing);
     }
 
     // ------------------------------------------------------------------
@@ -211,7 +244,8 @@ public final class ReleaseCommand implements Command {
         String stable = root + name + "/setup.sh";
         String tar = versioned + "release/" + name + "-" + version + ".tar.gz";
         List<String> urls = List.of(versioned + "release/setup.sh", tar + ".sha256",
-                versioned + "release/release.json", versioned + "setup.sh", stable);
+                versioned + "release/release.json", versioned + "setup.sh", stable,
+                versioned + "minisign.pub", root + name + "/minisign.pub");
         return new Plan(repository, target, name, version, tar, stable, urls);
     }
 
@@ -219,7 +253,8 @@ public final class ReleaseCommand implements Command {
     // upload + read-back
     // ------------------------------------------------------------------
 
-    private int publishToRepository(Plan plan, Path tar, List<Path> files, String sha) {
+    private int publishToRepository(Plan plan, Path tar, List<Path> files, String sha,
+                                    ReleaseSigner.Preview signing) {
         List<String> urls = new ArrayList<>();
         urls.add(plan.installerUrl);
         urls.addAll(plan.auxiliaryUrls.subList(0, 2 + 1));
@@ -236,6 +271,14 @@ public final class ReleaseCommand implements Command {
                         Files.readAllBytes(files.getFirst()));
                 Path stable = localDirectory(plan).getParent().resolve("setup.sh");
                 writeAtomically(stable, Files.readAllBytes(files.getFirst()));
+                if (signing.signed()) {
+                    Path pub = files.stream().filter(path -> path.getFileName().toString()
+                            .equals("minisign.pub")).findFirst().orElseThrow();
+                    writeAtomically(localDirectory(plan).resolve("minisign.pub"),
+                            Files.readAllBytes(pub));
+                    writeAtomically(localDirectory(plan).getParent().resolve("minisign.pub"),
+                            Files.readAllBytes(pub));
+                }
             } else {
                 MjmUploads.put(plan.installerUrl, Files.readAllBytes(tar));
                 System.out.println("  PUT " + plan.installerUrl);
@@ -246,6 +289,13 @@ public final class ReleaseCommand implements Command {
                 }
                 MjmUploads.put(plan.auxiliaryUrls.get(3), Files.readAllBytes(files.getFirst()));
                 MjmUploads.put(plan.auxiliaryUrls.get(4), Files.readAllBytes(files.getFirst()));
+                if (signing.signed()) {
+                    Path pub = files.stream().filter(path -> path.getFileName().toString()
+                            .equals("minisign.pub")).findFirst().orElseThrow();
+                    byte[] bytes = Files.readAllBytes(pub);
+                    MjmUploads.put(plan.auxiliaryUrls.get(5), bytes);
+                    MjmUploads.put(plan.auxiliaryUrls.get(6), bytes);
+                }
             }
         } catch (IOException | InterruptedException e) {
             System.err.println("mjm: release upload failed — " + e.getMessage());
@@ -262,6 +312,21 @@ public final class ReleaseCommand implements Command {
                         + " — wrote " + sha + ", read " + actual);
                 return 1;
             }
+            if (signing.signed()) {
+                Path signature = projectDir.resolve(RELEASE)
+                        .resolve(tar.getFileName() + ".minisig");
+                ReleaseSigner.verify(tar, signature, signing.publicKey());
+                if (!plan.repository.isLocal()) {
+                    byte[] remoteSignature = MjmUploads.get(plan.installerUrl + ".minisig");
+                    Path temp = Files.createTempFile("mjm-remote-", ".minisig");
+                    try {
+                        Files.write(temp, remoteSignature);
+                        ReleaseSigner.verify(tar, temp, signing.publicKey());
+                    } finally {
+                        Files.deleteIfExists(temp);
+                    }
+                }
+            }
             if (!plan.repository.isLocal()) {
                 MjmUploads.get(plan.auxiliaryUrls.get(0));
                 MjmUploads.get(plan.auxiliaryUrls.get(2));
@@ -277,7 +342,8 @@ public final class ReleaseCommand implements Command {
     }
 
     private int publishToGitHub(Plan plan, Path tar, List<Path> files,
-                                String name, String version, String tag, String sha) {
+                                String name, String version, String tag, String sha,
+                                ReleaseSigner.Preview signing) {
         String token = GitHubReleases.token();
         if (token == null || token.isBlank()) {
             System.err.println("mjm: MJM_GITHUB_TOKEN environment variable is not set — "
@@ -330,6 +396,17 @@ public final class ReleaseCommand implements Command {
                         + " — uploaded " + sha + ", read " + actual);
                 return 1;
             }
+            if (signing.signed()) {
+                Path signature = projectDir.resolve(RELEASE)
+                        .resolve(tar.getFileName() + ".minisig");
+                Path temp = Files.createTempFile("mjm-gh-", ".tar.gz");
+                try {
+                    Files.write(temp, readBack);
+                    ReleaseSigner.verify(temp, signature, signing.publicKey());
+                } finally {
+                    Files.deleteIfExists(temp);
+                }
+            }
         } catch (IOException | InterruptedException e) {
             System.err.println("mjm: release verification failed for " + tarDownload
                     + " — " + e.getMessage());
@@ -377,7 +454,8 @@ public final class ReleaseCommand implements Command {
     // generated files
     // ------------------------------------------------------------------
 
-    private static String bootstrap(String name, String version, String url, String sha) {
+    private static String bootstrap(String name, String version, String url, String sha,
+                                    ReleaseSigner.Preview signing) {
         return """
             #!/bin/sh
             # %1$s %2$s installer: download, verify, unpack, then run the bundled setup.
@@ -406,13 +484,31 @@ public final class ReleaseCommand implements Command {
                 exit 1
             fi
 
+            %5$s
             tar -xzf "$TMP/pkg.tar.gz" -C "$TMP"
             "$TMP/%1$s-%2$s/setup.sh"
-            """.formatted(name, version, url, sha);
+            """.formatted(name, version, url, sha,
+                signing.signed() ? """
+            MINISIGN="$(command -v minisign || true)"
+            if [ -z "$MINISIGN" ]; then
+                echo "%1$s: this release is signed — install minisign to verify it" >&2
+                exit 1
+            fi
+            if command -v curl >/dev/null 2>&1; then
+                curl -fsSL "$URL.minisig" -o "$TMP/pkg.tar.minisig"
+            else
+                wget -q "$URL.minisig" -O "$TMP/pkg.tar.minisig"
+            fi
+            "$MINISIGN" -V -q -P "%2$s" -m "$TMP/pkg.tar.gz" -x "$TMP/pkg.tar.minisig"
+            """.formatted(name, signing.publicKey())
+                        : """
+            echo "warning: this release is unsigned — only sha256 was checked" >&2
+            """);
     }
 
     private static String releaseJson(String name, String version, String artifact, String sha,
-                                      int jdk) {
+                                      int jdk, ReleaseSigner.Preview signing,
+                                      List<String> signatureNames) {
         var root = JsonUtils.object();
         root.put("name", name);
         root.put("version", version);
@@ -421,6 +517,13 @@ public final class ReleaseCommand implements Command {
         root.put("jdk", jdk);
         root.put("mjm", Mjm.VERSION);
         root.put("platform", "any");
+        root.put("signed", signing.signed());
+        if (signing.signed()) {
+            root.put("minisign.publicKey", signing.publicKey());
+        }
+        var signatures = JsonUtils.array();
+        signatureNames.forEach(signatures::add);
+        root.put("signatures", signatures);
         return root.toString();
     }
 }

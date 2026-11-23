@@ -68,6 +68,9 @@ class ReleaseCommandTest {
         ProjectLock.useUserRoot();
         com.jujin.mjm.store.Paths.resetForTesting();
         System.clearProperty("mjm.github.token");
+        System.clearProperty("mjm.minisign.key");
+        System.clearProperty("mjm.minisign.pubkey");
+        System.clearProperty("mjm.minisign.bin");
         System.clearProperty("mjm.github.api");
         System.clearProperty("mjm.github.uploads");
     }
@@ -141,13 +144,18 @@ class ReleaseCommandTest {
         });
         server.start();
         String base = "mjm:http://localhost:" + server.getAddress().getPort() + "/repo/";
+        fakeSigner();
 
-        Result result = run(base);
+        Result result = runRaw(base);
 
         assertEquals(0, result.exit(), result.out() + result.err());
         assertTrue(files.containsKey("/repo/app/1.0.0/release/app-1.0.0.tar.gz"));
         assertTrue(files.containsKey("/repo/app/1.0.0/release/setup.sh"));
         assertTrue(files.containsKey("/repo/app/setup.sh"), "the stable entry is uploaded");
+        assertTrue(files.containsKey("/repo/app/1.0.0/release/app-1.0.0.tar.gz.minisig"),
+                "the installer signature is uploaded");
+        assertTrue(files.containsKey("/repo/app/1.0.0/release/minisign.pub"),
+                "the public key is uploaded");
     }
 
     @Test
@@ -182,13 +190,16 @@ class ReleaseCommandTest {
         System.setProperty("mjm.github.api", base);
         System.setProperty("mjm.github.uploads", base);
         System.setProperty("mjm.github.token", "test-token");
+        fakeSigner();
 
-        Result result = run("gh:owner/repo");
+        Result result = runRaw("gh:owner/repo");
 
         assertEquals(0, result.exit(), result.out() + result.err());
         assertTrue(assets.containsKey("app-1.0.0.tar.gz"));
         assertTrue(assets.containsKey("setup.sh"));
         assertTrue(assets.containsKey("release.json"));
+        assertTrue(assets.containsKey("app-1.0.0.tar.gz.minisig"));
+        assertTrue(assets.containsKey("minisign.pub"));
     }
 
     @Test
@@ -201,7 +212,94 @@ class ReleaseCommandTest {
         assertTrue(result.err().contains("run mjm bundle first"), result.err());
     }
 
+
+    private static final String FAKE_PUB = "untrusted comment: fake key\nRWTfakePUBLICkeyLINE\n";
+
+    /** A fake minisign: records args, writes a dummy signature, verifies nothing. */
+    private void fakeSigner() throws Exception {
+        Path bin = dir.resolve("fake-minisign.sh");
+        Path key = dir.resolve("secret.key");
+        Path pub = dir.resolve("minisign.pub");
+        Files.writeString(key, "fake-secret");
+        Files.writeString(pub, FAKE_PUB);
+        Files.writeString(bin, """
+            #!/bin/sh
+            echo "$*" >> "%s"
+            case "$*" in
+              *"-S "*) for a in "$@"; do case "$prev" in -x) echo fake-signature > "$a";; esac; prev="$a"; done ;;
+              *"-R "*) exit 0 ;;
+              *"-V "*) exit 0 ;;
+            esac
+            exit 0
+            """.formatted(dir.resolve("fake-minisign.log")));
+        bin.toFile().setExecutable(true);
+        System.setProperty("mjm.minisign.bin", bin.toString());
+        System.setProperty("mjm.minisign.key", key.toString());
+        System.setProperty("mjm.minisign.pubkey", pub.toString());
+    }
+
+    @Test
+    void aSignedLocalReleaseCarriesSignaturesAndPublicKey() throws Exception {
+        fakeSigner();
+        Path repo = dir.resolve("signed");
+
+        Result result = runRaw("mjm:local:" + repo);
+
+        assertEquals(0, result.exit(), result.out() + result.err());
+        Path release = repo.resolve("app/1.0.0/release");
+        assertTrue(Files.exists(release.resolve("app-1.0.0.tar.gz.minisig")));
+        assertTrue(Files.exists(release.resolve("setup.sh.minisig")));
+        assertTrue(Files.exists(release.resolve("release.json.minisig")));
+        assertTrue(Files.exists(release.resolve("minisign.pub")));
+        assertTrue(Files.exists(repo.resolve("app/1.0.0/minisign.pub")));
+        assertTrue(Files.exists(repo.resolve("app/minisign.pub")));
+        String bootstrap = Files.readString(release.resolve("setup.sh"));
+        assertTrue(bootstrap.contains("minisign -V") || bootstrap.contains("\"$MINISIGN\" -V"),
+                bootstrap);
+        assertTrue(bootstrap.contains("RWTfakePUBLICkeyLINE"), bootstrap);
+        var json = JsonUtils.parseObject(
+                Files.readString(release.resolve("release.json")).strip());
+        assertEquals(true, json.getBoolean("signed"));
+        assertEquals("RWTfakePUBLICkeyLINE", json.getString("minisign.publicKey"));
+    }
+
+    @Test
+    void aMissingKeyIsRefusedUnlessUnsignedIsExplicit() throws Exception {
+        Result refused = runRaw();
+
+        assertEquals(1, refused.exit());
+        assertTrue(refused.err().contains("MJM_MINISIGN_KEY is not set"), refused.err());
+
+        Result allowed = run("--allow-unsigned");
+        assertEquals(0, allowed.exit(), allowed.out() + allowed.err());
+        String bootstrap = Files.readString(dir.resolve("target/dist/release/setup.sh"));
+        assertTrue(bootstrap.contains("unsigned"), bootstrap);
+        assertFalse(Files.exists(dir.resolve("target/dist/release/minisign.pub")));
+    }
+
+    @Test
+    void aSigningFailureStopsBeforeAnyUpload() throws Exception {
+        fakeSigner();
+        Path bin = dir.resolve("failing-minisign.sh");
+        Files.writeString(bin, "#!/bin/sh\nexit 1\n");
+        bin.toFile().setExecutable(true);
+        System.setProperty("mjm.minisign.bin", bin.toString());
+        Path repo = dir.resolve("never");
+
+        Result result = runRaw("mjm:local:" + repo);
+
+        assertEquals(1, result.exit());
+        assertTrue(result.err().contains("signing"), result.err());
+        assertFalse(Files.exists(repo), "nothing is uploaded after a signing failure");
+    }
+
     private Result run(String... args) {
+        List<String> withUnsigned = new java.util.ArrayList<>(List.of(args));
+        withUnsigned.add("--allow-unsigned");
+        return runRaw(withUnsigned.toArray(String[]::new));
+    }
+
+    private Result runRaw(String... args) {
         PrintStream originalOut = System.out;
         PrintStream originalErr = System.err;
         ByteArrayOutputStream out = new ByteArrayOutputStream();
