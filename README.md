@@ -14,7 +14,7 @@ curl -fsSL https://raw.githubusercontent.com/dzb/mjm-cargo/master/setup.sh | bas
 mjm --version          # mjm <version> — modern java manager
 ```
 
-**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D16, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects, local + Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
+**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D16, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
 
 ---
 
@@ -90,7 +90,7 @@ mjm cache purge --dry-run     # destructive: shows store/sources; --yes actually
 
 ```bash
 cd your-maven-project
-mjm init --pom                # translate pom.xml into mjm.toml (local/Central parents, reported gaps)
+mjm init --pom                # translate pom.xml; local/Central parents and BOMs; [java] from Maven properties
 ```
 
 The translation is a **reviewed migration, not an import**: properties are
