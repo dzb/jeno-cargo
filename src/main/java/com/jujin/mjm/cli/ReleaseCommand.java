@@ -182,7 +182,13 @@ public final class ReleaseCommand implements Command {
             return 2;
         }
         // The wrapper handles dry-run and JSON; executeHuman only performs the
-        // real local preparation and upload.
+        // real local preparation and upload. The upload reads target/dist/, so
+        // the lock covers the network phase too: clean --dist must not pull the
+        // tar out from under a running release.
+        return ProjectLock.with(projectDir, () -> release(parsed));
+    }
+
+    private int release(Parsed parsed) {
         String target = parsed.target();
         boolean allowUnsigned = parsed.allowUnsigned();
 

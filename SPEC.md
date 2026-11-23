@@ -428,6 +428,7 @@ modules = ["libs/core", "apps/web"]
 
 - **未知参数是用法错误**:exit 2,不静默忽略(`build`/`test`/`bundle`/`upgrade`(alias `update`) 无参数;`why` 恰好一个 id;`publish` 最多一个 target)。
 - **`--` 结束 mjm 的选项**:之后的内容作为位置参数交给命令(`run` 交给程序)。
+- **项目锁**：写 `target/`/`mjm.lock` 的命令 `lock`、`build`、`test`、`clean`、`add`、`remove`、`package`、`bundle`、`publish`、`release` 共用一把项目锁；`publish`/`release` 的上传阶段也在锁内。
 - **`--help` / `-h`**:只在 `--` 之前、且是唯一剩余参数时生效;`mjm --help` 打印清单 exit 0。
 - **`run` 的旗标边界**:mjm 的 `--module`/`--offline` 只在 target 之前生效;target 之后(或 `--` 之后)全部是程序参数。
 

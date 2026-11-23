@@ -62,6 +62,19 @@ class DistCommandsLockTest {
     }
 
     @Test
+    void releaseWaitsForTheProjectLock() throws Exception {
+        buildableProject();
+        ArtifactStore store = new ArtifactStore(dir.resolve("store"));
+        assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
+        assertEquals(0, new BundleCommand(store, dir).execute(List.of()));
+
+        assertWaitsThenRuns(() -> new ReleaseCommand(dir)
+                .execute(List.of("--allow-unsigned")));
+        assertTrue(Files.exists(dir.resolve("target/dist/release/setup.sh")),
+                "release prepared its files after the wait");
+    }
+
+    @Test
     void publishWaitsForTheProjectLock() throws Exception {
         buildableProject();
         ArtifactStore store = new ArtifactStore(dir.resolve("store"));
