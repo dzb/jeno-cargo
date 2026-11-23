@@ -65,7 +65,7 @@ public final class BuildCommand implements Command {
     public CommandCapabilities capabilities() {
         return CommandCapabilities.builder()
                 .json()
-                .network(CommandCapabilities.NetworkMode.OPTIONAL)
+                .network(CommandCapabilities.NetworkMode.NEVER)
                 .writes(CommandCapabilities.WriteScope.TARGET)
                 .workspace(CommandCapabilities.WorkspaceMode.AGGREGATE)
                 .build();

@@ -122,8 +122,7 @@ public final class RunCommand implements Command {
     @Override
     public CommandCapabilities capabilities() {
         return CommandCapabilities.builder()
-                .network(CommandCapabilities.NetworkMode.OPTIONAL)
-                .writes(CommandCapabilities.WriteScope.CACHE)
+                .network(CommandCapabilities.NetworkMode.NEVER)
                 .workspace(CommandCapabilities.WorkspaceMode.MODULE)
                 .passThrough()
                 .build();

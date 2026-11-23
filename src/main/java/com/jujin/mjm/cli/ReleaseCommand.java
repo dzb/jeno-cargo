@@ -90,6 +90,7 @@ public final class ReleaseCommand implements Command {
                         CommandCapabilities.WriteScope.REMOTE)
                 .workspace(CommandCapabilities.WorkspaceMode.MODULE)
                 .dryRun()
+                .confirmation(CommandCapabilities.Confirmation.REQUIRES_SIGNATURE)
                 .build();
     }
 

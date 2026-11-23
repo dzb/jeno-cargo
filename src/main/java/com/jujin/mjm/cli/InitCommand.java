@@ -74,7 +74,8 @@ public final class InitCommand implements Command {
         return CommandCapabilities.builder()
                 .json()
                 .network(CommandCapabilities.NetworkMode.OPTIONAL)
-                .writes(CommandCapabilities.WriteScope.PROJECT)
+                .writes(CommandCapabilities.WriteScope.PROJECT,
+                        CommandCapabilities.WriteScope.CACHE)
                 .workspace(CommandCapabilities.WorkspaceMode.GLOBAL)
                 .destructive()
                 .build();

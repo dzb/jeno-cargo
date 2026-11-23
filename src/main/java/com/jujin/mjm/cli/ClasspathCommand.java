@@ -78,9 +78,8 @@ public final class ClasspathCommand implements Command {
     public CommandCapabilities capabilities() {
         return CommandCapabilities.builder()
                 .json()
-                .network(CommandCapabilities.NetworkMode.OPTIONAL)
-                .writes(CommandCapabilities.WriteScope.CACHE,
-                        CommandCapabilities.WriteScope.PROJECT)
+                .network(CommandCapabilities.NetworkMode.NEVER)
+                .writes(CommandCapabilities.WriteScope.PROJECT)
                 .workspace(CommandCapabilities.WorkspaceMode.MODULE)
                 .build();
     }

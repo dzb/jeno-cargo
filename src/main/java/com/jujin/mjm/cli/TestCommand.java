@@ -82,7 +82,8 @@ public final class TestCommand implements Command {
         return CommandCapabilities.builder()
                 .json()
                 .network(CommandCapabilities.NetworkMode.OPTIONAL)
-                .writes(CommandCapabilities.WriteScope.TARGET)
+                .writes(CommandCapabilities.WriteScope.TARGET,
+                        CommandCapabilities.WriteScope.CACHE)
                 .workspace(CommandCapabilities.WorkspaceMode.AGGREGATE)
                 .build();
     }
