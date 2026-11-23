@@ -245,6 +245,19 @@ dependency cache) untouched; `uninstall.sh` removes the install. Test toolchain
 jars ship only with `--toolchain`. `mjm upgrade` (alias `mjm update`) upgrades in place and takes effect on
 the next invocation.
 
+mjm's own release tarball is signed: each release carries
+`mjm-bin-{version}.tar.gz.minisig` and `minisign.pub`. Verify manually before
+installing:
+
+```bash
+minisign -V -P "$(tail -1 minisign.pub)" \
+  -m mjm-bin-{version}.tar.gz -x mjm-bin-{version}.tar.gz.minisig
+```
+
+The key id is documented in [RELEASE.md](RELEASE.md); compare the fingerprint
+out of band. `mjm update` currently checks download integrity only — it does
+not verify the minisign signature yet.
+
 ## Commands
 
 A few everyday shapes; `mjm --help` prints the command list, and

@@ -2,7 +2,7 @@
 #
 # 两种触发,两种职责:
 #   push master   只验证:装上一个 release,构建 + 测试(狗粮常磨),不发版
-#   push tag v*   验证 + 发行:一致性门 → mjm bundle --toolchain → GitHub Release 附件
+#   push tag v*   验证 + 发行:一致性门 → mjm bundle --toolchain → minisign 签名 → GitHub Release
 #
 # 版本账本是 git tags 本身:人工决定版本号(改 mjm.toml 一处,构建派生),
 # tag 即发布。文档类变更不触发构建。
@@ -96,9 +96,10 @@ jobs:
       # later (the v0.1.4 artifact still had the old nine-jar layout for
       # exactly this reason). Packaging with the code under test closes that.
       #
-      # The lifecycle stops here: mjm has no `release` command. Deciding to
-      # build, name and upload an artifact belongs to the project's CI; mjm
-      # provides the mechanics (one step each) and nothing more.
+      # mjm's own release still uses bundle + gh release create: the `mjm
+      # release` command exists for user applications (it publishes pkg
+      # installers), while mjm itself is a tool distributed as a tar.gz with a
+      # bootstrap script. Signing is added here explicitly.
       - name: bundle (with the freshly built mjm)
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
@@ -112,6 +113,30 @@ jobs:
           mkdir dist-release
           cp "target/dist/mjm-$VERSION.tar.gz" "dist-release/mjm-bin-$VERSION.tar.gz"
 
+      - name: install minisign and sign the release asset
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          MINISIGN_KEY_B64: ${{ secrets.MJM_MINISIGN_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MINISIGN_KEY_B64:-}" ]; then
+            echo "::error::MJM_MINISIGN_KEY repository secret is not set — sign or do not release"
+            exit 1
+          fi
+          sudo apt-get update
+          sudo apt-get install -y minisign
+          VERSION="${GITHUB_REF_NAME#v}"
+          KEY_DIR="$RUNNER_TEMP/minisign"
+          mkdir -p "$KEY_DIR"
+          printf '%s' "$MINISIGN_KEY_B64" | base64 -d > "$KEY_DIR/mjm.key"
+          chmod 600 "$KEY_DIR/mjm.key"
+          minisign -R -s "$KEY_DIR/mjm.key" -p "$KEY_DIR/mjm.pub"
+          ASSET="dist-release/mjm-bin-$VERSION.tar.gz"
+          minisign -S -q -W -s "$KEY_DIR/mjm.key" -m "$ASSET" -x "$ASSET.minisig"
+          minisign -V -q -P "$(tail -1 "$KEY_DIR/mjm.pub")" -m "$ASSET" -x "$ASSET.minisig"
+          cp "$KEY_DIR/mjm.pub" dist-release/minisign.pub
+          echo "signed $ASSET; public key $(tail -1 "$KEY_DIR/mjm.pub" | cut -c1-16)…"
+
       # 重发安全:先删同 tag 的旧 release(保留 tag),规避附件 CDN 缓存。
       - name: create the GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -124,7 +149,40 @@ jobs:
           # The annotated tag message becomes the release notes, so what a
           # release changed lives with the tag that made it — one place to
           # read, and no second copy to drift.
-          gh release create "$TAG" "$ASSET" \
+          gh release create "$TAG" "$ASSET" "$ASSET.minisig" \
+            dist-release/minisign.pub \
             --target "$GITHUB_SHA" \
             --title "mjm $TAG" \
             --notes-from-tag
+
+      - name: verify the published release by downloading it
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          TAG="$GITHUB_REF_NAME"
+          VERIFY="$RUNNER_TEMP/verify"
+          rm -rf "$VERIFY"
+          mkdir -p "$VERIFY"
+          for attempt in 1 2 3 4 5; do
+            gh release download "$TAG" \
+              --pattern "mjm-bin-$VERSION.tar.gz*" --dir "$VERIFY" --clobber || true
+            gh release download "$TAG" \
+              --pattern "minisign.pub" --dir "$VERIFY" --clobber || true
+            if [ -f "$VERIFY/mjm-bin-$VERSION.tar.gz" ] \
+                && [ -f "$VERIFY/mjm-bin-$VERSION.tar.gz.minisig" ] \
+                && [ -f "$VERIFY/minisign.pub" ]; then
+              break
+            fi
+            echo "assets not visible yet (attempt $attempt) — retrying"
+            sleep 3
+          done
+          test -f "$VERIFY/mjm-bin-$VERSION.tar.gz"
+          test -f "$VERIFY/mjm-bin-$VERSION.tar.gz.minisig"
+          test -f "$VERIFY/minisign.pub"
+          minisign -V -q -P "$(tail -1 "$VERIFY/minisign.pub")" \
+            -m "$VERIFY/mjm-bin-$VERSION.tar.gz" \
+            -x "$VERIFY/mjm-bin-$VERSION.tar.gz.minisig"
+          echo "published asset verified: sha256 + minisign"
