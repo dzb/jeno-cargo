@@ -104,6 +104,12 @@ final class Substitutions {
         return module == null ? "" : " (local: " + display(root, module.dir()) + ")";
     }
 
+    /** The module's workspace-relative path when this id is local, else null. */
+    String localPath(String id) {
+        Module module = byId.get(id);
+        return module == null ? null : display(root, module.dir());
+    }
+
     /** The module's classes if this id is local, else null. */
     Path classesOrNull(String id) {
         Module module = byId.get(id);

@@ -231,6 +231,86 @@ class TreeWhyTest {
                 text -> { throw new IllegalStateException("no natives here"); }).refresh(dir);
     }
 
+    @Test
+    void treeJsonMarksTheScopeAndTheWorkspaceLocalPath() throws Exception {
+        // a local Maven repository supplies the metadata; the workspace module
+        // supplies the bytes, so the JSON carries both scope and local path
+        Path repo = dir.resolve("vendor");
+        pom(repo, "com/example/core/1.0.0", "core", "1.0.0", "");
+        Path module = dir.resolve("libs/core");
+        Files.createDirectories(module);
+        Files.writeString(module.resolve("mjm.toml"), """
+            [project]
+            name = "core"
+            group = "com.example"
+            version = "1.0.0"
+            """);
+        Path app = dir.resolve("app");
+        Files.createDirectories(app);
+        Files.writeString(app.resolve("mjm.toml"), """
+            [project]
+            name = "app"
+            version = "0.1.0"
+
+            [repos]
+            v = "local:../vendor"
+
+            [deps]
+            "com.example:core" = "v:1.0.0"
+            """);
+        Files.writeString(dir.resolve("mjm.ws.toml"), """
+            [ws]
+            modules = ["libs/core", "app"]
+            """);
+        ArtifactStore store = new ArtifactStore(dir.resolve("store"));
+        com.jujin.mjm.resolve.ArtifactLocations.useProjectRoot(app);
+        var pomSource = new com.jujin.mjm.store.StorePomSource(store);
+        new LockService(store, pomSource,
+                text -> { throw new IllegalStateException("no natives here"); }).refresh(app);
+
+        TreeCommand tree = new TreeCommand(store, pomSource,
+                text -> { throw new IllegalStateException("no natives here"); }, app);
+        assertEquals(0, tree.execute(List.of("--json")));
+
+        var root = com.jujin.freeway.commons.json.JsonUtils.parseObject(readConsole());
+        var artifacts = root.getArray("artifacts");
+        assertEquals(1, artifacts.size());
+        assertEquals("main", artifacts.getObject(0).getString("scope"));
+        assertEquals("libs/core", artifacts.getObject(0).getString("local"),
+                "the path matches the human (local: …) marker");
+    }
+
+    @Test
+    void treeMarksProcessorScopeOnTheHumanLine() throws Exception {
+        Path repo = dir.resolve("vendor");
+        pom(repo, "com/example/proc/1.0.0", "proc", "1.0.0", "");
+        Files.writeString(dir.resolve("mjm.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [build]
+            processors = ["com.example:proc:1.0.0"]
+            """);
+        System.setProperty("mjm.central.base", "local:" + repo);
+        try {
+            ArtifactStore store = new ArtifactStore(dir.resolve("store"));
+            com.jujin.mjm.resolve.ArtifactLocations.useProjectRoot(dir);
+            var pomSource = new com.jujin.mjm.store.StorePomSource(store);
+            new LockService(store, pomSource,
+                    text -> { throw new IllegalStateException("no natives here"); }).refresh(dir);
+
+            TreeCommand tree = new TreeCommand(store, pomSource,
+                    text -> { throw new IllegalStateException("no natives here"); }, dir);
+            assertEquals(0, tree.execute(List.of()));
+        } finally {
+            System.clearProperty("mjm.central.base");
+        }
+
+        String out = readConsole();
+        assertTrue(out.contains("com.example:proc@1.0.0  [depth 1, processor]"), out);
+    }
+
     // ------------------------------------------------------------------
     // the console capture both commands assert on
     // ------------------------------------------------------------------
@@ -399,6 +479,10 @@ class TreeWhyTest {
         assertEquals("com.example:lib-d", roots.getString(1));
 
         var artifacts = root.getArray("artifacts");
+        for (int i = 0; i < artifacts.size(); i++) {
+            assertEquals("main", artifacts.getObject(i).getString("scope"),
+                    "scope is part of the tree contract");
+        }
         java.util.List<String> ids = new java.util.ArrayList<>();
         java.util.Map<String, Integer> depths = new java.util.HashMap<>();
         for (int i = 0; i < artifacts.size(); i++) {

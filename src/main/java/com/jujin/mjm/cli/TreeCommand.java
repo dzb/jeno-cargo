@@ -109,7 +109,7 @@ public final class TreeCommand implements Command {
         }
 
         if (json) {
-            printJson(project, graph);
+            printJson(project, graph, substitutions);
             return 0;
         }
 
@@ -118,6 +118,7 @@ public final class TreeCommand implements Command {
 
         List<Requirement> requirements = new ArrayList<>(project.requirements());
         requirements.addAll(project.devRequirements());
+        requirements.addAll(project.processorRequirements());
 
         // Classic tree: each root's line, then its own subtree immediately, so
         // a child can never be mistaken for the next root. `printed` holds every
@@ -156,7 +157,8 @@ public final class TreeCommand implements Command {
      * children. No nested tree — a consumer walks {@code children}, so the same
      * fact is never represented twice.
      */
-    private static void printJson(MjProject project, ResolvedGraph graph) {
+    private static void printJson(MjProject project, ResolvedGraph graph,
+                                   Substitutions substitutions) {
         var root = com.jujin.freeway.commons.json.JsonUtils.object();
         var identity = com.jujin.freeway.commons.json.JsonUtils.object();
         identity.put("name", project.name());
@@ -167,6 +169,7 @@ public final class TreeCommand implements Command {
         var roots = com.jujin.freeway.commons.json.JsonUtils.array();
         java.util.List<Requirement> requirements = new ArrayList<>(project.requirements());
         requirements.addAll(project.devRequirements());
+        requirements.addAll(project.processorRequirements());
         for (Requirement requirement : requirements) {
             roots.add(requirement.id());
         }
@@ -181,8 +184,14 @@ public final class TreeCommand implements Command {
                     entry.put("version", artifact.version());
                     entry.put("depth", artifact.depth());
                     entry.put("declared", artifact.declared());
+                    entry.put("scope", artifact.scope().name()
+                            .toLowerCase(java.util.Locale.ROOT));
                     entry.put("dev", artifact.scope()
                             == com.jujin.mjm.resolve.Scope.DEV);
+                    String local = substitutions.localPath(artifact.id());
+                    if (local != null) {
+                        entry.put("local", local);
+                    }
                     var children = com.jujin.freeway.commons.json.JsonUtils.array();
                     graph.edges().getOrDefault(artifact.id(), List.of()).stream()
                             .sorted()
@@ -201,8 +210,17 @@ public final class TreeCommand implements Command {
                 + substitutions.marker(artifact.id())
                 + "  [depth " + artifact.depth()
                 + (artifact.declared() ? ", declared" : "")
-                + (artifact.scope() == com.jujin.mjm.resolve.Scope.DEV ? ", dev" : "")
+                + scopeSuffix(artifact.scope())
                 + "]" + suffix;
+    }
+
+    /** The human marker for an artifact's scope: empty, {@code , dev}, {@code , processor}. */
+    static String scopeSuffix(com.jujin.mjm.resolve.Scope scope) {
+        return switch (scope) {
+            case MAIN -> "";
+            case DEV -> ", dev";
+            case PROCESSOR -> ", processor";
+        };
     }
 
     private static ResolvedGraph.ResolvedArtifact byId(ResolvedGraph graph, String id) {

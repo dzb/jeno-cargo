@@ -109,7 +109,11 @@ public final class InfoCommand implements Command {
 
         Substitutions substitutions = Substitutions.forProject(projectDir);
         System.out.println(artifact.id() + "@" + artifact.version()
-                + (artifact.isMain() ? "" : "  [dev]")
+                + switch (artifact.scope()) {
+                    case MAIN -> "";
+                    case DEV -> "  [dev]";
+                    case PROCESSOR -> "  [processor]";
+                }
                 + substitutions.marker(artifact.id()));
 
         Descriptor descriptor = descriptor(artifact);

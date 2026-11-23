@@ -343,4 +343,33 @@ class InfoCommandTest {
         }
         return target;
     }
+
+    @Test
+    void theHeaderMarksDevAndProcessorScopes(@TempDir Path storeDir) throws Exception {
+        Files.writeString(dir.resolve("mjm.lock"), """
+            [[artifacts]]
+            id = "acme:dev-lib"
+            version = "1.0.0"
+            source = "gh:acme/dev-lib"
+            url = "https://github.com/acme/dev-lib/releases/download/v1.0.0/dev-lib-1.0.0.jar"
+            sha256 = "%1$s"
+            depth = 1
+            scope = "dev"
+
+            [[artifacts]]
+            id = "acme:proc"
+            version = "1.0.0"
+            source = "gh:acme/proc"
+            url = "https://github.com/acme/proc/releases/download/v1.0.0/proc-1.0.0.jar"
+            sha256 = "%1$s"
+            depth = 1
+            scope = "processor"
+            """.formatted("b".repeat(64)));
+
+        String dev = run(storeDir, List.of("acme:dev-lib"));
+        assertTrue(dev.contains("acme:dev-lib@1.0.0  [dev]"), dev);
+
+        String processor = run(storeDir, List.of("acme:proc"));
+        assertTrue(processor.contains("acme:proc@1.0.0  [processor]"), processor);
+    }
 }

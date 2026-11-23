@@ -391,9 +391,9 @@ modules = ["libs/core", "apps/web"]
 | `mjm build` | javac 编译 `src/main/java`,严格可见性 classpath(只含 MAIN 声明);`--release` 取 `[java].version`;processor 走 `-processorpath`。**当前要求至少一个 Java 源**;resource-only 模块会失败(报没有 sources) |
 | `mjm test` | fork JVM:`@MjmTest` + JUnit Platform;classpath 含 MAIN + dev,processor 只走 javac 的 `-processorpath`;每次运行先清空 `target/test-results/`(空测试/编译失败也会清空),XML 报告写该目录 |
 | `mjm run [<main>] [args…]` | 在 runtime classpath(排除 dev)上运行;无参数时用 `[project].main`;`[scripts]` 优先于同名主类。target 在 `--` 之前(可省略);mjm 旗标只在 target 之前生效;`--` 之后**全部**是程序参数(§6.2) |
-| `mjm tree [--json]` | 依赖树 + 深度;**以 `mjm.lock` 为准**:先读锁,再解析 manifest 只为补父子边;id/version/source/depth/scope 任一不一致 → exit 1、至多 10 行差异、不输出图 |
+| `mjm tree [--json]` | 依赖树 + 深度(processor 根也会列出并标 `, processor`);**以 `mjm.lock` 为准**:先读锁,再解析 manifest 只为补父子边;id/version/source/depth/scope 任一不一致 → exit 1、至多 10 行差异、不输出图 |
 | `mjm why <id>` | 每个引入路径与深度;同样以锁为准,漂移拒绝画图 |
-| `mjm info <id> [--source]` | 身份/来源/依赖/源码地址;`--source` 取源码树 |
+| `mjm info <id> [--source]` | 身份/来源/依赖/源码地址;`--source` 取源码树。标题按 scope 标记:`[dev]`、`[processor]`,MAIN 无标记 |
 | `mjm classpath [--test] [--file <path>]` | IDE 用 classpath;默认编译可见性;`--test` 为测试闭包(MAIN + dev,**排除 processor**——与 `mjm test` 的差异见 REMINDS §14);路径指向 store 内容寻址 jar,不拷贝 |
 | `mjm package [--uber] [--main <class>]` | `target/dist/<name>-<version>.jar`;`--uber` 合并闭包输出 `...-uber.jar`;`--main` 只影响本 jar 的 MANIFEST,不影响 `bundle`/`run` 的 `[project].main` |
 | `mjm bundle` | `target/dist/<name>-<version>/`(bin/lib/setup.sh/SHA256SUMS)+ `.tar.gz`。**当前是 mjm 专用安装器**:setup.sh 要求 JDK 25,launcher 是 mjm 品牌(`[project].main` 缺失时用 UsageStub 兜底),`lib/toolchain` 带 test 工具链;不是通用 app bundler |
@@ -441,8 +441,8 @@ modules = ["libs/core", "apps/web"]
 |---|---|
 | `project` | `{name, version}` |
 | `budget` | 整数(`max-depth`) |
-| `roots[]` | 声明根 id,按声明顺序 |
-| `artifacts[]` | `{id, version, depth, declared, dev, children[]}`;按 id 排序,`children` 排序。当前没有 `local`/`scope` 标记 |
+| `roots[]` | 声明根 id:`[deps]` → `[dev-deps]` → processors,按各自声明顺序 |
+| `artifacts[]` | `{id, version, depth, declared, dev, scope, local?, children[]}`;按 id 排序,`children` 排序。`scope` 为 `main`/`dev`/`processor`;workspace 本地替换时 `local` 为相对工作区根的路径(否则省略) |
 
 **outdated**
 
