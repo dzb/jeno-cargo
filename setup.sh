@@ -31,11 +31,17 @@ trap cleanup EXIT
 # ---- resolve the latest release tag ----
 # Follow the redirect from releases/latest to releases/tag/vX.Y.Z — one HEAD
 # request, no API rate limits, no JSON parsing.
-LATEST=$(curl -fsIL "https://github.com/$REPO/releases/latest" -o /dev/null -w '%{url_effective}' 2>/dev/null | sed 's|.*/tag/||')
-if [ -z "$LATEST" ] || [ "$LATEST" = "latest" ]; then
-    error "cannot resolve the latest release — check your network connection"
-    exit 1
-fi
+LATEST=$(curl -fsIL "https://github.com/$REPO/releases/latest" -o /dev/null -w '%{url_effective}' 2>/dev/null | sed 's|.*/tag/||; s|/$||')
+# A cold CDN edge (common right after a repository rename) can answer without
+# the tag redirect, leaving the effective URL unchanged. Say so instead of
+# building a nonsense download URL out of it.
+case "$LATEST" in
+    v[0-9]*) : ;;
+    *)
+        error "cannot resolve the latest release (got '${LATEST:-nothing}') — retry in a moment"
+        exit 1
+        ;;
+esac
 VERSION="${LATEST#v}"
 info "latest release: $LATEST"
 
