@@ -135,7 +135,7 @@ public final class AuditCommand implements Command {
             if (isMavenCoordinate(artifact)) {
                 queryable.add(artifact);
             } else {
-                notChecked.add(new NotChecked(artifact.id(), reason(artifact.source())));
+                notChecked.add(new NotChecked(artifact.id(), ArtifactReasons.of(artifact)));
             }
         }
 
@@ -381,25 +381,6 @@ public final class AuditCommand implements Command {
     /** OSV's Maven ecosystem is keyed by {@code group:artifact}; nothing else fits. */
     private static boolean isMavenCoordinate(LockedArtifact artifact) {
         return artifact.source().equals("central") && artifact.id().contains(":");
-    }
-
-    private static String reason(String source) {
-        if (source.startsWith("gh:")) {
-            return "mj-native";
-        }
-        if (source.equals("url")) {
-            return "bare-url";
-        }
-        Repository repository;
-        try {
-            repository = Repository.parse(source);
-        } catch (IllegalArgumentException notARepository) {
-            return "named-repository";
-        }
-        if (repository.layout() == Repository.Layout.MJM) {
-            return "mj-native";
-        }
-        return repository.isLocal() ? "local-repository" : "named-repository";
     }
 
     // ------------------------------------------------------------------

@@ -399,7 +399,7 @@ modules = ["libs/core", "apps/web"]
 | `mjm bundle` | `target/dist/<name>-<version>/`(bin/lib/setup.sh/SHA256SUMS)+ `.tar.gz`。**当前是 mjm 专用安装器**:setup.sh 要求 JDK 25,launcher 是 mjm 品牌(`[project].main` 缺失时用 UsageStub 兜底),`lib/toolchain` 带 test 工具链;不是通用 app bundler |
 | `mjm clean [--target (default) \| --dist]` | 默认整棵删 `target/`;`--dist` 只删 `target/dist/` 保留 classes;永不触碰 store |
 | `mjm cache dir \| size \| prune \| clean` | `dir`/`size` 只读;`prune` 删可证明无用之物;`clean` 删 store 与 sources |
-| `mjm outdated [--json]` | 已钉版本 vs 仓库可用版本;**当前遍历全部锁行**(含 dev/processor);`gh:`/`url`/`local:`/`mjm:` 列为未检查;跨 major 单列 |
+| `mjm outdated [--json] [--dev]` | 已钉版本 vs 仓库可用版本;默认只查 MAIN,`--dev` 含 dev/processor;`gh:`/`url`/`local:`/`mjm:` 列为未检查;跨 major 单列;完成即 exit 0(有更新也是 0) |
 | `mjm audit [--json] [--dev]` | OSV 漏洞查询;默认只查 MAIN,`--dev` 才含 dev/processor;只查 Central 坐标,其余列 `notChecked` 并给原因;漏洞或查询失败 exit 1 |
 | `mjm publish [target]` | 写三件套;目标只接受 `gh:`、`mjm:https:`、`mjm:local:`(§6.6) |
 | `mjm update` / `mjm upgrade` | 自升级(同一实现) |
@@ -453,6 +453,8 @@ modules = ["libs/core", "apps/web"]
 | `notChecked[]` | `{id, reason}` |
 | `failures[]` | `{id, error}` |
 
+`notChecked[].reason` 与 `audit` 共用同一词表(见下)。
+
 **audit**
 
 | 字段 | 类型 |
@@ -460,6 +462,16 @@ modules = ["libs/core", "apps/web"]
 | `vulnerabilities[]` | `{id, version, advisories[]}`,其中 advisory 为 `{id, severity?, summary?, fixed?, aliases[]}` |
 | `notChecked[]` | `{id, reason}` |
 | `failures[]` | `{id, error}` |
+
+`notChecked[].reason`(`outdated` 与 `audit` 共用):
+
+| 值 | 含义 |
+|---|---|
+| `native-release` | `gh:owner/repo` release(标签就是版本) |
+| `bare-url` | 裸 `https://…jar` 叶子(无元数据) |
+| `mjm-repository` | `mjm:` 布局仓库(含 `mjm:local:`;无版本索引/OSV 坐标) |
+| `local-repository` | 本地 Maven 布局目录(无版本索引) |
+| `named-repository` | 命名 HTTPS Maven 仓库;无法解析的 source 也归到这里 |
 
 ### 6.6 publish 目标
 

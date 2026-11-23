@@ -118,7 +118,7 @@ class AuditCommandTest {
         List<Map<String, Object>> notChecked = (List<Map<String, Object>>) root.get("notChecked");
         assertEquals(1, notChecked.size());
         assertEquals("owner/repo", notChecked.getFirst().get("id"));
-        assertEquals("mj-native", notChecked.getFirst().get("reason"));
+        assertEquals("native-release", notChecked.getFirst().get("reason"));
         assertTrue(queries.isEmpty(), "no OSV query was made for it");
     }
 

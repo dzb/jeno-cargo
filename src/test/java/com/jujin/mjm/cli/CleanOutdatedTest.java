@@ -336,7 +336,7 @@ class CleanOutdatedTest {
             assertEquals(false, updates.getObject(0).getBoolean("major"));
             var skipped = json.getArray("notChecked");
             assertEquals(1, skipped.size());
-            assertEquals("mj-native", skipped.getObject(0).getString("reason"));
+            assertEquals("native-release", skipped.getObject(0).getString("reason"));
             var failures = json.getArray("failures");
             assertEquals(1, failures.size());
             assertEquals("com.example:lib-c", failures.getObject(0).getString("id"));
@@ -650,5 +650,46 @@ class CleanOutdatedTest {
         }
         assertEquals(expectedExit, exit);
         return buffer.toString(StandardCharsets.UTF_8);
+    }
+
+    @Test
+    void outdatedChecksMainOnlyUnlessDevIsGiven() throws Exception {
+        projectWithLock("""
+            [[artifacts]]
+            id = "acme:main-lib"
+            version = "1.0.0"
+            source = "gh:acme/main-lib"
+            url = "https://github.com/acme/main-lib/releases/download/v1.0.0/main-lib-1.0.0.jar"
+            sha256 = "%1$s"
+            depth = 1
+
+            [[artifacts]]
+            id = "acme:dev-lib"
+            version = "1.0.0"
+            source = "gh:acme/dev-lib"
+            url = "https://github.com/acme/dev-lib/releases/download/v1.0.0/dev-lib-1.0.0.jar"
+            sha256 = "%1$s"
+            depth = 1
+            scope = "dev"
+
+            [[artifacts]]
+            id = "acme:proc"
+            version = "1.0.0"
+            source = "gh:acme/proc"
+            url = "https://github.com/acme/proc/releases/download/v1.0.0/proc-1.0.0.jar"
+            sha256 = "%1$s"
+            depth = 1
+            scope = "processor"
+            """.formatted(SHA));
+
+        var byDefault = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                runOutdated(0, "--json"));
+        assertEquals(1, byDefault.getArray("notChecked").size(),
+                "only the MAIN row is in scope by default");
+
+        var withDev = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                runOutdated(0, "--json", "--dev"));
+        assertEquals(3, withDev.getArray("notChecked").size(),
+                "--dev includes dev and processor rows");
     }
 }

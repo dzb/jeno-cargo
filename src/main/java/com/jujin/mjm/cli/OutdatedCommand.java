@@ -50,6 +50,11 @@ public final class OutdatedCommand implements Command {
     }
 
     @Override
+    public String usage() {
+        return "[--json] [--dev]";
+    }
+
+    @Override
     public boolean supportsOffline() {
         // the whole answer comes from repositories
         return false;
@@ -72,12 +77,16 @@ public final class OutdatedCommand implements Command {
             return workspace;
         }
         boolean json = false;
+        boolean includeDev = false;
         for (String arg : args) {
-            if (arg.equals("--json")) {
-                json = true;
-            } else {
-                System.err.println("mjm: outdated takes no arguments except --json");
-                return 2;
+            switch (arg) {
+                case "--json" -> json = true;
+                case "--dev" -> includeDev = true;
+                default -> {
+                    System.err.println("mjm: outdated takes --json and --dev only — got '"
+                            + arg + "'");
+                    return 2;
+                }
             }
         }
         MjProject project;
@@ -106,35 +115,31 @@ public final class OutdatedCommand implements Command {
         int checked = 0;
 
         for (LockedArtifact artifact : locked) {
+            if (!includeDev && artifact.scope() != com.jujin.mjm.resolve.Scope.MAIN) {
+                continue;  // default: production closure only
+            }
             String source = artifact.source();
-            if (source.startsWith("gh:")) {
-                unchecked.add(new Skipped(artifact.id(), "mj-native",
-                        "mj-native: the tag is the version"));
+            String reason = ArtifactReasons.of(artifact);
+            if (reason.equals("native-release")) {
+                unchecked.add(new Skipped(artifact.id(), reason,
+                        "native release: the tag is the version"));
                 continue;
             }
-            if (source.equals("url")) {
-                unchecked.add(new Skipped(artifact.id(), "bare-url",
-                        "bare URL: no metadata"));
+            if (reason.equals("bare-url")) {
+                unchecked.add(new Skipped(artifact.id(), reason, "bare URL: no metadata"));
                 continue;
             }
-
-            Repository repository;
-            try {
-                repository = source.equals("central") ? null : Repository.parse(source);
-            } catch (IllegalArgumentException e) {
-                failures.add(new Failed(artifact.id(), e.getMessage()));
-                continue;
-            }
-            if (repository != null && repository.isLocal()) {
-                unchecked.add(new Skipped(artifact.id(), "local-repository",
+            if (reason.equals("local-repository")) {
+                unchecked.add(new Skipped(artifact.id(), reason,
                         "local repository: no version listing"));
                 continue;
             }
-            if (repository != null && repository.layout() == Repository.Layout.MJM) {
-                unchecked.add(new Skipped(artifact.id(), "mjm-repository",
+            if (reason.equals("mjm-repository")) {
+                unchecked.add(new Skipped(artifact.id(), reason,
                         "mjm layout: no version index"));
                 continue;
             }
+            Repository repository = source.equals("central") ? null : Repository.parse(source);
 
             List<String> available;
             try {
