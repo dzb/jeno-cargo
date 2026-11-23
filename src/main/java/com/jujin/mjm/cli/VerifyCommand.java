@@ -457,6 +457,9 @@ public final class VerifyCommand implements Command {
         Path sums = bundle.resolve("SHA256SUMS");
         if (Files.isRegularFile(sums)) {
             checks.addAll(checksums(bundle, sums));
+        } else if (Files.isDirectory(bundle)) {
+            checks.add(CheckResult.failed("artifacts.bundle-incomplete",
+                    "bundle is incomplete at " + bundle + " — run mjm bundle"));
         } else {
             checks.add(CheckResult.skipped("artifacts.bundle",
                     "bundle: not built (skipped)"));

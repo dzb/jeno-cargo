@@ -120,6 +120,24 @@ class VerifyCommandTest {
     }
 
     @Test
+    void aBundleDirectoryWithoutSumsIsIncomplete() throws Exception {
+        Fixture fixture = fixture("1.0.0", true);
+        Path dist = Files.createDirectories(fixture.project.resolve("target/dist"));
+        Files.createDirectories(dist.resolve("demo-0.1.0"));
+
+        Result result = verify(fixture, "--json");
+
+        assertEquals(1, result.exit(), result.out());
+        var root = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                result.out().strip());
+        boolean incomplete = root.getArray("diagnostics").toList().stream()
+                .anyMatch(value -> value instanceof java.util.Map<?, ?> diagnostic
+                        && "artifacts.bundle-incomplete".equals(diagnostic.get("code")));
+        assertTrue(incomplete, result.out());
+        assertTrue(result.out().contains("run mjm bundle"), result.out());
+    }
+
+    @Test
     void aJarWithADescriptorButNoShaIsStillIncomplete() throws Exception {
         Fixture fixture = fixture("1.0.0", true);
         Path dist = Files.createDirectories(fixture.project.resolve("target/dist"));
