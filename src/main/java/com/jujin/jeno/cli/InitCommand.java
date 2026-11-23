@@ -15,18 +15,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * {@code mjm init} — start a project, or migrate one from Maven.
+ * {@code jeno init} — start a project, or migrate one from Maven.
  *
  * <pre>
- *   mjm init                    skeleton mjm.toml for the current directory
- *   mjm init --pom         translate ./pom.xml into mjm.toml (reviewed, not
+ *   jeno init                    skeleton jeno.toml for the current directory
+ *   jeno init --pom         translate ./pom.xml into jeno.toml (reviewed, not
  *                              imported: every unrepresentable fact is printed)
- *   mjm init --ws [paths]   write mjm.ws.toml — the local workspace file
+ *   jeno init --ws [paths]   write jeno.ws.toml — the local workspace file
  * </pre>
  *
  * <p>The migrated file is validated through {@link ProjectReader} before it is
- * written — a translation that mjm itself would refuse never lands on disk.
- * An existing mjm.toml is never overwritten without {@code --force}.
+ * written — a translation that jeno itself would refuse never lands on disk.
+ * An existing jeno.toml is never overwritten without {@code --force}.
  */
 public final class InitCommand implements Command {
 
@@ -51,7 +51,7 @@ public final class InitCommand implements Command {
 
     @Override
     public String summary() {
-        return "create mjm.toml (a skeleton, --pom to migrate, --ws for a workspace file)";
+        return "create jeno.toml (a skeleton, --pom to migrate, --ws for a workspace file)";
     }
     @Override
     public String usage() {
@@ -90,7 +90,7 @@ public final class InitCommand implements Command {
         }
 
         boolean workspace = cleaned.contains("--ws");
-        Path target = projectDir.resolve(workspace ? Workspaces.FILE : "mjm.toml");
+        Path target = projectDir.resolve(workspace ? Workspaces.FILE : "jeno.toml");
         boolean existedBefore = Files.exists(target);
         JsonCapture.Result captured = JsonCapture.run(() -> executeHuman(cleaned));
         if (captured.exitCode() != 0) {
@@ -135,7 +135,7 @@ public final class InitCommand implements Command {
                     .put("overwritten", existedBefore)
                     .put("project", identity)
                     .put("nextActions", JsonUtils.array()
-                            .add(JsonUtils.array().add("mjm").add("lock")))
+                            .add(JsonUtils.array().add("jeno").add("lock")))
                     .emit(0);
             return 0;
         } catch (IOException | RuntimeException e) {
@@ -178,17 +178,17 @@ public final class InitCommand implements Command {
         }
 
         // A workspace root is a composition of projects, not a project: writing
-        // mjm.toml here would make it a module and break the workspace (and the
+        // jeno.toml here would make it a module and break the workspace (and the
         // reader refuses that combination anyway). Plain init, --pom and --force
         // are all refused; init --ws is the one command that belongs here.
         if (Files.isRegularFile(projectDir.resolve(Workspaces.FILE))) {
             System.err.println(Ui.errPrefix() + projectDir + " is a workspace root (it has "
                     + Workspaces.FILE + ") — run init from a parent directory, or cd into a "
-                    + "module; a workspace root does not hold mjm.toml");
+                    + "module; a workspace root does not hold jeno.toml");
             return 1;
         }
 
-        Path target = projectDir.resolve("mjm.toml");
+        Path target = projectDir.resolve("jeno.toml");
         if (Files.exists(target) && !force) {
             System.err.println(Ui.errPrefix() + target + " already exists — pass --force to overwrite");
             return 1;
@@ -214,8 +214,8 @@ public final class InitCommand implements Command {
             if (result.multiModuleRoot()) {
                 System.err.println(Ui.errPrefix() + projectDir + " is a multi-module pom root"
                         + " (packaging pom, modules: " + String.join(", ", result.modules())
-                        + ") — mjm does not recurse; run mjm init --ws here, then"
-                        + " mjm init --pom inside each module (no mjm.toml was written)");
+                        + ") — jeno does not recurse; run jeno init --ws here, then"
+                        + " jeno init --pom inside each module (no jeno.toml was written)");
                 return 1;
             }
             toml = result.mjToml();
@@ -223,11 +223,11 @@ public final class InitCommand implements Command {
             toml = skeleton(nameOf(projectDir));
         }
 
-        // never write a file mjm would refuse to read
+        // never write a file jeno would refuse to read
         try {
             ProjectReader.parse(toml);
         } catch (RuntimeException e) {
-            System.err.println(Ui.errPrefix() + "the generated mjm.toml would not parse — " + e.getMessage());
+            System.err.println(Ui.errPrefix() + "the generated jeno.toml would not parse — " + e.getMessage());
             return 1;
         }
 
@@ -240,12 +240,12 @@ public final class InitCommand implements Command {
 
         System.out.println(Ui.ok("created " + target
                 + (migratePom ? " (migrated from pom.xml)" : "")));
-        System.out.println(Ui.dim("next: mjm add \"group:artifact\" <version>   then   mjm lock"));
+        System.out.println(Ui.dim("next: jeno add \"group:artifact\" <version>   then   jeno lock"));
         return 0;
     }
 
     /**
-     * {@code mjm init --ws}: write {@code mjm.ws.toml}, either from explicit
+     * {@code jeno init --ws}: write {@code jeno.ws.toml}, either from explicit
      * module paths or from a scan of the current directory three levels deep.
      */
     private int initWorkspace(List<String> given, boolean force) {
@@ -254,9 +254,9 @@ public final class InitCommand implements Command {
             System.err.println(Ui.errPrefix() + file + " already exists — pass --force to overwrite");
             return 1;
         }
-        if (Files.isRegularFile(projectDir.resolve("mjm.toml"))) {
-            System.err.println(Ui.errPrefix() + projectDir + " is a module (it has mjm.toml) and cannot "
-                    + "also be the workspace root — run mjm init --ws from a parent directory");
+        if (Files.isRegularFile(projectDir.resolve("jeno.toml"))) {
+            System.err.println(Ui.errPrefix() + projectDir + " is a module (it has jeno.toml) and cannot "
+                    + "also be the workspace root — run jeno init --ws from a parent directory");
             return 1;
         }
 
@@ -270,18 +270,18 @@ public final class InitCommand implements Command {
                 if (!legacy.isEmpty()) {
                     System.err.println(Ui.errPrefix() + "found legacy mj.toml in: "
                             + relativeList(projectDir, legacy));
-                    System.err.println("  mjm does not read mj.toml — create or migrate mjm.toml "
-                            + "in each module (one way: mjm init --pom), then rerun mjm init --ws");
+                    System.err.println("  jeno does not read mj.toml — create or migrate jeno.toml "
+                            + "in each module (one way: jeno init --pom), then rerun jeno init --ws");
                 } else {
                     System.err.println("  pass the paths explicitly: "
-                            + "mjm init --ws libs/core apps/web");
+                            + "jeno init --ws libs/core apps/web");
                 }
                 return 1;
             }
             if (!legacy.isEmpty()) {
                 System.err.println(Ui.errPrefix() + "warning: ignored legacy mj.toml in: "
                         + relativeList(projectDir, legacy));
-                System.err.println("  a workspace module is discovered by mjm.toml, never mj.toml");
+                System.err.println("  a workspace module is discovered by jeno.toml, never mj.toml");
             }
         } else {
             List<Path> seen = new ArrayList<>();
@@ -291,13 +291,13 @@ public final class InitCommand implements Command {
                     System.err.println(Ui.errPrefix() + "'" + text + "' is not a directory");
                     return 1;
                 }
-                if (!Files.isRegularFile(module.resolve("mjm.toml"))) {
+                if (!Files.isRegularFile(module.resolve("jeno.toml"))) {
                     if (Files.isRegularFile(module.resolve("mj.toml"))) {
-                        System.err.println(Ui.errPrefix() + "'" + text + "' has mj.toml, not mjm.toml — "
-                                + "mjm does not read the old name; migrate it (mjm init --pom) "
-                                + "or rename the file, then run mjm lock");
+                        System.err.println(Ui.errPrefix() + "'" + text + "' has mj.toml, not jeno.toml — "
+                                + "jeno does not read the old name; migrate it (jeno init --pom) "
+                                + "or rename the file, then run jeno lock");
                     } else {
-                        System.err.println(Ui.errPrefix() + "'" + text + "' has no mjm.toml — a workspace "
+                        System.err.println(Ui.errPrefix() + "'" + text + "' has no jeno.toml — a workspace "
                                 + "module needs one");
                     }
                     return 1;
@@ -308,7 +308,7 @@ public final class InitCommand implements Command {
         }
 
         StringBuilder out = new StringBuilder();
-        out.append("# generated by mjm init --ws — a local file, not meant to be committed\n");
+        out.append("# generated by jeno init --ws — a local file, not meant to be committed\n");
         out.append("[ws]\n");
         out.append("modules = [");
         for (int i = 0; i < modules.size(); i++) {
@@ -320,7 +320,7 @@ public final class InitCommand implements Command {
         }
         out.append("]\n");
 
-        // never write a workspace mjm would refuse to read
+        // never write a workspace jeno would refuse to read
         try {
             Files.writeString(file, out.toString());
             Workspaces.read(projectDir).orElseThrow(() ->
@@ -346,15 +346,15 @@ public final class InitCommand implements Command {
         return 0;
     }
 
-    /** Directories under {@code root} up to three levels down that hold mjm.toml. */
+    /** Directories under {@code root} up to three levels down that hold jeno.toml. */
     static List<Path> scan(Path root) {
-        return scanNamed(root, "mjm.toml");
+        return scanNamed(root, "jeno.toml");
     }
 
-    /** Directories that still hold the old mj.toml and have no mjm.toml. */
+    /** Directories that still hold the old mj.toml and have no jeno.toml. */
     static List<Path> scanLegacy(Path root) {
         return scanNamed(root, "mj.toml").stream()
-                .filter(path -> !Files.isRegularFile(path.resolve("mjm.toml")))
+                .filter(path -> !Files.isRegularFile(path.resolve("jeno.toml")))
                 .toList();
     }
 
@@ -408,7 +408,7 @@ public final class InitCommand implements Command {
         return result;
     }
 
-    /** The skeleton: a directory name is a valid mjm project name, or gets one. */
+    /** The skeleton: a directory name is a valid jeno project name, or gets one. */
     private static String skeleton(String name) {
         return """
             [project]

@@ -5,9 +5,9 @@ package com.jujin.jeno.cli;
  *
  * <p>Modern terminals get colour and status glyphs; scripts, CI, test
  * harnesses and pipes keep the exact plain text they already parse. The
- * explicit {@code -Dmjm.color=always|never} system property wins over
+ * explicit {@code -Djeno.color=always|never} system property wins over
  * everything; it exists for programmatic embedding/tests and is never set by
- * mjm itself. Otherwise {@code NO_COLOR} wins over {@code MJM_COLOR}, which
+ * jeno itself. Otherwise {@code NO_COLOR} wins over {@code JENO_COLOR}, which
  * wins over automatic terminal detection.
  *
  * <p>JSON commands never call this class: their stdout must stay one pure JSON
@@ -30,7 +30,7 @@ final class Ui {
 
     /** Whether human presentation should include ANSI colour and glyphs. */
     static boolean enabled() {
-        String override = System.getProperty("mjm.color");
+        String override = System.getProperty("jeno.color");
         if (override != null) {
             if (override.equalsIgnoreCase("always")) {
                 return true;
@@ -39,7 +39,7 @@ final class Ui {
                 return false;
             }
         }
-        return enabled(System.getenv("MJM_COLOR"),
+        return enabled(System.getenv("JENO_COLOR"),
                 System.getenv().containsKey("NO_COLOR"));
     }
 
@@ -80,14 +80,14 @@ final class Ui {
         return enabled() ? YELLOW + "! " + text + RESET : text;
     }
 
-    /** A next-action error; pipes keep the historical {@code mjm: } prefix. */
+    /** A next-action error; pipes keep the historical {@code jeno: } prefix. */
     static String error(String text) {
-        return enabled() ? RED + "error: " + text + RESET : "mjm: " + text;
+        return enabled() ? RED + "error: " + text + RESET : "jeno: " + text;
     }
 
     /** The prefix for an error whose body is built separately. */
     static String errPrefix() {
-        return enabled() ? RED + "error:" + RESET + " " : "mjm: ";
+        return enabled() ? RED + "error:" + RESET + " " : "jeno: ";
     }
 
     /** A doctor-style positive check: {@code ✓ text} or {@code ok: text}. */

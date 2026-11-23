@@ -21,10 +21,10 @@ import java.util.List;
 import java.util.stream.Stream;
 
 /**
- * {@code mjm test} — compiles test sources, then forks a separate JVM to
+ * {@code jeno test} — compiles test sources, then forks a separate JVM to
  * execute them. The forked JVM's classpath IS the test classpath: test
- * classes, code under test, closure jars, junit toolchain, and mjm's test API
- * ({@code JenoTestFork}). No mjm process classes leak in — zero classloader
+ * classes, code under test, closure jars, junit toolchain, and jeno's test API
+ * ({@code JenoTestFork}). No jeno process classes leak in — zero classloader
  * identity issues.
  *
  * <p>Two runners in the forked JVM ({@code JenoTestFork}):
@@ -64,7 +64,7 @@ public final class TestCommand implements Command {
 
     @Override
     public String summary() {
-        return "compile and run src/test/java — @MjmTest and JUnit Jupiter";
+        return "compile and run src/test/java — @JenoTest and JUnit Jupiter";
     }
 
     @Override
@@ -130,8 +130,8 @@ public final class TestCommand implements Command {
             System.err.println(Ui.errPrefix() + "test takes no arguments — got '" + args.getFirst() + "'");
             return 2;
         }
-        if (!Files.exists(projectDir.resolve("mjm.lock"))) {
-            System.err.println(Ui.errPrefix() + "no mjm.lock in " + projectDir + " — run mjm lock first");
+        if (!Files.exists(projectDir.resolve("jeno.lock"))) {
+            System.err.println(Ui.errPrefix() + "no jeno.lock in " + projectDir + " — run jeno lock first");
             return 1;
         }
         Filter filter = Filter.from(projectDir);
@@ -159,7 +159,7 @@ public final class TestCommand implements Command {
             // target/classes (package/bundle/publish/run) already say the latter.
             // A pure-test project has no main sources and needs no target/classes.
             if (hasMainSources() && !Files.exists(projectDir.resolve(MAIN_OUTPUT))) {
-                System.err.println(Ui.errPrefix() + MAIN_OUTPUT + " is missing — run mjm build first");
+                System.err.println(Ui.errPrefix() + MAIN_OUTPUT + " is missing — run jeno build first");
                 return 1;
             }
             return runTests(testSources, machineOutput);
@@ -200,7 +200,7 @@ public final class TestCommand implements Command {
             return 1;
         }
 
-        // fork a separate JVM — complete classloader isolation from the mjm process
+        // fork a separate JVM — complete classloader isolation from the jeno process
         String runClasspath = classpath(toolchain, true).joined();
         Path testOutput = projectDir.resolve(TEST_OUTPUT);
 
@@ -217,8 +217,8 @@ public final class TestCommand implements Command {
         try {
             ProcessBuilder builder = new ProcessBuilder(command);
             // A forked test JVM sees stdout as a pipe; force deterministic output
-            // even if the outer invocation used MJM_COLOR=always.
-            builder.environment().put("MJM_COLOR", "never");
+            // even if the outer invocation used JENO_COLOR=always.
+            builder.environment().put("JENO_COLOR", "never");
             Process process = machineOutput
                     ? builder.redirectErrorStream(true).start()
                     : builder.inheritIO().start();
@@ -374,7 +374,7 @@ public final class TestCommand implements Command {
     }
 
     /**
-     * {@code [test].include} / {@code [test].exclude} patterns from mjm.toml.
+     * {@code [test].include} / {@code [test].exclude} patterns from jeno.toml.
      * Maven's surefire has the same pair; without them a project cannot skip
      * integration-style tests that need a running service.
      */
@@ -389,10 +389,10 @@ public final class TestCommand implements Command {
 
         static Filter from(Path projectDir) {
             // ProjectReader owns [test]: patterns arrive typed and closed, so an
-            // error in mjm.toml surfaces here instead of silently meaning "run all".
+            // error in jeno.toml surfaces here instead of silently meaning "run all".
             JenoProject project;
             try {
-                project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
+                project = ProjectReader.parse(Files.readString(projectDir.resolve("jeno.toml")));
             } catch (java.nio.file.NoSuchFileException e) {
                 // no manifest at all: build/lock already report that; test unfiltered
                 return new Filter(List.of(), List.of());
@@ -400,7 +400,7 @@ public final class TestCommand implements Command {
                 // the file is there but cannot be read — silence would run every
                 // test and hide why the filters did not apply
                 throw new IllegalStateException("cannot read "
-                        + projectDir.resolve("mjm.toml") + " — " + e.getMessage(), e);
+                        + projectDir.resolve("jeno.toml") + " — " + e.getMessage(), e);
             }
             return new Filter(project.testInclude(), project.testExclude());
         }
@@ -438,10 +438,10 @@ public final class TestCommand implements Command {
         }
     }
 
-    /** {@code [java].version} from mjm.toml, or null — the test compile target. */
+    /** {@code [java].version} from jeno.toml, or null — the test compile target. */
     private Integer projectJavaVersion() {
         try {
-            return ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")))
+            return ProjectReader.parse(Files.readString(projectDir.resolve("jeno.toml")))
                     .javaVersion();
         } catch (IOException | RuntimeException e) {
             return null;
@@ -450,9 +450,9 @@ public final class TestCommand implements Command {
 
     private List<LockedArtifact> lock() {
         try {
-            return LockFileReader.read(Files.readString(projectDir.resolve("mjm.lock")));
+            return LockFileReader.read(Files.readString(projectDir.resolve("jeno.lock")));
         } catch (IOException e) {
-            throw new IllegalStateException("cannot read mjm.lock", e);
+            throw new IllegalStateException("cannot read jeno.lock", e);
         }
     }
 

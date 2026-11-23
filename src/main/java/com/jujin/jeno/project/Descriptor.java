@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A mj-native release descriptor ({@code {artifact}-{version}.mjm.toml}) —
+ * A mj-native release descriptor ({@code {artifact}-{version}.jeno.toml}) —
  * SPEC.md §3's closed schema as data. The descriptor travels next to the jar
  * and carries only facts: its own dependencies, its java requirement, which
  * of its earlier versions the author retracted, and the identity facts a
@@ -13,8 +13,8 @@ import java.util.Map;
  *
  * <p>The identity facts are facts, not rules: they are immutable once
  * published, never take part in resolution, and are read only by
- * {@code mjm info}. Rules (budget, repos, scripts) still live only in the
- * consumer's mjm.toml.
+ * {@code jeno info}. Rules (budget, repos, scripts) still live only in the
+ * consumer's jeno.toml.
  *
  * @param name      must equal the artifact name the consumer asked for
  * @param version   must equal the version the consumer asked for

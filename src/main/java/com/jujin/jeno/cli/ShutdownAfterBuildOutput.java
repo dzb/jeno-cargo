@@ -4,8 +4,8 @@ package com.jujin.jeno.cli;
  * Thrown by a command that removed its own build output and must therefore
  * not run the container's shutdown hooks afterwards.
  *
- * <p>When mjm runs from {@code target/classes} — the normal development
- * layout — {@code mjm clean} deletes the directory this very JVM loaded its
+ * <p>When jeno runs from {@code target/classes} — the normal development
+ * layout — {@code jeno clean} deletes the directory this very JVM loaded its
  * classes from. The JVM keeps working (loaded classes stay loaded), but
  * Freeway's container shutdown reflects over its beans to call
  * {@code @PreDestroy} methods, and the class loader may try to re-read a class

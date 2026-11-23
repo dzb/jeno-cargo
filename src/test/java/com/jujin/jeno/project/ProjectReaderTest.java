@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Contract tests for mjm.toml's closed schema (SPEC.md §2): every accepted
+ * Contract tests for jeno.toml's closed schema (SPEC.md §2): every accepted
  * shape parses into typed requirements, and every rejected shape fails with
  * the rule named.
  */
@@ -56,7 +56,7 @@ class ProjectReaderTest {
                 """));
         assertTrue(unknown.getMessage().contains("unknown section [dep]"),
                 "a misspelled section must be named, got: " + unknown.getMessage());
-        assertTrue(unknown.getMessage().contains("mjm.toml:5:1"),
+        assertTrue(unknown.getMessage().contains("jeno.toml:5:1"),
                 "the section's line and column are named, got: " + unknown.getMessage());
 
         ProjectException notATable = assertThrows(ProjectException.class,
@@ -77,7 +77,7 @@ class ProjectReaderTest {
                 mian = "com.example.Main"
                 """));
 
-        assertTrue(error.getMessage().contains("mjm.toml:4:1"),
+        assertTrue(error.getMessage().contains("jeno.toml:4:1"),
                 "the key's line and column are named, got: " + error.getMessage());
         assertTrue(error.getMessage().contains("[project].mian is not a key"),
                 "the key and its section are named, got: " + error.getMessage());
@@ -128,7 +128,7 @@ class ProjectReaderTest {
                 """));
         assertTrue(gh.getMessage().contains("[repos].gh is reserved for the gh: prefix"),
                 gh.getMessage());
-        assertTrue(gh.getMessage().contains("mjm.toml:6:1"),
+        assertTrue(gh.getMessage().contains("jeno.toml:6:1"),
                 "the position is named like every other schema error: " + gh.getMessage());
 
     }
@@ -195,7 +195,7 @@ class ProjectReaderTest {
             version = "0.1.0"
 
             [repos]
-            mine = "mjm:https://repo.example/"
+            mine = "jeno:https://repo.example/"
 
             [deps]
             "widget" = "mine:1.2.3"
@@ -224,7 +224,7 @@ class ProjectReaderTest {
                 version = "0.1.0"
 
                 [repos]
-                mine = "mjm:https://repo.example/"
+                mine = "jeno:https://repo.example/"
 
                 [deps]
                 "com.corp:lib" = "mine:1.0.0"
@@ -235,16 +235,16 @@ class ProjectReaderTest {
 
     @Test
     void aJenoRepositoryIsEitherNetworkOrLocal() {
-        // mjm:local:<dir> is the mjm layout on disk — a legal repository now
+        // jeno:local:<dir> is the jeno layout on disk — a legal repository now
         JenoProject local = ProjectReader.parse("""
             [project]
             name = "demo"
             version = "0.1.0"
 
             [repos]
-            mine = "mjm:local:/tmp/repo"
+            mine = "jeno:local:/tmp/repo"
             """);
-        assertEquals(Repository.Layout.MJM, local.repos().get("mine").layout());
+        assertEquals(Repository.Layout.JENO, local.repos().get("mine").layout());
         assertEquals(Repository.Transport.LOCAL, local.repos().get("mine").transport());
 
         assertRejects("""
@@ -253,7 +253,7 @@ class ProjectReaderTest {
             version = "0.1.0"
 
             [repos]
-            mine = "mjm:http://repo.example/"
+            mine = "jeno:http://repo.example/"
             """, "private network");
     }
 
@@ -309,7 +309,7 @@ class ProjectReaderTest {
                 version = "0.1.0"
                 "mi=an" = 1
                 """));
-        assertTrue(quotedKey.getMessage().contains("mjm.toml:4:1"),
+        assertTrue(quotedKey.getMessage().contains("jeno.toml:4:1"),
                 "got: " + quotedKey.getMessage());
         assertTrue(quotedKey.getMessage().contains("[project].mi=an is not a key"),
                 "the key is reported as it was written, got: " + quotedKey.getMessage());
@@ -323,7 +323,7 @@ class ProjectReaderTest {
                 ["dep"]
                 "com.example:lib-a" = "1.0.0"
                 """));
-        assertTrue(quotedSection.getMessage().contains("mjm.toml:5:1"),
+        assertTrue(quotedSection.getMessage().contains("jeno.toml:5:1"),
                 "got: " + quotedSection.getMessage());
         assertTrue(quotedSection.getMessage().contains("unknown section [dep]"),
                 "got: " + quotedSection.getMessage());
@@ -381,7 +381,7 @@ class ProjectReaderTest {
                 [test]
                 include = "x"
                 """));
-        assertTrue(wrongType.getMessage().contains("mjm.toml:6:1"),
+        assertTrue(wrongType.getMessage().contains("jeno.toml:6:1"),
                 "the wrong-typed key names its line and column, got: "
                         + wrongType.getMessage());
         assertTrue(wrongType.getMessage().contains("[test].include must be a string array"),

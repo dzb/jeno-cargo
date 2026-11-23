@@ -48,7 +48,7 @@ class WorkspaceSchemaTest {
 
     @Test
     void twoModulesClaimingOneIdAreRejectedEvenByRootLock() throws IOException {
-        Files.writeString(root.resolve("mjm.ws.toml"), """
+        Files.writeString(root.resolve("jeno.ws.toml"), """
             [ws]
             modules = ["libs/a", "libs/b"]
             """);
@@ -67,7 +67,7 @@ class WorkspaceSchemaTest {
 
     @Test
     void schemaErrorsCarryLineAndColumn() throws IOException {
-        Files.writeString(root.resolve("mjm.ws.toml"), """
+        Files.writeString(root.resolve("jeno.ws.toml"), """
             [ws]
             modules = ["libs/a"]
             junk = 1
@@ -76,13 +76,13 @@ class WorkspaceSchemaTest {
         var error = assertThrows(Workspaces.WorkspaceException.class,
                 () -> Workspaces.read(root));
 
-        assertTrue(error.getMessage().contains("mjm.ws.toml:3:1"), error.getMessage());
+        assertTrue(error.getMessage().contains("jeno.ws.toml:3:1"), error.getMessage());
         assertTrue(error.getMessage().contains("[ws].junk"), error.getMessage());
     }
 
     @Test
     void anUnknownSectionNamesItsOwnLine() throws IOException {
-        Files.writeString(root.resolve("mjm.ws.toml"), """
+        Files.writeString(root.resolve("jeno.ws.toml"), """
             [other]
             modules = ["libs/a"]
             """);
@@ -90,7 +90,7 @@ class WorkspaceSchemaTest {
         var error = assertThrows(Workspaces.WorkspaceException.class,
                 () -> Workspaces.read(root));
 
-        assertTrue(error.getMessage().contains("mjm.ws.toml:1:1"), error.getMessage());
+        assertTrue(error.getMessage().contains("jeno.ws.toml:1:1"), error.getMessage());
         assertTrue(error.getMessage().contains("[other]"), error.getMessage());
     }
 
@@ -99,7 +99,7 @@ class WorkspaceSchemaTest {
     private static void module(Path dir, String name, String group, String version)
             throws IOException {
         Files.createDirectories(dir);
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "%s"
             group = "%s"

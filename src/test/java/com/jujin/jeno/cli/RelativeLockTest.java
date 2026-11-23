@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * A {@code local:} repository used to put the checkout's absolute path into
- * mjm.lock: bytes differed between two clones, a cold store could not build a
+ * jeno.lock: bytes differed between two clones, a cold store could not build a
  * fresh clone, and {@code --offline} missed the URL index after a move. The
  * lock now writes {@code file:vendor/…} relative to the project root, and every
  * reader expands it there.
@@ -80,8 +80,8 @@ class RelativeLockTest {
         assertDoesNotThrow(() -> new LockService(reused, new StorePomSource(reused),
                 new StoreDescriptorSource(reused)).refresh(second),
                 "the relative key hits the index the other checkout filled");
-        assertEquals(Files.readString(first.resolve("mjm.lock")),
-                Files.readString(second.resolve("mjm.lock")),
+        assertEquals(Files.readString(first.resolve("jeno.lock")),
+                Files.readString(second.resolve("jeno.lock")),
                 "and the second checkout writes the same portable lock");
     }
 
@@ -92,7 +92,7 @@ class RelativeLockTest {
         String legacy = relative.replaceAll("url = \"file:(.*?)\"",
                 "url = \"file://" + project.toAbsolutePath() + "/$1\"");
         assertTrue(legacy.contains("file:///"), "the fixture is the old absolute form:\n" + legacy);
-        Files.writeString(project.resolve("mjm.lock"), legacy);
+        Files.writeString(project.resolve("jeno.lock"), legacy);
 
         int exit = new BuildCommand(new ArtifactStore(storeDir), project).execute(List.of());
         assertEquals(0, exit, "an absolute file:// row is still read and built");
@@ -108,7 +108,7 @@ class RelativeLockTest {
         Path outside = Files.createDirectories(dir.resolve("outside-repo"));
         writeRepository(outside);  // the layout root IS the repository
         Path project = Files.createDirectories(dir.resolve("outside-project"));
-        Files.writeString(project.resolve("mjm.toml"), manifest("local:" + outside));
+        Files.writeString(project.resolve("jeno.toml"), manifest("local:" + outside));
 
         String lock = lock(project, new ArtifactStore(dir.resolve("store-outside")));
 
@@ -139,7 +139,7 @@ class RelativeLockTest {
     private Path project(Path projectDir) throws IOException {
         Files.createDirectories(projectDir);
         writeRepository(projectDir.resolve("vendor"));
-        Files.writeString(projectDir.resolve("mjm.toml"), manifest("local:vendor"));
+        Files.writeString(projectDir.resolve("jeno.toml"), manifest("local:vendor"));
         Path main = projectDir.resolve("src/main/java/demo/Main.java");
         Files.createDirectories(main.getParent());
         Files.writeString(main, """
@@ -192,7 +192,7 @@ class RelativeLockTest {
         ArtifactLocations.useProjectRoot(projectDir);
         new LockService(store, new StorePomSource(store), new StoreDescriptorSource(store))
                 .refresh(projectDir);
-        return Files.readString(projectDir.resolve("mjm.lock"));
+        return Files.readString(projectDir.resolve("jeno.lock"));
     }
 
     /** Offline is process-wide static state; the suite must not inherit it. */

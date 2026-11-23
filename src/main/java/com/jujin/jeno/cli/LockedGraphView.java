@@ -45,20 +45,20 @@ final class LockedGraphView {
     private LockedGraphView() {}
 
     /**
-     * Reads {@code mjm.lock}, resolves the manifest for edges, and returns the
+     * Reads {@code jeno.lock}, resolves the manifest for edges, and returns the
      * resolved graph only when every locked fact agrees with it.
      */
     static ResolvedGraph graph(Path projectDir, JenoProject project,
                                PomSource pomSource, DescriptorSource descriptorSource) {
-        Path lock = projectDir.resolve("mjm.lock");
+        Path lock = projectDir.resolve("jeno.lock");
         if (!Files.exists(lock)) {
-            throw new OutOfDateException("no mjm.lock in " + projectDir + " — run mjm lock first");
+            throw new OutOfDateException("no jeno.lock in " + projectDir + " — run jeno lock first");
         }
         List<LockedArtifact> locked;
         try {
             locked = LockFileReader.read(Files.readString(lock));
         } catch (IOException e) {
-            throw new OutOfDateException("cannot read mjm.lock in " + projectDir);
+            throw new OutOfDateException("cannot read jeno.lock in " + projectDir);
         } catch (RuntimeException e) {
             throw new OutOfDateException(e.getMessage());
         }
@@ -66,7 +66,7 @@ final class LockedGraphView {
         ResolvedGraph graph = Resolver.resolve(project, pomSource, descriptorSource);
         List<String> differences = compare(locked, graph);
         if (!differences.isEmpty()) {
-            StringBuilder message = new StringBuilder("mjm.lock is out of date — run mjm lock");
+            StringBuilder message = new StringBuilder("jeno.lock is out of date — run jeno lock");
             for (String line : differences) {
                 message.append('\n').append(line);
             }

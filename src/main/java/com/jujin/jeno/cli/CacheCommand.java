@@ -14,23 +14,23 @@ import java.util.List;
 import java.util.stream.Stream;
 
 /**
- * {@code mjm cache} — what the user-level directories hold, and how to reclaim
+ * {@code jeno cache} — what the user-level directories hold, and how to reclaim
  * them.
  *
  * <pre>
- *   mjm cache dir     the three roots (store, sources, locks)
- *   mjm cache size    how much each one takes
- *   mjm cache prune   only what is provably dead: lock files whose project is
+ *   jeno cache dir     the three roots (store, sources, locks)
+ *   jeno cache size    how much each one takes
+ *   jeno cache prune   only what is provably dead: lock files whose project is
  *                     gone, interrupted {@code part-*.tmp} downloads, and index
  *                     entries whose artifact is missing
- *   mjm cache purge [--dry-run] [--yes]
+ *   jeno cache purge [--dry-run] [--yes]
  *                     remove store and sources outright (alias: clean).
  *                     Destructive: it refuses without --yes; --dry-run prints
  *                     what would go and deletes nothing.
  * </pre>
  *
  * <p>Everything here is local: no command in this group touches the network,
- * the project tree, {@code mjm.lock}, or the lock files of live projects.
+ * the project tree, {@code jeno.lock}, or the lock files of live projects.
  */
 public final class CacheCommand implements Command {
 
@@ -151,7 +151,7 @@ public final class CacheCommand implements Command {
             return 0;
         }
         if (Ui.enabled()) {
-            System.out.println(Ui.heading("mjm local paths"));
+            System.out.println(Ui.heading("jeno local paths"));
         }
         System.out.println(Ui.dim("store   ") + Paths.store());
         System.out.println(Ui.dim("sources ") + Paths.sources());
@@ -177,7 +177,7 @@ public final class CacheCommand implements Command {
             return 0;
         }
         if (Ui.enabled()) {
-            System.out.println(Ui.heading("mjm local sizes"));
+            System.out.println(Ui.heading("jeno local sizes"));
         }
         System.out.println(Ui.dim("store   ") + human(store));
         System.out.println(Ui.dim("sources ") + human(sources));
@@ -288,7 +288,7 @@ public final class CacheCommand implements Command {
     }
 
     /**
-     * Deletes store and sources; locks, the project and mjm.lock stay.
+     * Deletes store and sources; locks, the project and jeno.lock stay.
      * Destructive, so it needs --yes; --dry-run only reports what would go.
      */
     private int purge(String subcommand, boolean dryRun, boolean yes, boolean json) {
@@ -314,7 +314,7 @@ public final class CacheCommand implements Command {
                 if (!dryRun) {
                     result.diagnostic("error", "CONFIRMATION_REQUIRED",
                             "cache purge needs --yes",
-                            List.of(List.of("mjm", "cache", "purge", "--yes")));
+                            List.of(List.of("jeno", "cache", "purge", "--yes")));
                     result.emit(2);
                     return 2;
                 }

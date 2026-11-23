@@ -46,11 +46,11 @@ class BuildRunTest {
         RunCommand run = new RunCommand(store, dir);
 
         assertEquals(1, build.execute(java.util.List.of()),
-                "a build without mjm.lock is refused with a next-action message");
+                "a build without jeno.lock is refused with a next-action message");
 
         writeLock(dir);
 
-        assertEquals(0, build.execute(java.util.List.of()), "mjm build compiles the sources");
+        assertEquals(0, build.execute(java.util.List.of()), "jeno build compiles the sources");
         assertTrue(Files.exists(dir.resolve("target/classes/demo/Main.class")),
                 "the compiled class lands in target/classes");
 
@@ -62,7 +62,7 @@ class BuildRunTest {
         writeProject(dir);
         writeLock(dir);
         ArtifactStore store = new ArtifactStore(storeDir);
-        System.setProperty("mjm.color", "always");
+        System.setProperty("jeno.color", "always");
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         PrintStream original = System.out;
         int exit;
@@ -71,7 +71,7 @@ class BuildRunTest {
             exit = new BuildCommand(store, dir).execute(java.util.List.of("--json"));
         } finally {
             System.setOut(original);
-            System.clearProperty("mjm.color");
+            System.clearProperty("jeno.color");
         }
 
         assertEquals(0, exit);
@@ -92,9 +92,9 @@ class BuildRunTest {
 
     @Test
     void aStaleLockIsRefused(@TempDir Path storeDir) throws Exception {
-        // mjm.toml declares lib-a; the lock only carries an unrelated id —
-        // a declared id missing from the lock means someone forgot mjm lock.
-        Files.writeString(dir.resolve("mjm.toml"), """
+        // jeno.toml declares lib-a; the lock only carries an unrelated id —
+        // a declared id missing from the lock means someone forgot jeno lock.
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -102,7 +102,7 @@ class BuildRunTest {
             [deps]
             "com.example:lib-a" = "1.0.0"
             """);
-        Files.writeString(dir.resolve("mjm.lock"), """
+        Files.writeString(dir.resolve("jeno.lock"), """
             [[artifacts]]
             id = "org.other:lib"
             version = "1.0.0"
@@ -118,7 +118,7 @@ class BuildRunTest {
 
     private static void writeProject(Path dir) throws IOException {
         Files.createDirectories(dir.resolve("src/main/java/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -136,7 +136,7 @@ class BuildRunTest {
 
     private static void writeLock(Path dir) throws IOException {
         // No dependencies in this project — an empty lock still must be present.
-        Files.writeString(dir.resolve("mjm.lock"),
+        Files.writeString(dir.resolve("jeno.lock"),
                 LockFile.serialize(new ResolvedGraph(java.util.List.of(), java.util.List.of(), java.util.Map.of()),
                         url -> "f".repeat(64)));
     }

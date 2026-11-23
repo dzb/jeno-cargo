@@ -15,11 +15,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * {@code mjm doctor} — a local, read-only diagnosis of the project files.
+ * {@code jeno doctor} — a local, read-only diagnosis of the project files.
  *
  * <p>It exists because the two file-format questions users hit first are not
  * build errors: "is this the old {@code mj.toml} or the current
- * {@code mjm.toml}?" and "why does build say lock missing?" The doctor names
+ * {@code jeno.toml}?" and "why does build say lock missing?" The doctor names
  * both files, validates the manifest and lock shapes, checks every module in a
  * workspace, and reports whether the XDG roots can be created. It never
  * resolves dependencies, writes files, or contacts a repository.
@@ -39,7 +39,7 @@ public final class DoctorCommand implements Command {
 
     @Override
     public String summary() {
-        return "check manifest/lock names, workspace modules, and local mjm paths";
+        return "check manifest/lock names, workspace modules, and local jeno paths";
     }
 
     @Override
@@ -128,48 +128,48 @@ public final class DoctorCommand implements Command {
         Path legacyLock = dir.resolve("mj.lock");
         if (Files.isRegularFile(legacyManifest)) {
             checks.add(CheckResult.failed("legacy-manifest",
-                    "legacy mj.toml found — mjm does not read it; rename it to mjm.toml "
-                    + "(or migrate it with mjm init --pom) and run mjm lock"));
+                    "legacy mj.toml found — jeno does not read it; rename it to jeno.toml "
+                    + "(or migrate it with jeno init --pom) and run jeno lock"));
         }
         if (Files.isRegularFile(legacyLock)) {
             checks.add(CheckResult.failed("legacy-lock",
-                    "legacy mj.lock found — mjm does not read it; regenerate it as mjm.lock "
-                    + "with mjm lock"));
+                    "legacy mj.lock found — jeno does not read it; regenerate it as jeno.lock "
+                    + "with jeno lock"));
         }
 
-        Path manifest = dir.resolve("mjm.toml");
+        Path manifest = dir.resolve("jeno.toml");
         if (!Files.isRegularFile(manifest)) {
             checks.add(CheckResult.failed("manifest-missing",
-                    "no mjm.toml" + (Files.isRegularFile(legacyManifest)
+                    "no jeno.toml" + (Files.isRegularFile(legacyManifest)
                     ? " (the old mj.toml is present, but it is not a fallback)"
-                    : " — run mjm init")));
+                    : " — run jeno init")));
         } else {
             try {
                 project = ProjectReader.parse(Files.readString(manifest));
-                checks.add(CheckResult.ok("manifest", "mjm.toml (" + project.name() + "@"
+                checks.add(CheckResult.ok("manifest", "jeno.toml (" + project.name() + "@"
                         + project.version() + ")"));
             } catch (IOException | RuntimeException e) {
                 String message = e.getMessage();
-                if (!message.contains("mjm.toml")) {
-                    message = "mjm.toml: " + message;
+                if (!message.contains("jeno.toml")) {
+                    message = "jeno.toml: " + message;
                 }
                 checks.add(CheckResult.failed("manifest-invalid", message));
             }
         }
 
-        Path lock = dir.resolve("mjm.lock");
+        Path lock = dir.resolve("jeno.lock");
         if (!Files.isRegularFile(lock)) {
-            checks.add(CheckResult.failed("lock-missing", "no mjm.lock — run mjm lock"));
+            checks.add(CheckResult.failed("lock-missing", "no jeno.lock — run jeno lock"));
         } else {
             try {
                 int count = LockFileReader.read(Files.readString(lock)).size();
-                checks.add(CheckResult.ok("lock", "mjm.lock (" + count + " artifact(s))"));
+                checks.add(CheckResult.ok("lock", "jeno.lock (" + count + " artifact(s))"));
             } catch (IOException | RuntimeException e) {
-                checks.add(CheckResult.failed("lock-invalid", "mjm.lock: " + e.getMessage()));
+                checks.add(CheckResult.failed("lock-invalid", "jeno.lock: " + e.getMessage()));
             }
         }
         checks.add(CheckResult.skipped("declarations",
-                "not compared with mjm.lock — run mjm lock --check"));
+                "not compared with jeno.lock — run jeno lock --check"));
         return new ModuleReport(label, dir, checks, project);
     }
 

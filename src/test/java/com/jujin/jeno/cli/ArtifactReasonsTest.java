@@ -13,8 +13,8 @@ class ArtifactReasonsTest {
     void theVocabularyIsSharedAndComplete() {
         assertEquals("native-release", reason("gh:acme/lib", "https://github.com/acme/lib/x.jar"));
         assertEquals("bare-url", reason("url", "https://host/x.jar"));
-        assertEquals("mjm-repository", reason("mjm:https://host/", "https://host/a/1/a-1.jar"));
-        assertEquals("mjm-repository", reason("mjm:local:../vendor", "file:vendor/a/1/a-1.jar"));
+        assertEquals("jeno-repository", reason("jeno:https://host/", "https://host/a/1/a-1.jar"));
+        assertEquals("jeno-repository", reason("jeno:local:../vendor", "file:vendor/a/1/a-1.jar"));
         assertEquals("local-repository", reason("local:../vendor", "file:vendor/a/1/a-1.jar"));
         assertEquals("named-repository",
                 reason("https://nexus.corp/repository/maven/", "https://nexus.corp/…"));

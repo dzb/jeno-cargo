@@ -23,11 +23,11 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * {@code mjm audit} — known vulnerabilities for the locked closure, from OSV.
+ * {@code jeno audit} — known vulnerabilities for the locked closure, from OSV.
  *
  * <p>Only artifacts addressed by Maven coordinates are checked: OSV's Maven
  * ecosystem is keyed by {@code group:artifact}, which a {@code gh:} release, an
- * {@code mjm:} repository, a local repository or a bare URL do not have. Those
+ * {@code jeno:} repository, a local repository or a bare URL do not have. Those
  * are listed as <em>not checked</em> with the reason — never as clean, because
  * "nothing found" and "nothing could be asked" are different answers.
  *
@@ -138,9 +138,9 @@ public final class AuditCommand implements Command {
 
         List<LockedArtifact> locked;
         try {
-            Path lock = projectDir.resolve("mjm.lock");
+            Path lock = projectDir.resolve("jeno.lock");
             if (!Files.exists(lock)) {
-                String message = "no mjm.lock in " + projectDir + " — run mjm lock first";
+                String message = "no jeno.lock in " + projectDir + " — run jeno lock first";
                 if (json) {
                     JsonResult.error("audit", 1, "LOCK_MISSING", message).emit(1);
                 } else {
@@ -150,7 +150,7 @@ public final class AuditCommand implements Command {
             }
             locked = LockFileReader.read(Files.readString(lock));
         } catch (IOException e) {
-            String message = "cannot read mjm.lock in " + projectDir;
+            String message = "cannot read jeno.lock in " + projectDir;
             if (json) {
                 JsonResult.error("audit", 1, "LOCK_UNREADABLE", message).emit(1);
             } else {
@@ -414,7 +414,7 @@ public final class AuditCommand implements Command {
     }
 
     private static String host() {
-        String host = System.getProperty("mjm.osv.host", OSV_DEFAULT);
+        String host = System.getProperty("jeno.osv.host", OSV_DEFAULT);
         return host.endsWith("/") ? host.substring(0, host.length() - 1) : host;
     }
 

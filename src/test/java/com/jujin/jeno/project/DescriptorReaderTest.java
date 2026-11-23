@@ -92,7 +92,7 @@ class DescriptorReaderTest {
                 sumary = "a library"
                 """, "mylib", "1.2.0"));
 
-        assertTrue(error.getMessage().contains("mylib-1.2.0.mjm.toml:4:1"),
+        assertTrue(error.getMessage().contains("mylib-1.2.0.jeno.toml:4:1"),
                 "the file, line and column are named, got: " + error.getMessage());
         assertTrue(error.getMessage().contains("[project].sumary is not a key"),
                 "got: " + error.getMessage());
@@ -149,7 +149,7 @@ class DescriptorReaderTest {
                 version = "1.2.0"
 
                 [scripts]
-                dev = "mjm run"
+                dev = "jeno run"
                 """, "mylib", "1.2.0"));
         assertTrue(unknown.getMessage().contains("unknown section [scripts]"),
                 "got: " + unknown.getMessage());

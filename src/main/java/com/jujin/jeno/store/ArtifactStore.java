@@ -37,7 +37,7 @@ public final class ArtifactStore {
 
     /** What kind of bytes a URL holds — decides the store file's extension. */
     public enum Kind {
-        JAR("jar"), POM("pom"), DESCRIPTOR("mjm.toml"), ARCHIVE("tar.gz");
+        JAR("jar"), POM("pom"), DESCRIPTOR("jeno.toml"), ARCHIVE("tar.gz");
 
         private final String extension;
 
@@ -100,7 +100,7 @@ public final class ArtifactStore {
 
     /**
      * Creates a non-mutating handle. The store directories are created on the
-     * first write ({@link #ensure}), not here: {@code mjm --help} and other
+     * first write ({@link #ensure}), not here: {@code jeno --help} and other
      * read-only startup paths must work even when the user's cache root is not
      * writable, and a command that only inspects a lock must not leave an empty
      * store behind.
@@ -159,7 +159,7 @@ public final class ArtifactStore {
         }
         if (offline) {
             throw new StoreException(url + " is not in the store and --offline forbids "
-                    + "fetching it — run mjm lock without --offline once to fill the store");
+                    + "fetching it — run jeno lock without --offline once to fill the store");
         }
         byte[] bytes = fetch(url);
         String sha = sha256(bytes);
@@ -226,12 +226,12 @@ public final class ArtifactStore {
             Path jar = findByDigest(artifact.sha256(), Kind.JAR);
             if (jar == null) {
                 throw new StoreException(artifact.id() + "@" + artifact.version()
-                        + " is not in the store — run mjm lock");
+                        + " is not in the store — run jeno lock");
             }
             if (!sha256(jar).equals(artifact.sha256())) {
                 throw new StoreException("the store copy of " + artifact.id() + "@"
                         + artifact.version() + " does not match the locked sha256 — the store "
-                        + "is corrupted; run mjm cache purge, then mjm lock");
+                        + "is corrupted; run jeno cache purge, then jeno lock");
             }
             jars.put(artifact.id(), jar);
         }
@@ -308,7 +308,7 @@ public final class ArtifactStore {
                     HttpResponse.BodyHandlers.ofByteArray());
             if (response.statusCode() != 200) {
                 throw new StoreException(url + " answered " + response.statusCode()
-                        + " (mjm pins exact released artifacts)");
+                        + " (jeno pins exact released artifacts)");
             }
             return response.body();
         } catch (IOException e) {

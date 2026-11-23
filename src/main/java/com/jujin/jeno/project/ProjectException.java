@@ -1,7 +1,7 @@
 package com.jujin.jeno.project;
 
 /**
- * mjm.toml (or a descriptor) violated the file-format spec: an unknown section,
+ * jeno.toml (or a descriptor) violated the file-format spec: an unknown section,
  * a wrong value type, a malformed coordinate, a rule that SPEC.md froze. The
  * message names the section and the rule; the file name is the caller's to
  * prepend.

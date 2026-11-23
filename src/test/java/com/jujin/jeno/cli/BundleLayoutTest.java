@@ -43,7 +43,7 @@ class DistLayoutTest {
     @Test
     void distShipsOneJarPlusTheDeclaredToolchain(@TempDir Path storeDir) throws Exception {
         Files.createDirectories(dir.resolve("src/main/java/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "1.0.0"
@@ -73,7 +73,7 @@ class DistLayoutTest {
         Path placedToolchain = place(storeDir, toolchainJar);
         Path placedProcessor = place(storeDir, processorJar);
 
-        Files.writeString(dir.resolve("mjm.lock"), """
+        Files.writeString(dir.resolve("jeno.lock"), """
             [[artifacts]]
             id = "com.acme:skeleton"
             version = "1.0.0"
@@ -171,7 +171,7 @@ class DistLayoutTest {
     @Test
     void theLauncherPutsOnlyTheLibraryOnTheClasspath(@TempDir Path storeDir) throws Exception {
         Files.createDirectories(dir.resolve("src/main/java/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "1.0.0"
@@ -179,7 +179,7 @@ class DistLayoutTest {
             """);
         Files.writeString(dir.resolve("src/main/java/demo/App.java"),
                 "package demo; public final class App {}");
-        Files.writeString(dir.resolve("mjm.lock"), "");
+        Files.writeString(dir.resolve("jeno.lock"), "");
 
         ArtifactStore store = new ArtifactStore(storeDir);
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
@@ -187,9 +187,9 @@ class DistLayoutTest {
 
         String launcher = Files.readString(dir.resolve("target/dist/demo-1.0.0/bin/demo"));
         assertTrue(launcher.startsWith("#!/bin/sh\n# demo 1.0.0 launcher\n"),
-                "the launcher names the program, not mjm: " + launcher);
-        assertFalse(launcher.contains("modern java manager"), "no mjm branding");
-        assertTrue(launcher.contains("-cp \"$MJM_HOME/lib/*\""),
+                "the launcher names the program, not jeno: " + launcher);
+        assertFalse(launcher.contains("modern java manager"), "no jeno branding");
+        assertTrue(launcher.contains("-cp \"$JENO_HOME/lib/*\""),
                 "one classpath wildcard, no toolchain: " + launcher);
         String execLine = launcher.lines()
                 .filter(line -> line.strip().startsWith("exec "))
@@ -201,7 +201,7 @@ class DistLayoutTest {
     @Test
     void deliverablesLiveInDistNotTarget(@TempDir Path storeDir) throws Exception {
         Files.createDirectories(dir.resolve("src/main/java/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "1.0.0"
@@ -209,7 +209,7 @@ class DistLayoutTest {
             """);
         Files.writeString(dir.resolve("src/main/java/demo/App.java"),
                 "package demo; public final class App {}");
-        Files.writeString(dir.resolve("mjm.lock"), "");
+        Files.writeString(dir.resolve("jeno.lock"), "");
 
         ArtifactStore store = new ArtifactStore(storeDir);
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
@@ -245,7 +245,7 @@ class DistLayoutTest {
     private static String labels(Path jar) throws Exception {
         try (var file = new java.util.jar.JarFile(jar.toFile())) {
             return String.valueOf(file.getManifest().getMainAttributes()
-                    .getValue("mjm-Dependencies"));
+                    .getValue("jeno-Dependencies"));
         }
     }
 
@@ -269,7 +269,7 @@ class DistLayoutTest {
     @Test
     void aToolchainIdMissingFromTheLockIsNamed(@TempDir Path storeDir) throws Exception {
         Files.createDirectories(dir.resolve("src/main/java/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "1.0.0"
@@ -280,7 +280,7 @@ class DistLayoutTest {
             """);
         Files.writeString(dir.resolve("src/main/java/demo/App.java"),
                 "package demo; public final class App {}");
-        Files.writeString(dir.resolve("mjm.lock"), "");
+        Files.writeString(dir.resolve("jeno.lock"), "");
 
         ArtifactStore store = new ArtifactStore(storeDir);
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
@@ -298,20 +298,20 @@ class DistLayoutTest {
         assertEquals(1, exit);
         String message = errors.toString(StandardCharsets.UTF_8);
         assertTrue(message.contains("[toolchain].jars names 'com.acme:missing-kit'"), message);
-        assertTrue(message.contains("run mjm lock"), message);
+        assertTrue(message.contains("run jeno lock"), message);
     }
 
     @Test
     void bundleNeedsAMainClass(@TempDir Path storeDir) throws Exception {
         Files.createDirectories(dir.resolve("src/main/java/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "1.0.0"
             """);
         Files.writeString(dir.resolve("src/main/java/demo/App.java"),
                 "package demo; public final class App {}");
-        Files.writeString(dir.resolve("mjm.lock"), "");
+        Files.writeString(dir.resolve("jeno.lock"), "");
 
         ArtifactStore store = new ArtifactStore(storeDir);
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
@@ -326,7 +326,7 @@ class DistLayoutTest {
     void setupScriptUsesTheDeclaredJavaVersionAndVerifiesChecksums(@TempDir Path storeDir)
             throws Exception {
         Files.createDirectories(dir.resolve("src/main/java/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "2.0.0"
@@ -337,7 +337,7 @@ class DistLayoutTest {
             """);
         Files.writeString(dir.resolve("src/main/java/demo/App.java"),
                 "package demo; public final class App {}");
-        Files.writeString(dir.resolve("mjm.lock"), "");
+        Files.writeString(dir.resolve("jeno.lock"), "");
 
         ArtifactStore store = new ArtifactStore(storeDir);
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
@@ -362,7 +362,7 @@ class DistLayoutTest {
     @Test
     void withoutJavaVersionSetupUsesTheRunningJdkMajor(@TempDir Path storeDir) throws Exception {
         Files.createDirectories(dir.resolve("src/main/java/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "1.0.0"
@@ -370,7 +370,7 @@ class DistLayoutTest {
             """);
         Files.writeString(dir.resolve("src/main/java/demo/App.java"),
                 "package demo; public final class App {}");
-        Files.writeString(dir.resolve("mjm.lock"), "");
+        Files.writeString(dir.resolve("jeno.lock"), "");
 
         ArtifactStore store = new ArtifactStore(storeDir);
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));

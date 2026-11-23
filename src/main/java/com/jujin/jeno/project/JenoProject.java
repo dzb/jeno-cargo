@@ -4,13 +4,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A parsed mjm.toml — SPEC.md §2's closed schema as data. Values that were
+ * A parsed jeno.toml — SPEC.md §2's closed schema as data. Values that were
  * validated: coordinate shapes, semver tags, https URLs, the depth budget.
  * Everything downstream (resolver, lockfile, build) consumes this record and
  * never re-reads the file.
  *
  * @param group           the {@code [project].group} — a reverse-DNS id
- *                        ({@code com.jujin8.mjm}); null when unset. Required by
+ *                        ({@code com.jujin8.jeno}); null when unset. Required by
  *                        a Maven-layout publish (the path is group-based) and
  *                        carried into the published descriptor so consumers
  *                        address the library as {@code group:artifact}
@@ -24,7 +24,7 @@ import java.util.Map;
  *                        javac's {@code -processorpath}; empty means javac's
  *                        default (the classpath)
  * @param devRequirements {@code [dev-deps]} — test-only requirements; they
- *                        resolve into mjm.lock but never reach the compile
+ *                        resolve into jeno.lock but never reach the compile
  *                        visibility, the runtime classpath or a published
  *                        descriptor (Cargo's dev-dependencies)
  * @param toolchain       {@code [toolchain].jars} — artifact ids that are

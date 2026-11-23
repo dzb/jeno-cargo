@@ -13,10 +13,10 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * {@code pom.xml} → {@code mjm.toml} migration (the {@code mjm init --pom}
+ * {@code pom.xml} → {@code jeno.toml} migration (the {@code jeno init --pom}
  * path). This is a translation, not an import: the output is a hand-editable
- * mjm.toml a human reviews before the first {@code mjm lock}, and anything that
- * has no mjm equivalent is reported instead of silently dropped.
+ * jeno.toml a human reviews before the first {@code jeno lock}, and anything that
+ * has no jeno equivalent is reported instead of silently dropped.
  *
  * <p>A local {@code <parent><relativePath>} chain is read from disk (the default
  * is {@code ../pom.xml}): its properties and dependencyManagement are merged
@@ -25,7 +25,7 @@ import java.util.Set;
  * unresolved, because migration must not become a network operation.
  *
  * <p>What is reported and skipped: remote parents, build plugins, profiles,
- * {@code <repositories>}, non-jar packaging, exclusions (mjm.toml has no
+ * {@code <repositories>}, non-jar packaging, exclusions (jeno.toml has no
  * exclusion syntax), pom-packaging modules with no dependencies of their own,
  * and any dependency whose version is still an unresolved property.
  */
@@ -374,8 +374,8 @@ public final class PomMigration {
         }
         if (!modules.isEmpty()) {
             addNote(notes, "this pom declares modules (" + String.join(", ", modules)
-                    + ") — migrate each module separately, or write mjm.ws.toml and run"
-                    + " this again inside each module; mjm does not recurse");
+                    + ") — migrate each module separately, or write jeno.ws.toml and run"
+                    + " this again inside each module; jeno does not recurse");
         }
         noteUnrepresentable(project, notes);
 
@@ -401,32 +401,32 @@ public final class PomMigration {
             }
             if (depVersion.contains("${")) {
                 addNote(notes, id + " version '" + depVersion + "' is an unresolved property — "
-                        + "mjm.toml does not interpolate; pin it by hand");
+                        + "jeno.toml does not interpolate; pin it by hand");
                 continue;
             }
             if (depVersion.endsWith("-SNAPSHOT")) {
-                addNote(notes, id + " is a snapshot — mjm rejects snapshots; pin a released"
+                addNote(notes, id + " is a snapshot — jeno rejects snapshots; pin a released"
                         + " version");
                 continue;
             }
             if ("system".equals(scope)) {
-                addNote(notes, id + " has scope system (a local jar path) — mjm has no"
+                addNote(notes, id + " has scope system (a local jar path) — jeno has no"
                         + " equivalent; publish it to a repository, or use a URL dependency");
                 continue;
             }
             if ("import".equals(scope)) {
-                addNote(notes, id + " has scope import (a BOM) — mjm resolves poms directly;"
+                addNote(notes, id + " has scope import (a BOM) — jeno resolves poms directly;"
                         + " declare the libraries it pins instead");
                 continue;
             }
             if (!dependency.all("exclusions").isEmpty()) {
-                addNote(notes, id + " declares exclusions — mjm.toml has no exclusion syntax;"
+                addNote(notes, id + " declares exclusions — jeno.toml has no exclusion syntax;"
                         + " remove the unwanted transitive dependency by not depending on"
                         + " this artifact, or accept it and check the depth budget");
             }
             if ((type != null && !type.equals("jar")) || classifier != null) {
                 addNote(notes, id + " uses type=" + type + " classifier=" + classifier
-                        + " — mjm resolves plain jars only; that artifact is skipped");
+                        + " — jeno resolves plain jars only; that artifact is skipped");
                 continue;
             }
             if ("provided".equals(scope)) {
@@ -468,7 +468,7 @@ public final class PomMigration {
     }
 
     // ------------------------------------------------------------------
-    // notes for what mjm cannot carry
+    // notes for what jeno cannot carry
     // ------------------------------------------------------------------
 
     private static void noteUnrepresentable(PomXml.Node project, List<String> notes) {
@@ -481,7 +481,7 @@ public final class PomMigration {
                         + plugin.text("artifactId"));
             }
             addNote(notes, "build plugins are not migrated (" + String.join(", ", names)
-                    + ") — run them before mjm build, or replace them with mjm commands");
+                    + ") — run them before jeno build, or replace them with jeno commands");
         }
         PomXml.Node repositories = project.first("repositories");
         if (repositories != null && !repositories.all("repository").isEmpty()) {
@@ -491,12 +491,12 @@ public final class PomMigration {
         }
         PomXml.Node pluginRepositories = project.first("pluginRepositories");
         if (pluginRepositories != null && !pluginRepositories.all("pluginRepository").isEmpty()) {
-            addNote(notes, "pluginRepositories are not copied — mjm has no plugin resolution;"
+            addNote(notes, "pluginRepositories are not copied — jeno has no plugin resolution;"
                     + " use [repos] only for libraries");
         }
         PomXml.Node profiles = project.first("profiles");
         if (profiles != null && !profiles.all("profile").isEmpty()) {
-            addNote(notes, "profiles are not migrated — mjm has no profile activation; choose"
+            addNote(notes, "profiles are not migrated — jeno has no profile activation; choose"
                     + " one set of values or use [overrides]/environment-specific manifests");
         }
     }

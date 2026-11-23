@@ -1,7 +1,7 @@
 package com.jujin.jeno.resolve;
 
 /**
- * The dependency graph violates one of mjm's frozen rules: a cross-major
+ * The dependency graph violates one of jeno's frozen rules: a cross-major
  * conflict, a depth-budget breach, a circular dependency, a mixed-species id.
  * The message carries the full introduction path and the exits that stay
  * inside the rules — surfacing it is the "dependency review moment"

@@ -20,8 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * {@code [dev-deps]} across the real commands: a dev-only jar is absent from
  * the build's compile classpath (strict visibility), absent from
- * {@code mjm package}'s output, absent from the published descriptor — and
- * present on {@code mjm test}'s classpath. The lockfile is the one graph both
+ * {@code jeno package}'s output, absent from the published descriptor — and
+ * present on {@code jeno test}'s classpath. The lockfile is the one graph both
  * sides read.
  */
 class DevDepsVisibilityTest {
@@ -44,7 +44,7 @@ class DevDepsVisibilityTest {
         // The source imports something only a dev dependency could provide:
         // if dev jars leaked into javac's -cp this would compile.
         Files.createDirectories(dir.resolve("src/main/java/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -66,7 +66,7 @@ class DevDepsVisibilityTest {
 
         // a lock that pins the dev artifact to a real (but empty) jar
         Path jar = jarWith(storeDir.resolve("empty"), "test-kit-1.0.0.jar");
-        Files.writeString(dir.resolve("mjm.lock"), lockRow("com.example:test-kit", jar, Scope.DEV));
+        Files.writeString(dir.resolve("jeno.lock"), lockRow("com.example:test-kit", jar, Scope.DEV));
 
         int exit = new BuildCommand(new ArtifactStore(storeDir), dir).execute(List.of());
         assertEquals(1, exit, "the import must fail — the dev jar is not on the compile path");
@@ -77,7 +77,7 @@ class DevDepsVisibilityTest {
     @Test
     void aDevDependencyIsAbsentFromThePublishedDescriptor(@TempDir Path storeDir) throws Exception {
         Files.createDirectories(dir.resolve("src/main/java/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -96,7 +96,7 @@ class DevDepsVisibilityTest {
             """);
         Path mainJar = jarWith(storeDir.resolve("jars"), "main-lib-1.0.0.jar");
         Path placed = storePlace(storeDir, mainJar);
-        Files.writeString(dir.resolve("mjm.lock"), """
+        Files.writeString(dir.resolve("jeno.lock"), """
             [[artifacts]]
             id = "com.example:main-lib"
             version = "1.0.0"
@@ -125,7 +125,7 @@ class DevDepsVisibilityTest {
                 .execute(List.of()));
         new PublishCommand(dir).execute(List.of());
 
-        Path descriptor = dir.resolve("target/dist/demo-0.1.0.mjm.toml");
+        Path descriptor = dir.resolve("target/dist/demo-0.1.0.jeno.toml");
         assertTrue(Files.exists(descriptor), "the descriptor was written");
         String text = Files.readString(descriptor);
         assertTrue(text.contains("com.example:main-lib"), "the main dependency is published");

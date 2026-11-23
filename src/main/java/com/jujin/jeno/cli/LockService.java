@@ -19,8 +19,8 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermissions;
 
 /**
- * The lock flow shared by {@code mjm lock} and {@code mjm add}: resolve the
- * graph, download every byte into the store, pin the digests into mjm.lock
+ * The lock flow shared by {@code jeno lock} and {@code jeno add}: resolve the
+ * graph, download every byte into the store, pin the digests into jeno.lock
  * (SPEC.md §4). One owner of the "lock" fact — the command is the shell
  * around it.
  */
@@ -43,15 +43,15 @@ public final class LockService {
      * came from, and the lock text. Producing it touches only the store, never
      * the project, so a caller can decide afterwards whether to commit.
      */
-    public record Prepared(ResolvedGraph graph, String mjmToml, String lockText) {}
+    public record Prepared(ResolvedGraph graph, String jenoToml, String lockText) {}
 
     /**
-     * Parses {@code mjmTomlText}, resolves it and puts every byte in the store,
+     * Parses {@code jenoTomlText}, resolves it and puts every byte in the store,
      * but writes nothing into the project. {@code add}/{@code remove} call this
      * with the edited manifest so a failure leaves the disk untouched.
      */
-    public Prepared prepare(String mjmTomlText) {
-        JenoProject project = ProjectReader.parse(mjmTomlText);
+    public Prepared prepare(String jenoTomlText) {
+        JenoProject project = ProjectReader.parse(jenoTomlText);
         ResolvedGraph graph = Resolver.resolve(project, pomSource, descriptorSource);
         for (ResolvedGraph.ResolvedArtifact artifact : graph.artifacts()) {
             store.ensure(artifact.jarUrl(), ArtifactStore.Kind.JAR);
@@ -59,7 +59,7 @@ public final class LockService {
                 store.ensure(artifact.metadataUrl(), metadataKind(artifact));
             }
         }
-        return new Prepared(graph, mjmTomlText, LockFile.serialize(graph, store::digestOf));
+        return new Prepared(graph, jenoTomlText, LockFile.serialize(graph, store::digestOf));
     }
 
     /**
@@ -68,21 +68,21 @@ public final class LockService {
      * lock was never produced.
      */
     public void commit(Path projectDir, Prepared prepared) {
-        Path manifest = projectDir.resolve("mjm.toml");
+        Path manifest = projectDir.resolve("jeno.toml");
         String previous = null;
         try {
             previous = Files.readString(manifest);
         } catch (IOException ignored) {
-            // no manifest yet (mjm init): nothing to restore
+            // no manifest yet (jeno init): nothing to restore
         }
         try {
-            writeAtomically(manifest, prepared.mjmToml());
+            writeAtomically(manifest, prepared.jenoToml());
         } catch (RuntimeException e) {
             restore(manifest, previous);
             throw e;
         }
         try {
-            writeAtomically(projectDir.resolve("mjm.lock"), prepared.lockText());
+            writeAtomically(projectDir.resolve("jeno.lock"), prepared.lockText());
         } catch (RuntimeException e) {
             restore(manifest, previous);
             throw e;
@@ -93,10 +93,10 @@ public final class LockService {
     public ResolvedGraph refresh(Path projectDir) {
         String text;
         try {
-            text = Files.readString(projectDir.resolve("mjm.toml"));
+            text = Files.readString(projectDir.resolve("jeno.toml"));
         } catch (IOException e) {
-            throw new IllegalStateException("no mjm.toml in " + projectDir
-                    + " — run mjm init to create one", e);
+            throw new IllegalStateException("no jeno.toml in " + projectDir
+                    + " — run jeno init to create one", e);
         }
         Prepared prepared = prepare(text);
         commit(projectDir, prepared);

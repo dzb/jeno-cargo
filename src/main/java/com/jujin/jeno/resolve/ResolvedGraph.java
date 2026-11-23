@@ -11,9 +11,9 @@ import java.util.Map;
  * build and the tree commands need. {@link #artifacts()} is the full closure
  * (the runtime classpath's content), sorted by id; {@link #direct()} is the
  * declared subset — the compile classpath's content (SPEC.md §4.4's strict
- * visibility is "free" here: mjm builds both lists from one graph);
+ * visibility is "free" here: jeno builds both lists from one graph);
  * {@link #edges()} is the walked graph — parent id to child ids — which is
- * what {@code mjm tree} / {@code mjm why} render.
+ * what {@code jeno tree} / {@code jeno why} render.
  *
  * @param source      where the artifact comes from: {@code central}, an
  *                    mj-native origin ({@code gh:owner/repo}), or a named

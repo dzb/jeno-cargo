@@ -14,7 +14,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The CLI is called {@code mjm}. Its sources used to say {@code mj} in comments,
+ * The CLI is called {@code jeno}. Its sources used to say {@code mj} in comments,
  * javadoc and user-facing messages — a second name for the same tool, and in
  * one place the wrong recovery path ({@code ~/.mj/store}). This scan keeps the
  * sweep from growing back.
@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * two internal temp-name prefixes that are never shown to a user.
  *
  * <p>The second check is narrower and stricter: the system properties the tool
- * reads are {@code -Dmjm.*}, and a document naming the short form (dash, D, the
+ * reads are {@code -Djeno.*}, and a document naming the short form (dash, D, the
  * two letters, a dot) sends the user to a flag nothing looks at.
  */
 class NamingTest {
@@ -34,12 +34,12 @@ class NamingTest {
             "mj-manifest-", // temp file prefix for the jar manifest
             "----mj",       // multipart boundary prefix in the upload request
             "mj.toml",      // the legacy file name; doctor/migration messages must name it
-            "mj.lock");     // the legacy lock name; never read by mjm
+            "mj.lock");     // the legacy lock name; never read by jeno
 
     private static final Pattern BARE_MJ = Pattern.compile("\\bmj\\b");
 
     /**
-     * A system property is spelled {@code -Dmjm.<name>}; the short form is
+     * A system property is spelled {@code -Djeno.<name>}; the short form is
      * exactly the wrong key, and a user who copies it from a document gets a
      * silently ignored flag. Built from two pieces so this guard never trips
      * its own grep.
@@ -57,7 +57,7 @@ class NamingTest {
             }
         }
         assertTrue(violations.isEmpty(),
-                "bare `mj` left in the sources (write `mjm`, or add the term to ALLOWED):\n  "
+                "bare `mj` left in the sources (write `jeno`, or add the term to ALLOWED):\n  "
                         + String.join("\n  ", violations));
     }
 
@@ -92,7 +92,7 @@ class NamingTest {
             }
         }
         assertTrue(violations.isEmpty(),
-                "a system property is -Dmjm.<name>; the short two-letter form is ignored "
+                "a system property is -Djeno.<name>; the short two-letter form is ignored "
                         + "at runtime:\n  " + String.join("\n  ", violations));
     }
 

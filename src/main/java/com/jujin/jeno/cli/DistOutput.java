@@ -18,7 +18,7 @@ import java.util.stream.Stream;
  * <p>Two callers, two intents. A writer clears only the paths its own run and
  * version own — a single artifact file ({@code package}, and the descriptor and
  * checksum of {@code publish}), or this version's bundle directory plus its
- * tar.gz ({@code bundle}). {@code mjm clean --dist} calls it on {@code target/dist/}
+ * tar.gz ({@code bundle}). {@code jeno clean --dist} calls it on {@code target/dist/}
  * itself, because the user asked for the whole directory to go. Writers must
  * keep their own paths precise; removing the directory is a decision only a
  * human makes.

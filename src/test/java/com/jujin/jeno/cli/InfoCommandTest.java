@@ -22,8 +22,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code mjm info}: the facts about one locked dependency, plus source
- * addressing folded in from the retired {@code mjm source} command. Reading
+ * {@code jeno info}: the facts about one locked dependency, plus source
+ * addressing folded in from the retired {@code jeno source} command. Reading
  * facts is pure output; only {@code --source} writes a tree.
  */
 class InfoCommandTest {
@@ -62,7 +62,7 @@ class InfoCommandTest {
                 descriptor.getBytes(StandardCharsets.UTF_8));
         String metaSha = ArtifactStore.sha256(meta);
 
-        Files.writeString(dir.resolve("mjm.lock"), """
+        Files.writeString(dir.resolve("jeno.lock"), """
             [[artifacts]]
             id = "acme:widget"
             version = "1.2.0"
@@ -104,7 +104,7 @@ class InfoCommandTest {
         Path meta = placeInStore(storeDir, ArtifactStore.Kind.DESCRIPTOR,
                 descriptor.getBytes(StandardCharsets.UTF_8));
         String metaSha = ArtifactStore.sha256(meta);
-        Files.writeString(dir.resolve("mjm.lock"), """
+        Files.writeString(dir.resolve("jeno.lock"), """
             [[artifacts]]
             id = "acme:widget"
             version = "1.2.0"
@@ -115,7 +115,7 @@ class InfoCommandTest {
             depth = 1
             """.formatted("a".repeat(64), metaSha));
 
-        System.setProperty("mjm.color", "always");
+        System.setProperty("jeno.color", "always");
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ByteArrayOutputStream err = new ByteArrayOutputStream();
         PrintStream originalOut = System.out;
@@ -129,7 +129,7 @@ class InfoCommandTest {
         } finally {
             System.setOut(originalOut);
             System.setErr(originalErr);
-            System.clearProperty("mjm.color");
+            System.clearProperty("jeno.color");
         }
 
         assertEquals(0, exit);
@@ -137,7 +137,7 @@ class InfoCommandTest {
         String raw = out.toString(StandardCharsets.UTF_8);
         assertFalse(raw.contains("\u001B["), "JSON stdout must not contain ANSI");
         var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(raw);
-        assertEquals(1, json.getInt("schemaVersion"));
+        assertEquals(2, json.getInt("schemaVersion"));
         assertEquals("info", json.getString("command"));
         assertEquals("ok", json.getString("status"));
 
@@ -199,7 +199,7 @@ class InfoCommandTest {
 
     @Test
     void plainInfoNeverWritesASourceTree(@TempDir Path storeDir) throws Exception {
-        Files.writeString(dir.resolve("mjm.lock"), """
+        Files.writeString(dir.resolve("jeno.lock"), """
             [[artifacts]]
             id = "acme:widget"
             version = "1.2.0"
@@ -211,7 +211,7 @@ class InfoCommandTest {
 
         String output = run(storeDir, List.of("acme:widget"));
         assertTrue(output.contains("acme:widget@1.2.0"), output);
-        System.clearProperty("mjm.sources.root");
+        System.clearProperty("jeno.sources.root");
     }
 
     @Test
@@ -224,7 +224,7 @@ class InfoCommandTest {
         server.start();
 
         try {
-            Files.writeString(dir.resolve("mjm.lock"), """
+            Files.writeString(dir.resolve("jeno.lock"), """
                 [[artifacts]]
                 id = "acme:widget"
                 version = "1.2.0"
@@ -234,7 +234,7 @@ class InfoCommandTest {
                 depth = 1
                 """.formatted(base, "a".repeat(64)));
 
-            System.setProperty("mjm.github.host", base);
+            System.setProperty("jeno.github.host", base);
             String output = run(storeDir, List.of("acme:widget", "--source"),
                     root.resolve("sources"));
             try {
@@ -242,7 +242,7 @@ class InfoCommandTest {
                 assertTrue(Files.exists(root.resolve("sources/acme_widget@1.2.0/src/Widget.java")),
                         "the tree landed under the sources root");
             } finally {
-                System.clearProperty("mjm.github.host");
+                System.clearProperty("jeno.github.host");
             }
         } finally {
             server.stop(0);
@@ -260,7 +260,7 @@ class InfoCommandTest {
         server.start();
 
         try {
-            Files.writeString(dir.resolve("mjm.lock"), """
+            Files.writeString(dir.resolve("jeno.lock"), """
                 [[artifacts]]
                 id = "com.example:lib"
                 version = "1.0.0"
@@ -279,11 +279,11 @@ class InfoCommandTest {
 
     @Test
     void anJenoRepositoryHasNoSourceTree(@TempDir Path storeDir) throws Exception {
-        Files.writeString(dir.resolve("mjm.lock"), """
+        Files.writeString(dir.resolve("jeno.lock"), """
             [[artifacts]]
             id = "widget"
             version = "1.0.0"
-            source = "mjm:https://repo.example/"
+            source = "jeno:https://repo.example/"
             url = "https://repo.example/widget/1.0.0/widget-1.0.0.jar"
             sha256 = "%s"
             meta-sha256 = "%s"
@@ -308,7 +308,7 @@ class InfoCommandTest {
 
     @Test
     void aUrlLeafIsExplicitAboutHavingNoSource(@TempDir Path storeDir) throws Exception {
-        Files.writeString(dir.resolve("mjm.lock"), """
+        Files.writeString(dir.resolve("jeno.lock"), """
             [[artifacts]]
             id = "bare"
             version = "1.0.0"
@@ -324,7 +324,7 @@ class InfoCommandTest {
 
     @Test
     void anUnknownIdSaysWhereToLook(@TempDir Path storeDir) {
-        // no mjm.lock: the command refuses with the next action
+        // no jeno.lock: the command refuses with the next action
         int exit = new InfoCommand(new ArtifactStore(storeDir), dir).execute(List.of("x:y"));
         assertEquals(1, exit);
     }
@@ -333,7 +333,7 @@ class InfoCommandTest {
     void identityFactsTravelFromMjTomlIntoThePublishedDescriptor(@TempDir Path storeDir)
             throws Exception {
         Files.createDirectories(dir.resolve("src/main/java/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "widget"
             version = "1.2.0"
@@ -346,7 +346,7 @@ class InfoCommandTest {
             """);
         Files.writeString(dir.resolve("src/main/java/demo/App.java"),
                 "package demo; public final class App {}");
-        Files.writeString(dir.resolve("mjm.lock"), "");
+        Files.writeString(dir.resolve("jeno.lock"), "");
         assertEquals(0, new BuildCommand(new ArtifactStore(storeDir), dir).execute(List.of()));
 
         // publish uploads what package built
@@ -354,7 +354,7 @@ class InfoCommandTest {
                 .execute(List.of()));
         new PublishCommand(dir).execute(List.of());
 
-        String descriptor = Files.readString(dir.resolve("target/dist/widget-1.2.0.mjm.toml"));
+        String descriptor = Files.readString(dir.resolve("target/dist/widget-1.2.0.jeno.toml"));
         assertTrue(descriptor.contains("summary = \"A tiny reactive widget toolkit\""), descriptor);
         assertTrue(descriptor.contains("homepage = \"https://github.com/acme/widget\""), descriptor);
         assertTrue(descriptor.contains("license = \"Apache-2.0\""), descriptor);
@@ -394,7 +394,7 @@ class InfoCommandTest {
     }
 
     private String run(Path storeDir, List<String> args, Path root) {
-        System.setProperty("mjm.sources.root", root.toString());
+        System.setProperty("jeno.sources.root", root.toString());
         java.io.PrintStream original = System.out;
         var buffer = new java.io.ByteArrayOutputStream();
         try {
@@ -402,7 +402,7 @@ class InfoCommandTest {
             new InfoCommand(new ArtifactStore(storeDir), dir).execute(args);
         } finally {
             System.setOut(original);
-            System.clearProperty("mjm.sources.root");
+            System.clearProperty("jeno.sources.root");
         }
         return buffer.toString(StandardCharsets.UTF_8);
     }
@@ -419,7 +419,7 @@ class InfoCommandTest {
         return switch (kind) {
             case JAR -> "jar";
             case POM -> "pom";
-            case DESCRIPTOR -> "mjm.toml";
+            case DESCRIPTOR -> "jeno.toml";
             case ARCHIVE -> "tar.gz";
         };
     }
@@ -460,7 +460,7 @@ class InfoCommandTest {
 
     @Test
     void theHeaderMarksDevAndProcessorScopes(@TempDir Path storeDir) throws Exception {
-        Files.writeString(dir.resolve("mjm.lock"), """
+        Files.writeString(dir.resolve("jeno.lock"), """
             [[artifacts]]
             id = "acme:dev-lib"
             version = "1.0.0"

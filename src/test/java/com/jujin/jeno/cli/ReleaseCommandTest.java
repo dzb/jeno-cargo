@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** {@code mjm release}: bundle output in, verified installer out. */
+/** {@code jeno release}: bundle output in, verified installer out. */
 class ReleaseCommandTest {
 
     @TempDir
@@ -40,7 +40,7 @@ class ReleaseCommandTest {
         com.jujin.jeno.resolve.ArtifactLocations.useProjectRoot(dir);
         store = new ArtifactStore(dir.resolve(".cache/store"));
         Files.createDirectories(dir.resolve("src/main/java/app"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "app"
             version = "1.0.0"
@@ -55,7 +55,7 @@ class ReleaseCommandTest {
                 public static void main(String[] args) { System.out.println("app-ok"); }
             }
             """);
-        Files.writeString(dir.resolve("mjm.lock"), "");
+        Files.writeString(dir.resolve("jeno.lock"), "");
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
         assertEquals(0, new BundleCommand(store, dir).execute(List.of()));
     }
@@ -67,12 +67,12 @@ class ReleaseCommandTest {
         }
         ProjectLock.useUserRoot();
         com.jujin.jeno.store.Paths.resetForTesting();
-        System.clearProperty("mjm.github.token");
-        System.clearProperty("mjm.minisign.key");
-        System.clearProperty("mjm.minisign.pubkey");
-        System.clearProperty("mjm.minisign.bin");
-        System.clearProperty("mjm.github.api");
-        System.clearProperty("mjm.github.uploads");
+        System.clearProperty("jeno.github.token");
+        System.clearProperty("jeno.minisign.key");
+        System.clearProperty("jeno.minisign.pubkey");
+        System.clearProperty("jeno.minisign.bin");
+        System.clearProperty("jeno.github.api");
+        System.clearProperty("jeno.github.uploads");
     }
 
     @Test
@@ -99,7 +99,7 @@ class ReleaseCommandTest {
     void aLocalTargetWritesTheVersionedAndStableLayouts() throws Exception {
         Path repo = dir.resolve("repo");
 
-        Result result = run("mjm:local:" + repo);
+        Result result = run("jeno:local:" + repo);
 
         assertEquals(0, result.exit(), result.out() + result.err());
         Path versioned = repo.resolve("app/1.0.0");
@@ -114,7 +114,7 @@ class ReleaseCommandTest {
     void dryRunWritesNothingToTheTarget() throws Exception {
         Path repo = dir.resolve("never");
 
-        Result result = run("--dry-run", "mjm:local:" + repo);
+        Result result = run("--dry-run", "jeno:local:" + repo);
 
         assertEquals(0, result.exit(), result.out() + result.err());
         assertFalse(Files.exists(repo), "dry-run never touches the target");
@@ -128,7 +128,7 @@ class ReleaseCommandTest {
         Path repo = dir.resolve("never-json");
 
         Result result = runRaw("--json", "--dry-run", "--allow-unsigned",
-                "mjm:local:" + repo);
+                "jeno:local:" + repo);
 
         assertEquals(0, result.exit(), result.err());
         assertFalse(Files.exists(repo));
@@ -158,7 +158,7 @@ class ReleaseCommandTest {
     @Test
     void jsonPrivateLanDryRunCarriesThePlainHttpWarning() throws Exception {
         Result result = runRaw("--json", "--dry-run", "--allow-unsigned",
-                "mjm:http://192.168.1.39:18080/upload/");
+                "jeno:http://192.168.1.39:18080/upload/");
 
         assertEquals(0, result.exit(), result.err());
         assertFalse(Files.exists(dir.resolve("target/dist/release")));
@@ -218,7 +218,7 @@ class ReleaseCommandTest {
             }
         });
         server.start();
-        String base = "mjm:http://localhost:" + server.getAddress().getPort() + "/repo/";
+        String base = "jeno:http://localhost:" + server.getAddress().getPort() + "/repo/";
         fakeSigner();
 
         Result result = runRaw(base);
@@ -262,9 +262,9 @@ class ReleaseCommandTest {
         });
         server.start();
         String base = "http://localhost:" + server.getAddress().getPort();
-        System.setProperty("mjm.github.api", base);
-        System.setProperty("mjm.github.uploads", base);
-        System.setProperty("mjm.github.token", "test-token");
+        System.setProperty("jeno.github.api", base);
+        System.setProperty("jeno.github.uploads", base);
+        System.setProperty("jeno.github.token", "test-token");
         fakeSigner();
 
         Result result = runRaw("gh:owner/repo");
@@ -284,7 +284,7 @@ class ReleaseCommandTest {
         Result result = run();
 
         assertEquals(1, result.exit());
-        assertTrue(result.err().contains("run mjm bundle first"), result.err());
+        assertTrue(result.err().contains("run jeno bundle first"), result.err());
     }
 
 
@@ -308,9 +308,9 @@ class ReleaseCommandTest {
             exit 0
             """.formatted(dir.resolve("fake-minisign.log")));
         bin.toFile().setExecutable(true);
-        System.setProperty("mjm.minisign.bin", bin.toString());
-        System.setProperty("mjm.minisign.key", key.toString());
-        System.setProperty("mjm.minisign.pubkey", pub.toString());
+        System.setProperty("jeno.minisign.bin", bin.toString());
+        System.setProperty("jeno.minisign.key", key.toString());
+        System.setProperty("jeno.minisign.pubkey", pub.toString());
     }
 
     @Test
@@ -318,7 +318,7 @@ class ReleaseCommandTest {
         fakeSigner();
         Path repo = dir.resolve("signed");
 
-        Result result = runRaw("mjm:local:" + repo);
+        Result result = runRaw("jeno:local:" + repo);
 
         assertEquals(0, result.exit(), result.out() + result.err());
         Path release = repo.resolve("app/1.0.0/release");
@@ -343,7 +343,7 @@ class ReleaseCommandTest {
         Result refused = runRaw();
 
         assertEquals(1, refused.exit());
-        assertTrue(refused.err().contains("MJM_MINISIGN_KEY is not set"), refused.err());
+        assertTrue(refused.err().contains("JENO_MINISIGN_KEY is not set"), refused.err());
 
         Result allowed = run("--allow-unsigned");
         assertEquals(0, allowed.exit(), allowed.out() + allowed.err());
@@ -358,10 +358,10 @@ class ReleaseCommandTest {
         Path bin = dir.resolve("failing-minisign.sh");
         Files.writeString(bin, "#!/bin/sh\nexit 1\n");
         bin.toFile().setExecutable(true);
-        System.setProperty("mjm.minisign.bin", bin.toString());
+        System.setProperty("jeno.minisign.bin", bin.toString());
         Path repo = dir.resolve("never");
 
-        Result result = runRaw("mjm:local:" + repo);
+        Result result = runRaw("jeno:local:" + repo);
 
         assertEquals(1, result.exit());
         assertTrue(result.err().contains("signing"), result.err());
@@ -448,7 +448,7 @@ class ReleaseCommandTest {
         server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         server.createContext("/", exchange -> respond(exchange, 500, "no"));
         server.start();
-        String base = "mjm:http://localhost:" + server.getAddress().getPort() + "/repo/";
+        String base = "jeno:http://localhost:" + server.getAddress().getPort() + "/repo/";
 
         Result result = run(base);
 
@@ -461,7 +461,7 @@ class ReleaseCommandTest {
         Result result = run("gh:owner/repo");
 
         assertEquals(1, result.exit());
-        assertTrue(result.err().contains("MJM_GITHUB_TOKEN"), result.err());
+        assertTrue(result.err().contains("JENO_GITHUB_TOKEN"), result.err());
     }
 
     private static boolean commandMissing(String command) {

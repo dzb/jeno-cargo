@@ -49,11 +49,11 @@ final class VendoredToolchain {
             }
         });
         central.start();
-        System.setProperty("mjm.central.base",
+        System.setProperty("jeno.central.base",
                 "http://localhost:" + central.getAddress().getPort() + "/");
         return () -> {
             central.stop(0);
-            System.clearProperty("mjm.central.base");
+            System.clearProperty("jeno.central.base");
         };
     }
 }

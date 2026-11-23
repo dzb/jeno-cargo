@@ -205,7 +205,7 @@ final class WorkspaceRun {
     }
 
     /**
-     * For {@code run}, only the prefix before the target is mjm's: a
+     * For {@code run}, only the prefix before the target is jeno's: a
      * {@code --module} after the target belongs to the program.
      */
     private static boolean namesModuleInPrefix(List<String> args, boolean stopAtFirstPositional) {

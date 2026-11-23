@@ -6,14 +6,14 @@ import java.nio.file.Path;
  * A {@code [repos]} entry as a value: a <em>location</em> plus a <em>layout</em>.
  *
  * <p>These are two independent facts, and the old prefix chain conflated them:
- * {@code local:} said "on disk" and {@code mjm:} said "the two-level layout",
- * so "the mjm layout on disk" had no spelling. Now every combination is one
+ * {@code local:} said "on disk" and {@code jeno:} said "the two-level layout",
+ * so "the jeno layout on disk" had no spelling. Now every combination is one
  * value:
  *
  * <pre>
  *   https://host/…        NETWORK + MAVEN    local:&lt;dir&gt;        LOCAL + MAVEN
- *   mjm:https://host/…    NETWORK + MJM      mjm:local:&lt;dir&gt;    LOCAL + MJM
- *   mjm:http://<private-ip>/…  NETWORK + MJM  (LAN only; literal address)
+ *   jeno:https://host/…    NETWORK + JENO      jeno:local:&lt;dir&gt;    LOCAL + JENO
+ *   jeno:http://<private-ip>/…  NETWORK + JENO  (LAN only; literal address)
  *
  * Plain {@code http://} is a NETWORK location too, but only for literal
  * private-network addresses ({@link #isLocalNetworkHttp}).
@@ -35,8 +35,8 @@ public record Repository(String name, Layout layout, Transport transport,
     public enum Layout {
         /** Maven's group path: {@code group/path/artifact/version/artifact-version.ext}. */
         MAVEN,
-        /** mjm's native two levels: {@code name/version/name-version.ext}. */
-        MJM
+        /** jeno's native two levels: {@code name/version/name-version.ext}. */
+        JENO
     }
 
     /** Where the location lives. */
@@ -55,9 +55,9 @@ public record Repository(String name, Layout layout, Transport transport,
         if (declaration == null || declaration.isBlank()) {
             throw new IllegalArgumentException(twoShapes());
         }
-        boolean mjm = declaration.startsWith("mjm:");
-        String rest = mjm ? declaration.substring("mjm:".length()) : declaration;
-        Layout layout = mjm ? Layout.MJM : Layout.MAVEN;
+        boolean jeno = declaration.startsWith("jeno:");
+        String rest = jeno ? declaration.substring("jeno:".length()) : declaration;
+        Layout layout = jeno ? Layout.JENO : Layout.MAVEN;
 
         if (rest.startsWith("local:")) {
             String path = rest.substring("local:".length()).strip();
@@ -86,7 +86,7 @@ public record Repository(String name, Layout layout, Transport transport,
     }
 
     /**
-     * The explicit form: {@code [repos.<name>] type = "maven"|"mjm", url = ...}.
+     * The explicit form: {@code [repos.<name>] type = "maven"|"jeno", url = ...}.
      * The type decides the layout — a static host can serve either one, so the
      * protocol is a declared fact, never guessed from the URL. A url that starts
      * with http is a network location; anything else is a directory ({@code ~}
@@ -100,9 +100,9 @@ public record Repository(String name, Layout layout, Transport transport,
         String kind = type == null || type.isBlank() ? "maven" : type.strip();
         Layout layout = switch (kind) {
             case "maven" -> Layout.MAVEN;
-            case "mjm" -> Layout.MJM;
+            case "jeno" -> Layout.JENO;
             default -> throw new IllegalArgumentException(
-                    "type must be \"maven\" or \"mjm\", got \"" + kind + "\"");
+                    "type must be \"maven\" or \"jeno\", got \"" + kind + "\"");
         };
         if (url == null || url.isBlank()) {
             throw new IllegalArgumentException("a repository needs a url: https://… or a directory");
@@ -115,17 +115,17 @@ public record Repository(String name, Layout layout, Transport transport,
                     + " (localhost/10/172.16-31/192.168/169.254/IPv6 ULA or link-local),"
                     + " or a directory");
         }
-        if (location.startsWith("mjm:") || location.startsWith("local:")) {
+        if (location.startsWith("jeno:") || location.startsWith("local:")) {
             throw new IllegalArgumentException(
                     "url is a location, not a type — write type = \"" + kind
-                    + "\" and url without the mjm:/local: prefix");
+                    + "\" and url without the jeno:/local: prefix");
         }
         if (network) {
-            String declaration = (layout == Layout.MJM ? "mjm:" : "") + location;
+            String declaration = (layout == Layout.JENO ? "jeno:" : "") + location;
             return new Repository(name, layout, Transport.NETWORK, declaration, null,
                     location.endsWith("/") ? location : location + "/");
         }
-        String declaration = (layout == Layout.MJM ? "mjm:" : "") + "local:" + location;
+        String declaration = (layout == Layout.JENO ? "jeno:" : "") + "local:" + location;
         return new Repository(name, layout, Transport.LOCAL, declaration, location, null);
     }
 
@@ -325,9 +325,9 @@ public record Repository(String name, Layout layout, Transport transport,
         return "a repository is a location plus a layout:\n"
                 + "  https://host/…          or local:<dir>       (Maven layout)\n"
                 + "  http://<private-ip>/…   or local:<dir>       (Maven layout, LAN only)\n"
-                + "  mjm:https://host/…      or mjm:local:<dir>   (mjm layout, artifact names,\n"
+                + "  jeno:https://host/…      or jeno:local:<dir>   (jeno layout, artifact names,\n"
                 + "                                                no group)\n"
-                + "  mjm:http://<private-ip>/… or mjm:local:<dir> (mjm layout, LAN only)\n"
+                + "  jeno:http://<private-ip>/… or jeno:local:<dir> (jeno layout, LAN only)\n"
                 + "  plain http: literal private address only; public hosts need https.";
     }
 
@@ -346,7 +346,7 @@ public record Repository(String name, Layout layout, Transport transport,
     }
 
     public boolean isJenoLayout() {
-        return layout == Layout.MJM;
+        return layout == Layout.JENO;
     }
 
     /** The network base without the layout prefix, ending in {@code /}. */

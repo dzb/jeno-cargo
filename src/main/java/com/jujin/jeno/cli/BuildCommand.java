@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 /**
- * {@code mjm build}: compiles {@code src/main/java} into {@code target/classes}
+ * {@code jeno build}: compiles {@code src/main/java} into {@code target/classes}
  * against the compile classpath — the declared dependencies only (DESIGN.md
  * §4.4's strict visibility: importing anything undeclared is a compile error
  * by construction). The lockfile is the sole input; every jar is verified
@@ -91,7 +91,7 @@ public final class BuildCommand implements Command {
         }
         try {
             JenoProject project = ProjectReader.parse(
-                    Files.readString(moduleDir.resolve("mjm.toml")));
+                    Files.readString(moduleDir.resolve("jeno.toml")));
             Path classes = moduleDir.resolve(OUTPUT).toAbsolutePath().normalize();
             JsonObject data = JsonUtils.object();
             data.put("classesDir", classes.toString());
@@ -126,13 +126,13 @@ public final class BuildCommand implements Command {
             System.err.println(Ui.errPrefix() + "build takes no arguments — got '" + args.getFirst() + "'");
             return 2;
         }
-        if (!Files.exists(projectDir.resolve("mjm.lock"))) {
-            System.err.println(Ui.errPrefix() + "no mjm.lock in " + projectDir + " — run mjm lock first");
+        if (!Files.exists(projectDir.resolve("jeno.lock"))) {
+            System.err.println(Ui.errPrefix() + "no jeno.lock in " + projectDir + " — run jeno lock first");
             return 1;
         }
-        if (!Files.exists(projectDir.resolve("mjm.toml"))) {
-            System.err.println(Ui.errPrefix() + "no mjm.toml in " + projectDir
-                    + " — run mjm init to create one");
+        if (!Files.exists(projectDir.resolve("jeno.toml"))) {
+            System.err.println(Ui.errPrefix() + "no jeno.toml in " + projectDir
+                    + " — run jeno init to create one");
             return 1;
         }
         // A build writes target/classes; a test run deletes and refills
@@ -149,15 +149,15 @@ public final class BuildCommand implements Command {
 
         // SPEC §2.1: [java].version means (a) produce bytecode for that major
         // via --release, and (b) require the running JDK to be at least that.
-        // Skipping (a) would let mjm compile against a newer API than the
+        // Skipping (a) would let jeno compile against a newer API than the
         // declared target while the published descriptor claims the target —
         // a claim the bytes would not honor.
         if (project.javaVersion() != null) {
             int running = Runtime.version().feature();
             if (running < project.javaVersion()) {
                 System.err.println(Ui.errPrefix() + "this project targets Java "
-                        + project.javaVersion() + " but mjm runs on Java " + running
-                        + " — run mjm on a newer JDK, or lower [java].version");
+                        + project.javaVersion() + " but jeno runs on Java " + running
+                        + " — run jeno on a newer JDK, or lower [java].version");
                 return 1;
             }
         }
@@ -209,11 +209,11 @@ public final class BuildCommand implements Command {
             return 0;
         }
 
-        // In-process javac: mjm runs on a JDK, so the compiler is always here —
+        // In-process javac: jeno runs on a JDK, so the compiler is always here —
         // no PATH dependency, output straight to the console.
         javax.tools.JavaCompiler compiler = javax.tools.ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
-            System.err.println(Ui.errPrefix() + "no system Java compiler — mjm needs a JDK, not a JRE");
+            System.err.println(Ui.errPrefix() + "no system Java compiler — jeno needs a JDK, not a JRE");
             return 1;
         }
         List<String> command = new ArrayList<>();
@@ -222,7 +222,7 @@ public final class BuildCommand implements Command {
         command.add("-cp");
         command.add(compileClasspath);
         // full debug info: line numbers, source file, and local variable names
-        // — what a debugger and a decompiler need to make `mjm source` trees
+        // — what a debugger and a decompiler need to make `jeno source` trees
         // line up with the bytes
         command.add("-g");
         // annotation processors ride on -processorpath: they are build tools,
@@ -255,9 +255,9 @@ public final class BuildCommand implements Command {
     }
 
     /**
-     * Writes {@code META-INF/mjm/version.properties} from mjm.toml — the one
+     * Writes {@code META-INF/jeno/version.properties} from jeno.toml — the one
      * declaration becomes a resource the running binary can read from a
-     * classes directory, a jar, or an installed dist alike. This is why mjm's
+     * classes directory, a jar, or an installed dist alike. This is why jeno's
      * version is not a source constant: a resource survives every layout,
      * while {@code Package.getImplementationVersion()} is null off a jar.
      */
@@ -305,7 +305,7 @@ public final class BuildCommand implements Command {
     }
 
     private void writeVersionResource(JenoProject project, Path output) {
-        Path target = output.resolve("META-INF/mjm/version.properties");
+        Path target = output.resolve("META-INF/jeno/version.properties");
         try {
             Files.createDirectories(target.getParent());
             Files.writeString(target, Version.propertiesText(project.version()));
@@ -316,17 +316,17 @@ public final class BuildCommand implements Command {
 
     private List<LockedArtifact> readLock() {
         try {
-            return LockFileReader.read(Files.readString(projectDir.resolve("mjm.lock")));
+            return LockFileReader.read(Files.readString(projectDir.resolve("jeno.lock")));
         } catch (IOException e) {
-            throw new IllegalStateException("cannot read mjm.lock", e);
+            throw new IllegalStateException("cannot read jeno.lock", e);
         }
     }
 
     private JenoProject readProject() {
         try {
-            return ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
+            return ProjectReader.parse(Files.readString(projectDir.resolve("jeno.toml")));
         } catch (IOException e) {
-            throw new IllegalStateException("cannot read mjm.toml in " + projectDir, e);
+            throw new IllegalStateException("cannot read jeno.toml in " + projectDir, e);
         }
     }
 

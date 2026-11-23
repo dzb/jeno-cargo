@@ -24,7 +24,7 @@ import java.util.Map;
  *   <li>{@link Mode#COMPILE} — the declared MAIN dependencies only (strict
  *       visibility), no {@code target/classes}; used by {@code build}.</li>
  *   <li>{@link Mode#TEST} — test classes, main classes, every non-processor
- *       artifact in the lock, the running mjm classes, then the toolchain
+ *       artifact in the lock, the running jeno classes, then the toolchain
  *       jars.</li>
  *   <li>{@link Mode#RUN} — main classes, then every MAIN artifact (dev and
  *       processor skipped).</li>
@@ -41,7 +41,7 @@ import java.util.Map;
  *
  * <p>{@code TEST} and {@code EXPORT_TEST} both exclude processor-scope
  * artifacts: processors compile code, they are not something tests link
- * against. {@code mjm test} passes them on javac's {@code -processorpath}
+ * against. {@code jeno test} passes them on javac's {@code -processorpath}
  * instead (REMINDS.md §14).
  */
 final class ClasspathAssembler {
@@ -101,8 +101,8 @@ final class ClasspathAssembler {
                 for (Requirement requirement : input.project().requirements()) {
                     LockedArtifact artifact = byId.get(requirement.id());
                     if (artifact == null) {
-                        throw new ClasspathException("mjm.lock is stale — '" + requirement.id()
-                                + "' is declared in mjm.toml but not locked; run mjm lock");
+                        throw new ClasspathException("jeno.lock is stale — '" + requirement.id()
+                                + "' is declared in jeno.toml but not locked; run jeno lock");
                     }
                     entries.add(artifactPath(artifact, store, substitutions, false));
                 }
@@ -143,9 +143,9 @@ final class ClasspathAssembler {
                 for (Requirement requirement : input.project().requirements()) {
                     LockedArtifact artifact = byId.get(requirement.id());
                     if (artifact == null) {
-                        throw new ClasspathException("mjm.lock is stale — '"
-                                + requirement.id() + "' is declared in mjm.toml but not locked; "
-                                + "run mjm lock");
+                        throw new ClasspathException("jeno.lock is stale — '"
+                                + requirement.id() + "' is declared in jeno.toml but not locked; "
+                                + "run jeno lock");
                     }
                     entries.add(artifactPath(artifact, store, substitutions, false));
                 }

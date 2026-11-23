@@ -70,7 +70,7 @@ class TestRunnerTest {
             exit = new TestCommand(new ArtifactStore(storeDir), dir).execute(List.of());
         }
 
-        assertEquals(1, exit, "a failing @MjmTest fails the command");
+        assertEquals(1, exit, "a failing @JenoTest fails the command");
     }
 
     @Test
@@ -207,7 +207,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
         String message = errors.toString(StandardCharsets.UTF_8);
         assertEquals(1, exit);
-        assertTrue(message.contains("mjm: target/classes is missing — run mjm build first"),
+        assertTrue(message.contains("jeno: target/classes is missing — run jeno build first"),
                 "the next action, like package/bundle/publish/run give: " + message);
         assertFalse(message.contains("符号") || message.contains("symbol"),
                 "no javac symbol error instead of the instruction: " + message);
@@ -276,13 +276,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
     @Test
     void aMissingManifestMeansNoFilters() {
-        // the one case that stays silent: lock/build already say mjm.toml is missing
+        // the one case that stays silent: lock/build already say jeno.toml is missing
         assertTrue(TestCommand.Filter.from(dir).keeps("anything.java"));
     }
 
     @Test
     void aManifestThatCannotBeReadIsAnErrorNotAnEmptyFilter() throws IOException {
-        Files.createDirectory(dir.resolve("mjm.toml"));  // exists, but is not a file
+        Files.createDirectory(dir.resolve("jeno.toml"));  // exists, but is not a file
 
         IllegalStateException error = assertThrows(IllegalStateException.class,
                 () -> TestCommand.Filter.from(dir));
@@ -319,7 +319,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         String java = Path.of(System.getProperty("java.home"), "bin", "java").toString();
         String classpath = System.getProperty("java.class.path");
         try (var central = VendoredToolchain.start()) {
-            String base = System.getProperty("mjm.central.base");
+            String base = System.getProperty("jeno.central.base");
             Process first = run(dir, java, classpath, base, marker, dir.resolve("first.log"));
             Process second = run(dir, java, classpath, base, marker, dir.resolve("second.log"));
 
@@ -353,9 +353,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     private static Process run(Path projectDir, String java, String classpath, String centralBase,
                                Path marker, Path log) throws IOException {
         ProcessBuilder builder = new ProcessBuilder(java, "-cp", classpath,
-                "-Dmjm.central.base=" + centralBase,
+                "-Djeno.central.base=" + centralBase,
                 // a scratch home: the child's store and lock files stay out of
-                // the real ~/.mjm
+                // the real ~/.jeno
                 "-Duser.home=" + projectDir.resolve(".home"),
                 "com.jujin.jeno.cli.Jeno", "test");
         builder.directory(projectDir.toFile());
@@ -371,7 +371,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
     private void project() throws IOException {
         Files.createDirectories(dir.resolve("src/test/java/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -379,7 +379,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     }
 
     private void lock() throws IOException {
-        Files.writeString(dir.resolve("mjm.lock"),
+        Files.writeString(dir.resolve("jeno.lock"),
                 LockFile.serialize(new ResolvedGraph(List.of(), List.of(), Map.of()),
                         url -> "e".repeat(64)));
     }

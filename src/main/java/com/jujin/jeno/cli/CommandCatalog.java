@@ -10,14 +10,14 @@ import java.util.Locale;
 /**
  * Machine-readable command discovery.
  *
- * <p>{@code mjm --json --help} returns the complete catalog; {@code mjm
+ * <p>{@code jeno --json --help} returns the complete catalog; {@code jeno
  * --json <command> --help} returns one descriptor. The catalog is generated
  * from the same {@link CommandCapabilities} that command dispatch consults, so
  * agent-facing metadata cannot drift into a hand-maintained second list.
  */
 final class CommandCatalog {
 
-    static final int SCHEMA_VERSION = 1;
+    static final int SCHEMA_VERSION = 2;
 
     private CommandCatalog() {}
 
@@ -26,7 +26,7 @@ final class CommandCatalog {
         var root = JsonUtils.object();
         root.put("schemaVersion", SCHEMA_VERSION);
         root.put("kind", "commandCatalog");
-        root.put("mjmVersion", Jeno.VERSION);
+        root.put("jenoVersion", Jeno.VERSION);
 
         var globalFlags = JsonUtils.array();
         addFlag(globalFlags, "--json",
@@ -36,11 +36,11 @@ final class CommandCatalog {
         addFlag(globalFlags, "--help, -h",
                 "print human help, or the JSON catalog when combined with --json");
         addFlag(globalFlags, "--version, -v",
-                "print the mjm version; combine with --json for a JSON document");
+                "print the jeno version; combine with --json for a JSON document");
         addFlag(globalFlags, "--offline, -o",
                 "refuse network access for commands that support it");
         addFlag(globalFlags, "--",
-                "end mjm's options; the rest goes to the command");
+                "end jeno's options; the rest goes to the command");
         root.put("globalFlags", globalFlags);
 
         var exitCodes = JsonUtils.object();
@@ -58,22 +58,22 @@ final class CommandCatalog {
         System.out.println(root);
     }
 
-    /** One command descriptor, used by {@code mjm --json <command> --help}. */
+    /** One command descriptor, used by {@code jeno --json <command> --help}. */
     static void printCommand(Command command) {
         var root = JsonUtils.object();
         root.put("schemaVersion", SCHEMA_VERSION);
         root.put("kind", "commandDescriptor");
-        root.put("mjmVersion", Jeno.VERSION);
+        root.put("jenoVersion", Jeno.VERSION);
         root.put("command", descriptor(command));
         System.out.println(root);
     }
 
-    /** Version information for `mjm --json --version`. */
+    /** Version information for `jeno --json --version`. */
     static void printVersion() {
         var root = JsonUtils.object();
         root.put("schemaVersion", SCHEMA_VERSION);
         root.put("kind", "version");
-        root.put("mjmVersion", Jeno.VERSION);
+        root.put("jenoVersion", Jeno.VERSION);
         root.put("javaVersion", Runtime.version().feature());
         root.put("javaVendor", System.getProperty("java.vendor", ""));
         System.out.println(root);

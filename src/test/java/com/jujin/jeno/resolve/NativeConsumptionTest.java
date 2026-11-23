@@ -25,8 +25,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * The gh: consumption chain end to end against a server that speaks the
  * GitHub release URL layout — descriptor, jar, transitive descriptor, all
- * downloaded through the store and pinned in mjm.lock. The host override
- * ({@code -Dmjm.github.host}) is what lets this run on a loopback server;
+ * downloaded through the store and pinned in jeno.lock. The host override
+ * ({@code -Djeno.github.host}) is what lets this run on a loopback server;
  * the URL shapes are the production shapes.
  */
 class NativeConsumptionTest {
@@ -54,10 +54,10 @@ class NativeConsumptionTest {
 
         HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         Map<String, byte[]> routes = new LinkedHashMap<>();
-        routes.put("/acme/mylib/releases/download/v1.0.0/mylib-1.0.0.mjm.toml",
+        routes.put("/acme/mylib/releases/download/v1.0.0/mylib-1.0.0.jeno.toml",
                 mylibDescriptor.getBytes());
         routes.put("/acme/mylib/releases/download/v1.0.0/mylib-1.0.0.jar", mylibJar);
-        routes.put("/acme/mylib2/releases/download/v0.1.0/mylib2-0.1.0.mjm.toml",
+        routes.put("/acme/mylib2/releases/download/v0.1.0/mylib2-0.1.0.jeno.toml",
                 mylib2Descriptor.getBytes());
         routes.put("/acme/mylib2/releases/download/v0.1.0/mylib2-0.1.0.jar", mylib2Jar);
         server.createContext("/", exchange -> {
@@ -73,7 +73,7 @@ class NativeConsumptionTest {
         });
         server.start();
         String overridden = "http://localhost:" + server.getAddress().getPort();
-        System.setProperty("mjm.github.host", overridden);
+        System.setProperty("jeno.github.host", overridden);
         try {
             JenoProject project = ProjectReader.parse("""
                 [project]
@@ -109,11 +109,11 @@ class NativeConsumptionTest {
             }
             // the production digest source reads the session records
             String lock = LockFile.serialize(graph, store::digestOf);
-            Files.writeString(dir.resolve("mjm.lock"), lock);
+            Files.writeString(dir.resolve("jeno.lock"), lock);
 
             // the lock-hit path: both jars are in the store under their digests
             for (LockedArtifact artifact : LockFileReader.read(
-                    Files.readString(dir.resolve("mjm.lock")))) {
+                    Files.readString(dir.resolve("jeno.lock")))) {
                 Path jar = store.findByDigest(artifact.sha256(), ArtifactStore.Kind.JAR);
                 assertNotNull(jar, artifact.id() + " must be in the store");
                 assertEquals(artifact.sha256(), ArtifactStore.sha256(jar));
@@ -123,7 +123,7 @@ class NativeConsumptionTest {
                             ArtifactStore.sha256(mylibJar), ArtifactStore.Kind.JAR))));
         } finally {
             server.stop(0);
-            System.clearProperty("mjm.github.host");
+            System.clearProperty("jeno.github.host");
         }
     }
 }

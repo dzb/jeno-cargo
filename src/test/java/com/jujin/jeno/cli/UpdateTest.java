@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code mjm update} end to end — against a loopback releases API, never the
+ * {@code jeno update} end to end — against a loopback releases API, never the
  * real GitHub. The served release carries a minimal dist tar.gz whose
  * setup.sh drops a marker into the redirected HOME; the marker's presence
  * proves the full path: detect → download → extract → run the packaged
@@ -36,19 +36,19 @@ class UpdateTest {
         packageDist("0.1.99");
         HttpServer server = serveLatest("v0.1.99");
 
-        System.setProperty("mjm.update.api",
+        System.setProperty("jeno.update.api",
                 "http://localhost:" + server.getAddress().getPort()
-                        + "/repos/dzb/mjm-cargo/releases/latest");
-        System.setProperty("mjm.update.home", home.toString());
+                        + "/repos/dzb/jeno-cargo/releases/latest");
+        System.setProperty("jeno.update.home", home.toString());
         try {
             int exit = new UpdateCommand().execute(List.of());
             assertEquals(0, exit, "the upgrade completed");
-            assertTrue(Files.exists(home.resolve(".mjm/marker")),
+            assertTrue(Files.exists(home.resolve(".jeno/marker")),
                     "the packaged setup.sh ran under the redirected HOME");
         } finally {
             server.stop(0);
-            System.clearProperty("mjm.update.api");
-            System.clearProperty("mjm.update.home");
+            System.clearProperty("jeno.update.api");
+            System.clearProperty("jeno.update.home");
         }
     }
 
@@ -59,10 +59,10 @@ class UpdateTest {
         packageDist("0.1.99");
         HttpServer server = serveLatest("v0.1.99");
 
-        System.setProperty("mjm.update.api",
+        System.setProperty("jeno.update.api",
                 "http://localhost:" + server.getAddress().getPort()
-                        + "/repos/dzb/mjm-cargo/releases/latest");
-        System.setProperty("mjm.update.home", home.toString());
+                        + "/repos/dzb/jeno-cargo/releases/latest");
+        System.setProperty("jeno.update.home", home.toString());
         PrintStream original = System.out;
         var buffer = new ByteArrayOutputStream();
         try {
@@ -71,12 +71,12 @@ class UpdateTest {
         } finally {
             System.setOut(original);
             server.stop(0);
-            System.clearProperty("mjm.update.api");
-            System.clearProperty("mjm.update.home");
+            System.clearProperty("jeno.update.api");
+            System.clearProperty("jeno.update.home");
         }
 
         String output = buffer.toString(StandardCharsets.UTF_8);
-        assertTrue(output.contains("upgraded to mjm "),
+        assertTrue(output.contains("upgraded to jeno "),
                 "the message names the product: " + output);
         assertFalse(output.contains("upgraded to mj "),
                 "and never the previous name: " + output);
@@ -87,11 +87,11 @@ class UpdateTest {
         packageDist("0.1.99");
         HttpServer server = serveLatest("v0.1.99", 1);
 
-        System.setProperty("mjm.update.api",
+        System.setProperty("jeno.update.api",
                 "http://localhost:" + server.getAddress().getPort()
-                        + "/repos/dzb/mjm-cargo/releases/latest");
-        System.setProperty("mjm.update.home", home.toString());
-        System.setProperty("mjm.update.backoff.ms", "1,1,1,1");
+                        + "/repos/dzb/jeno-cargo/releases/latest");
+        System.setProperty("jeno.update.home", home.toString());
+        System.setProperty("jeno.update.backoff.ms", "1,1,1,1");
         java.io.PrintStream original = System.err;
         var errors = new ByteArrayOutputStream();
         int exit;
@@ -101,16 +101,16 @@ class UpdateTest {
         } finally {
             System.setErr(original);
             server.stop(0);
-            System.clearProperty("mjm.update.api");
-            System.clearProperty("mjm.update.home");
-            System.clearProperty("mjm.update.backoff.ms");
+            System.clearProperty("jeno.update.api");
+            System.clearProperty("jeno.update.home");
+            System.clearProperty("jeno.update.backoff.ms");
         }
 
         String message = errors.toString(StandardCharsets.UTF_8);
         assertEquals(0, exit, "the second, complete response is installed");
         assertTrue(message.contains("download attempt 1 failed"),
                 "the retry is reported: " + message);
-        assertTrue(Files.exists(home.resolve(".mjm/marker")), "the upgrade landed");
+        assertTrue(Files.exists(home.resolve(".jeno/marker")), "the upgrade landed");
     }
 
     @Test
@@ -120,11 +120,11 @@ class UpdateTest {
         Path tmp = Path.of(System.getProperty("java.io.tmpdir"));
         long leftoversBefore = countUpgradeTemps(tmp);
 
-        System.setProperty("mjm.update.api",
+        System.setProperty("jeno.update.api",
                 "http://localhost:" + server.getAddress().getPort()
-                        + "/repos/dzb/mjm-cargo/releases/latest");
-        System.setProperty("mjm.update.home", home.toString());
-        System.setProperty("mjm.update.backoff.ms", "1,1,1,1");
+                        + "/repos/dzb/jeno-cargo/releases/latest");
+        System.setProperty("jeno.update.home", home.toString());
+        System.setProperty("jeno.update.backoff.ms", "1,1,1,1");
         java.io.PrintStream original = System.err;
         var errors = new ByteArrayOutputStream();
         int exit;
@@ -134,9 +134,9 @@ class UpdateTest {
         } finally {
             System.setErr(original);
             server.stop(0);
-            System.clearProperty("mjm.update.api");
-            System.clearProperty("mjm.update.home");
-            System.clearProperty("mjm.update.backoff.ms");
+            System.clearProperty("jeno.update.api");
+            System.clearProperty("jeno.update.home");
+            System.clearProperty("jeno.update.backoff.ms");
         }
 
         String message = errors.toString(StandardCharsets.UTF_8);
@@ -145,15 +145,15 @@ class UpdateTest {
                 "the next action is named: " + message);
         assertTrue(message.contains("download attempt 4 failed"),
                 "all five tries happened (four retries): " + message);
-        assertFalse(Files.exists(home.resolve(".mjm/marker")),
+        assertFalse(Files.exists(home.resolve(".jeno/marker")),
                 "nothing was installed over the working one");
         assertEquals(leftoversBefore, countUpgradeTemps(tmp),
-                "no mjm-upgrade-* temp file or directory survives the failure");
+                "no jeno-upgrade-* temp file or directory survives the failure");
     }
 
     @Test
     void theShippedRetryWindowSpansAboutFifteenSeconds() {
-        System.clearProperty("mjm.update.backoff.ms");
+        System.clearProperty("jeno.update.backoff.ms");
 
         long total = java.util.Arrays.stream(UpdateCommand.backoffMillis()).sum();
 
@@ -164,17 +164,17 @@ class UpdateTest {
     private static long countUpgradeTemps(Path tmp) throws IOException {
         try (var entries = Files.list(tmp)) {
             return entries.filter(path -> path.getFileName().toString()
-                    .startsWith("mjm-upgrade-")).count();
+                    .startsWith("jeno-upgrade-")).count();
         }
     }
 
     @Test
     void jsonCheckReportsAnAvailableUpdateWithoutInstalling(@TempDir Path home) throws Exception {
         HttpServer server = serveLatest("v0.1.99");
-        System.setProperty("mjm.update.api",
+        System.setProperty("jeno.update.api",
                 "http://localhost:" + server.getAddress().getPort()
-                        + "/repos/dzb/mjm-cargo/releases/latest");
-        System.setProperty("mjm.update.home", home.toString());
+                        + "/repos/dzb/jeno-cargo/releases/latest");
+        System.setProperty("jeno.update.home", home.toString());
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         PrintStream original = System.out;
         int exit;
@@ -184,8 +184,8 @@ class UpdateTest {
         } finally {
             System.setOut(original);
             server.stop(0);
-            System.clearProperty("mjm.update.api");
-            System.clearProperty("mjm.update.home");
+            System.clearProperty("jeno.update.api");
+            System.clearProperty("jeno.update.home");
         }
 
         assertEquals(0, exit);
@@ -197,7 +197,7 @@ class UpdateTest {
         assertEquals("0.1.99", json.getString("latestVersion"));
         assertEquals(true, json.getBoolean("updateAvailable"));
         assertEquals(false, json.getBoolean("upgraded"));
-        assertFalse(Files.exists(home.resolve(".mjm/marker")),
+        assertFalse(Files.exists(home.resolve(".jeno/marker")),
                 "check mode never downloads or installs");
     }
 
@@ -205,19 +205,19 @@ class UpdateTest {
     void theCurrentVersionIsANoOp(@TempDir Path home) throws Exception {
         HttpServer server = serveLatest("v" + Jeno.VERSION);
 
-        System.setProperty("mjm.update.api",
+        System.setProperty("jeno.update.api",
                 "http://localhost:" + server.getAddress().getPort()
-                        + "/repos/dzb/mjm-cargo/releases/latest");
-        System.setProperty("mjm.update.home", home.toString());
+                        + "/repos/dzb/jeno-cargo/releases/latest");
+        System.setProperty("jeno.update.home", home.toString());
         try {
             int exit = new UpdateCommand().execute(List.of());
             assertEquals(0, exit, "already-latest exits zero");
-            assertFalse(Files.exists(home.resolve(".mjm/marker")),
+            assertFalse(Files.exists(home.resolve(".jeno/marker")),
                     "nothing was installed");
         } finally {
             server.stop(0);
-            System.clearProperty("mjm.update.api");
-            System.clearProperty("mjm.update.home");
+            System.clearProperty("jeno.update.api");
+            System.clearProperty("jeno.update.home");
         }
     }
 
@@ -226,16 +226,16 @@ class UpdateTest {
      * drops the marker — the installer is the artifact under test.
      */
     private void packageDist(String version) throws IOException, InterruptedException {
-        Path dist = Files.createDirectories(dir.resolve("mjm-" + version));
+        Path dist = Files.createDirectories(dir.resolve("jeno-" + version));
         Files.writeString(dist.resolve("setup.sh"), """
             #!/bin/bash
             set -e
-            mkdir -p "$HOME/.mjm"
-            touch "$HOME/.mjm/marker"
+            mkdir -p "$HOME/.jeno"
+            touch "$HOME/.jeno/marker"
             """);
         Process tar = new ProcessBuilder("tar", "-czf",
-                dir.resolve("mjm-bin-" + version + ".tar.gz").toString(),
-                "-C", dir.toString(), "mjm-" + version)
+                dir.resolve("jeno-bin-" + version + ".tar.gz").toString(),
+                "-C", dir.toString(), "jeno-" + version)
                 .inheritIO().start();
         assertEquals(0, tar.waitFor(), "the fixture tar.gz was built");
     }
@@ -253,12 +253,12 @@ class UpdateTest {
     private HttpServer serveLatest(String tag, int truncated) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         String json = "{\"tag_name\":\"" + tag + "\",\"assets\":[{"
-                + "\"name\":\"mjm-bin-" + tag.substring(1) + ".tar.gz\","
+                + "\"name\":\"jeno-bin-" + tag.substring(1) + ".tar.gz\","
                 + "\"browser_download_url\":\"http://localhost:"
-                + server.getAddress().getPort() + "/assets/mjm-bin-"
+                + server.getAddress().getPort() + "/assets/jeno-bin-"
                 + tag.substring(1) + ".tar.gz\"}]}";
         byte[] body = json.getBytes(StandardCharsets.UTF_8);
-        server.createContext("/repos/dzb/mjm-cargo/releases/latest", exchange -> {
+        server.createContext("/repos/dzb/jeno-cargo/releases/latest", exchange -> {
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, body.length);
             try (var out = exchange.getResponseBody()) {
@@ -300,8 +300,8 @@ class UpdateTest {
         CommandRunner runner = new CommandRunner(List.of(command));
         String viaAlias = help(runner, "update");
         String viaName = help(runner, "upgrade");
-        assertTrue(viaAlias.contains("usage: mjm upgrade"), viaAlias);
-        assertTrue(viaName.contains("usage: mjm upgrade"), viaName);
+        assertTrue(viaAlias.contains("usage: jeno upgrade"), viaAlias);
+        assertTrue(viaName.contains("usage: jeno upgrade"), viaName);
         assertTrue(viaName.contains("(also: update)"), viaName);
     }
 

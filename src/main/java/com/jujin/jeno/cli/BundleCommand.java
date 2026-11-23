@@ -24,17 +24,17 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 /**
- * {@code mjm bundle} — assembles an installable distribution directory. This is
- * <b>not</b> a general "package my library" step; that is {@code mjm package},
+ * {@code jeno bundle} — assembles an installable distribution directory. This is
+ * <b>not</b> a general "package my library" step; that is {@code jeno package},
  * and its single product is a jar.
  *
  * <p>bundle exists for one job: producing the artifact an application ships to
- * its own users — the thing behind a {@code curl | bash}. mjm itself is the first
+ * its own users — the thing behind a {@code curl | bash}. jeno itself is the first
  * consumer; any CLI project can use it. A library never needs it.
  *
  * <pre>
  *   target/dist/{name}-{version}/
- *   ├── bin/{name}                POSIX launcher (main class from mjm.toml)
+ *   ├── bin/{name}                POSIX launcher (main class from jeno.toml)
  *   ├── lib/
  *   │   ├── {name}-{version}.jar  one jar: project + skeleton merged
  *   │   └── toolchain/            lifecycle toolchain (test-only jars)
@@ -47,7 +47,7 @@ import java.util.stream.Stream;
  *
  * <p><b>What this command does not decide.</b> Whether a project wants a
  * bundle, what to name it, where to upload it — all of that is the project's
- * CI. mjm provides the packaging mechanics (merge the skeleton, place the
+ * CI. jeno provides the packaging mechanics (merge the skeleton, place the
  * launcher, write setup.sh, checksum it) and nothing else.
  */
 public final class BundleCommand implements Command {
@@ -66,7 +66,7 @@ public final class BundleCommand implements Command {
             fi
             PRG=$(dirname "$PRG")
         done
-        MJM_HOME=$(cd "$(dirname "$PRG")/.." && pwd)
+        JENO_HOME=$(cd "$(dirname "$PRG")/.." && pwd)
 
         if [ -n "$JAVA_HOME" ]; then
             JAVA="$JAVA_HOME/bin/java"
@@ -81,7 +81,7 @@ public final class BundleCommand implements Command {
         # lib/ holds this program with its shipped dependencies merged. The
         # lifecycle toolchain under lib/toolchain/ is test-only and is not on
         # this classpath.
-        exec "$JAVA" -cp "$MJM_HOME/lib/*" %3$s "$@"
+        exec "$JAVA" -cp "$JENO_HOME/lib/*" %3$s "$@"
         """;
 
     private static final String SETUP_TEMPLATE = """
@@ -242,7 +242,7 @@ public final class BundleCommand implements Command {
         }
         try {
             JenoProject project = ProjectReader.parse(
-                    Files.readString(moduleDir.resolve("mjm.toml")));
+                    Files.readString(moduleDir.resolve("jeno.toml")));
             Path dist = moduleDir.resolve("target/dist");
             Path bundleDir = dist.resolve(project.name() + "-" + project.version())
                     .toAbsolutePath().normalize();
@@ -314,9 +314,9 @@ public final class BundleCommand implements Command {
         Substitutions substitutions;
         try {
             project = ProjectReader.parse(
-                    Files.readString(projectDir.resolve("mjm.toml")));
+                    Files.readString(projectDir.resolve("jeno.toml")));
             locked = LockFileReader.read(
-                    Files.readString(projectDir.resolve("mjm.lock")));
+                    Files.readString(projectDir.resolve("jeno.lock")));
             substitutions = Substitutions.forProject(projectDir);
             jars = store.verifiedJars(locked,
                     artifact -> substitutions.find(artifact.id()) != null);
@@ -327,7 +327,7 @@ public final class BundleCommand implements Command {
             for (String id : project.toolchain()) {
                 if (!lockedIds.contains(id)) {
                     System.err.println(Ui.errPrefix() + "[toolchain].jars names '" + id
-                            + "' but it is not in mjm.lock — run mjm lock");
+                            + "' but it is not in jeno.lock — run jeno lock");
                     return 1;
                 }
             }
@@ -337,11 +337,11 @@ public final class BundleCommand implements Command {
         }
 
         if (!Files.isDirectory(projectDir.resolve(CLASSES))) {
-            System.err.println(Ui.errPrefix() + CLASSES + " is missing — run mjm build first");
+            System.err.println(Ui.errPrefix() + CLASSES + " is missing — run jeno build first");
             return 1;
         }
         if (project.main() == null || project.main().isBlank()) {
-            System.err.println(Ui.errPrefix() + "bundle needs [project].main — set it in mjm.toml");
+            System.err.println(Ui.errPrefix() + "bundle needs [project].main — set it in jeno.toml");
             return 1;
         }
 
@@ -426,7 +426,7 @@ public final class BundleCommand implements Command {
                 return 1;
             }
 
-            // the lifecycle toolchain — shipped apart, loaded only by mjm test
+            // the lifecycle toolchain — shipped apart, loaded only by jeno test
             if (!toolchainRows.isEmpty()) {
                 Path toolchainDir = lib.resolve("toolchain");
                 Files.createDirectories(toolchainDir);
@@ -508,7 +508,7 @@ public final class BundleCommand implements Command {
      * Zips {@code classes} into {@code jarFile} with the JDK's jar tool,
      * adding the Java-conventional manifest entries ({@code
      * Implementation-Title}/{@code Implementation-Version}) so outside tools
-     * and IDEs can read the version without mjm's resource.
+     * and IDEs can read the version without jeno's resource.
      */
     static int jar(Path classes, Path jarFile, String title, String version, String mainClass) {
         try {
@@ -521,12 +521,12 @@ public final class BundleCommand implements Command {
             if (version != null && !version.isBlank()) {
                 attributes.put(new java.util.jar.Attributes.Name("Implementation-Version"),
                         version);
-                attributes.put(new java.util.jar.Attributes.Name("mjm-Version"), version);
+                attributes.put(new java.util.jar.Attributes.Name("jeno-Version"), version);
             }
             if (mainClass != null && !mainClass.isBlank()) {
                 attributes.put(java.util.jar.Attributes.Name.MAIN_CLASS, mainClass);
             }
-            attributes.put(new java.util.jar.Attributes.Name("Built-By"), "mjm");
+            attributes.put(new java.util.jar.Attributes.Name("Built-By"), "jeno");
 
             Path manifestFile = Files.createTempFile("mj-manifest-", ".mf");
             try (var out = Files.newOutputStream(manifestFile)) {

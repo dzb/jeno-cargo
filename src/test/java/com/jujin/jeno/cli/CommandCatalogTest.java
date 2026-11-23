@@ -38,7 +38,7 @@ class CommandCatalogTest {
 
         assertEquals(0, result.exit(), result.out() + result.err());
         Map<String, Object> root = parse(result.out());
-        assertEquals(1, root.get("schemaVersion"));
+        assertEquals(2, root.get("schemaVersion"));
         assertEquals("commandCatalog", root.get("kind"));
         assertEquals(22, root.get("commandCount"));
         assertEquals(22, asList(root.get("commands")).size());
@@ -244,19 +244,19 @@ class CommandCatalogTest {
         assertEquals(0, result.exit(), result.out() + result.err());
         Map<String, Object> root = parse(result.out());
         assertEquals("version", root.get("kind"));
-        assertEquals(1, root.get("schemaVersion"));
-        assertEquals(Jeno.VERSION, root.get("mjmVersion"));
+        assertEquals(2, root.get("schemaVersion"));
+        assertEquals(Jeno.VERSION, root.get("jenoVersion"));
         assertNotNull(root.get("javaVersion"));
     }
 
     @Test
     void jsonCatalogNeverContainsAnsiEvenWhenColourIsForced() {
-        System.setProperty("mjm.color", "always");
+        System.setProperty("jeno.color", "always");
         try {
             Result result = run("--json", "--help");
             assertFalse(result.out().contains("\u001B["), "catalog stdout must stay pure JSON");
         } finally {
-            System.clearProperty("mjm.color");
+            System.clearProperty("jeno.color");
         }
     }
 
@@ -319,7 +319,7 @@ class CommandCatalogTest {
             Path project = Files.createDirectories(dir.resolve("cold-project"));
             int port = server.getAddress().getPort();
             String url = "http://127.0.0.1:" + port + "/com/example/lib/1.0.0/lib-1.0.0.jar";
-            Files.writeString(project.resolve("mjm.toml"), """
+            Files.writeString(project.resolve("jeno.toml"), """
                     [project]
                     name = "cold"
                     version = "0.1.0"
@@ -327,7 +327,7 @@ class CommandCatalogTest {
                     [deps]
                     "com.example:lib" = "1.0.0"
                     """);
-            Files.writeString(project.resolve("mjm.lock"), """
+            Files.writeString(project.resolve("jeno.lock"), """
                     [[artifacts]]
                     id = "com.example:lib"
                     version = "1.0.0"

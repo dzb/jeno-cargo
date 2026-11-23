@@ -69,7 +69,7 @@ public final class CommandRunner {
             if (json) {
                 CommandCatalog.printVersion();
             } else {
-                System.out.println(Ui.heading("mjm " + Jeno.VERSION)
+                System.out.println(Ui.heading("jeno " + Jeno.VERSION)
                         + Ui.dim(" — modern java manager"));
             }
             return 0;
@@ -129,7 +129,7 @@ public final class CommandRunner {
         if (json && !command.capabilities().supportsJson()) {
             CommandCatalog.printError(command.name(), 2, "JSON_UNSUPPORTED",
                     "command '" + command.name() + "' does not declare JSON output yet; "
-                    + "use `mjm --json " + command.name() + " --help` for its descriptor",
+                    + "use `jeno --json " + command.name() + " --help` for its descriptor",
                     rest.subList(0, flagsEnd), offline);
             return 2;
         }
@@ -236,7 +236,7 @@ public final class CommandRunner {
 
     private static void printCommandHelp(Command command) {
         String syntax = command.usage();
-        System.out.println(Ui.heading("usage:") + " mjm " + Ui.accent(command.name())
+        System.out.println(Ui.heading("usage:") + " jeno " + Ui.accent(command.name())
                 + (syntax.isEmpty() ? "" : " " + syntax));
         String[] aliases = command.aliases();
         String summary = command.summary()
@@ -263,10 +263,10 @@ public final class CommandRunner {
             column = Math.max(column, label(command).length() + 2);
         }
 
-        System.out.println(Ui.heading("mjm " + Jeno.VERSION)
+        System.out.println(Ui.heading("jeno " + Jeno.VERSION)
                 + Ui.dim(" — modern java manager"));
         System.out.println();
-        System.out.println(Ui.dim("usage:") + " mjm <command> [args]");
+        System.out.println(Ui.dim("usage:") + " jeno <command> [args]");
         for (Map.Entry<Command.Category, List<Command>> entry : groups.entrySet()) {
             if (entry.getValue().isEmpty()) {
                 continue;
@@ -292,19 +292,19 @@ public final class CommandRunner {
                 + Ui.dim("refuse all network access; remote publish/release targets, "
                 + "update/outdated/audit are rejected; local targets remain allowed"));
         System.out.println("  " + pad("--", column)
-                + Ui.dim("end mjm's options; the rest goes to the command"));
+                + Ui.dim("end jeno's options; the rest goes to the command"));
         System.out.println();
         System.out.println(Ui.heading("Examples"));
         for (String example : List.of(
-                "mjm init",
-                "mjm add \"org.slf4j:slf4j-api\" 2.0.18",
-                "mjm build && mjm test",
-                "mjm doctor",
-                "mjm --json --help")) {
+                "jeno init",
+                "jeno add \"org.slf4j:slf4j-api\" 2.0.18",
+                "jeno build && jeno test",
+                "jeno doctor",
+                "jeno --json --help")) {
             System.out.println("  " + Ui.dim(example));
         }
         System.out.println();
-        System.out.println(Ui.dim("Run 'mjm <command> --help' for command details."));
+        System.out.println(Ui.dim("Run 'jeno <command> --help' for command details."));
         return exit;
     }
 

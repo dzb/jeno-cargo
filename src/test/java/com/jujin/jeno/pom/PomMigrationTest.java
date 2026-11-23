@@ -12,9 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code pom.xml} → {@code mjm.toml}: a translation a human reviews, never a
+ * {@code pom.xml} → {@code jeno.toml}: a translation a human reviews, never a
  * silent import. Test scope becomes {@code [dev-deps]}; properties are
- * resolved because mjm.toml has no interpolation; anything mj cannot express
+ * resolved because jeno.toml has no interpolation; anything mj cannot express
  * is reported rather than dropped.
  */
 class PomMigrationTest {

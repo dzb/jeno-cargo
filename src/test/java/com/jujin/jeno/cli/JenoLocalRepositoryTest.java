@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code mjm:local:<dir>} — the mjm layout on disk: two levels, no group, no
+ * {@code jeno:local:<dir>} — the jeno layout on disk: two levels, no group, no
  * Maven pom. The lock keeps the declaration and relocatable {@code file:} URLs.
  */
 class JenoLocalRepositoryTest {
@@ -61,7 +61,7 @@ class JenoLocalRepositoryTest {
         publishArtifact(vendor, "lib", "1.0.0", "lib-bytes");
         Path project = project("proj", """
             [repos]
-            cascade = "mjm:local:../vendor"
+            cascade = "jeno:local:../vendor"
 
             [deps]
             "lib" = "cascade:1.0.0"
@@ -71,7 +71,7 @@ class JenoLocalRepositoryTest {
         locks.refresh(project);
 
         LockedArtifact lib = only(project);
-        assertEquals("mjm:local:../vendor", lib.source(),
+        assertEquals("jeno:local:../vendor", lib.source(),
                 "the declaration is recorded as written");
         assertTrue(lib.url().contains("/vendor/lib/1.0.0/lib-1.0.0.jar"), lib.url());
         assertTrue(Files.exists(store.findByDigest(lib.sha256(), ArtifactStore.Kind.JAR)),
@@ -88,7 +88,7 @@ class JenoLocalRepositoryTest {
             """);
         Path project = project("proj", """
             [repos]
-            cascade = "mjm:local:../vendor"
+            cascade = "jeno:local:../vendor"
 
             [deps]
             "lib" = "cascade:1.0.0"
@@ -100,7 +100,7 @@ class JenoLocalRepositoryTest {
         List<LockedArtifact> locked = read(project);
         assertEquals(List.of("lib", "sib"), locked.stream().map(LockedArtifact::id).sorted().toList());
         for (LockedArtifact artifact : locked) {
-            assertEquals("mjm:local:../vendor", artifact.source());
+            assertEquals("jeno:local:../vendor", artifact.source());
         }
     }
 
@@ -110,25 +110,25 @@ class JenoLocalRepositoryTest {
         Files.createDirectories(producer.resolve("src/main/java/widget"));
         Files.writeString(producer.resolve("src/main/java/widget/Widget.java"),
                 "package widget; public final class Widget {}");
-        Files.writeString(producer.resolve("mjm.lock"), "");
+        Files.writeString(producer.resolve("jeno.lock"), "");
         assertEquals(0, new BuildCommand(store, producer).execute(List.of()));
         assertEquals(0, new PackageCommand(store, producer).execute(List.of()));
 
         Path repository = root.resolve("local-repo");
-        String target = "mjm:local:" + repository;
+        String target = "jeno:local:" + repository;
         Result published = run(new PublishCommand(producer), target);
 
         assertEquals(0, published.exit(), published.out() + published.err());
         Path artifactPath = repository.resolve("widget/0.1.0");
         assertTrue(Files.exists(artifactPath.resolve("widget-0.1.0.jar")));
-        assertTrue(Files.exists(artifactPath.resolve("widget-0.1.0.mjm.toml")));
+        assertTrue(Files.exists(artifactPath.resolve("widget-0.1.0.jeno.toml")));
         assertEquals(ArtifactStore.sha256(artifactPath.resolve("widget-0.1.0.jar")).strip(),
                 Files.readString(artifactPath.resolve("widget-0.1.0.sha256")).strip(),
                 "the checksum file matches the jar");
 
         Path consumer = project("consumer", """
             [repos]
-            mine = "mjm:local:%s"
+            mine = "jeno:local:%s"
 
             [deps]
             "widget" = "mine:0.1.0"
@@ -139,22 +139,22 @@ class JenoLocalRepositoryTest {
         com.jujin.jeno.resolve.ArtifactLocations.useProjectRoot(consumer);
         locks.refresh(consumer);
         assertEquals(0, new BuildCommand(store, consumer).execute(List.of()),
-                "a project can consume what mjm publish just wrote");
+                "a project can consume what jeno publish just wrote");
     }
 
     @Test
     void malformedJenoRepositoriesNameBothLegalShapes() {
         ProjectException ftp = assertThrows(ProjectException.class, () ->
                 ProjectReader.parse("[project]\nname = \"x\"\nversion = \"1.0.0\"\n"
-                        + "[repos]\nbad = \"mjm:ftp://host/\"\n"));
-        assertTrue(ftp.getMessage().contains("mjm:https://"), ftp.getMessage());
-        assertTrue(ftp.getMessage().contains("mjm:local:"), ftp.getMessage());
+                        + "[repos]\nbad = \"jeno:ftp://host/\"\n"));
+        assertTrue(ftp.getMessage().contains("jeno:https://"), ftp.getMessage());
+        assertTrue(ftp.getMessage().contains("jeno:local:"), ftp.getMessage());
 
         ProjectException bare = assertThrows(ProjectException.class, () ->
                 ProjectReader.parse("[project]\nname = \"x\"\nversion = \"1.0.0\"\n"
-                        + "[repos]\nbad = \"mjm:../vendor\"\n"));
-        assertTrue(bare.getMessage().contains("mjm:https://"), bare.getMessage());
-        assertTrue(bare.getMessage().contains("mjm:local:"), bare.getMessage());
+                        + "[repos]\nbad = \"jeno:../vendor\"\n"));
+        assertTrue(bare.getMessage().contains("jeno:https://"), bare.getMessage());
+        assertTrue(bare.getMessage().contains("jeno:local:"), bare.getMessage());
     }
 
     @Test
@@ -165,19 +165,19 @@ class JenoLocalRepositoryTest {
         publishArtifact(b.resolve("vendor"), "lib", "2.0.0", "b-bytes");
         Path ma = module(a.resolve("m1"), "m1", """
             [repos]
-            cascade = "mjm:local:../vendor"
+            cascade = "jeno:local:../vendor"
 
             [deps]
             "lib" = "cascade:1.0.0"
             """);
         Path mb = module(b.resolve("m2"), "m2", """
             [repos]
-            cascade = "mjm:local:../vendor"
+            cascade = "jeno:local:../vendor"
 
             [deps]
             "lib" = "cascade:2.0.0"
             """);
-        Files.writeString(root.resolve("mjm.ws.toml"), """
+        Files.writeString(root.resolve("jeno.ws.toml"), """
             [ws]
             modules = ["a/m1", "b/m2"]
             """);
@@ -197,7 +197,7 @@ class JenoLocalRepositoryTest {
 
     @Test
     void theOlderRepositoryShapesAreUnchanged() throws Exception {
-        // mjm:https:// is still a valid declaration (resolution is a network act,
+        // jeno:https:// is still a valid declaration (resolution is a network act,
         // covered by the repository tests); local: still resolves a Maven layout
         ProjectReader.parse("""
             [project]
@@ -205,7 +205,7 @@ class JenoLocalRepositoryTest {
             version = "1.0.0"
 
             [repos]
-            remote = "mjm:https://repo.example/"
+            remote = "jeno:https://repo.example/"
             """);
 
         Path vendor = root.resolve("maven-vendor");
@@ -239,7 +239,7 @@ class JenoLocalRepositoryTest {
     private Path project(String name, String body) throws IOException {
         Path dir = root.resolve(name);
         Files.createDirectories(dir);
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "%s"
             version = "0.1.0"
@@ -250,7 +250,7 @@ class JenoLocalRepositoryTest {
 
     private Path module(Path dir, String name, String body) throws IOException {
         Files.createDirectories(dir);
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "%s"
             version = "0.1.0"
@@ -270,7 +270,7 @@ class JenoLocalRepositoryTest {
         Files.createDirectories(dir);
         Path jar = dir.resolve(name + "-" + version + ".jar");
         writeJar(jar, marker);
-        Files.writeString(dir.resolve(name + "-" + version + ".mjm.toml"), """
+        Files.writeString(dir.resolve(name + "-" + version + ".jeno.toml"), """
             [project]
             name = "%s"
             version = "%s"
@@ -289,7 +289,7 @@ class JenoLocalRepositoryTest {
     }
 
     private static List<LockedArtifact> read(Path project) throws IOException {
-        return LockFileReader.read(Files.readString(project.resolve("mjm.lock")));
+        return LockFileReader.read(Files.readString(project.resolve("jeno.lock")));
     }
 
     private static LockedArtifact only(Path project) throws IOException {

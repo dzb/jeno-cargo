@@ -21,13 +21,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * {@code mjm classpath [--test] [--file <path>]} — the classpath an IDE should
+ * {@code jeno classpath [--test] [--file <path>]} — the classpath an IDE should
  * use for this project, printed on one line (or written to a file).
  *
  * <p>The default is the <em>compile</em> classpath under strict visibility: the
  * project's classes plus the jars it declares directly. Transitive jars are not
  * included, on purpose — an IDE that offers them would compile code that
- * {@code mjm build} rejects, which is the most confusing disagreement a build
+ * {@code jeno build} rejects, which is the most confusing disagreement a build
  * tool can have with an editor. {@code --test} widens it to the test classpath:
  * test classes, main classes, and the whole closure (main and dev).
  *
@@ -132,9 +132,9 @@ public final class ClasspathCommand implements Command {
         JenoProject project;
         List<LockedArtifact> locked;
         try {
-            project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
-            if (!Files.exists(projectDir.resolve("mjm.lock"))) {
-                String message = "no mjm.lock in " + projectDir + " — run mjm lock first";
+            project = ProjectReader.parse(Files.readString(projectDir.resolve("jeno.toml")));
+            if (!Files.exists(projectDir.resolve("jeno.lock"))) {
+                String message = "no jeno.lock in " + projectDir + " — run jeno lock first";
                 if (json) {
                     JsonResult.error("classpath", 1, "LOCK_MISSING", message).emit(1);
                 } else {
@@ -142,9 +142,9 @@ public final class ClasspathCommand implements Command {
                 }
                 return 1;
             }
-            locked = LockFileReader.read(Files.readString(projectDir.resolve("mjm.lock")));
+            locked = LockFileReader.read(Files.readString(projectDir.resolve("jeno.lock")));
         } catch (IOException e) {
-            String message = "no mjm.toml in " + projectDir + " — run mjm init to create one";
+            String message = "no jeno.toml in " + projectDir + " — run jeno init to create one";
             if (json) {
                 JsonResult.error("classpath", 1, "MANIFEST_MISSING", message).emit(1);
             } else {

@@ -19,16 +19,16 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 /**
- * The uber-jar writer shared by {@code mjm package --uber} and {@code mjm dist}:
+ * The uber-jar writer shared by {@code jeno package --uber} and {@code jeno dist}:
  * project classes first, then every closure jar merged in, with
  * {@code META-INF/services} files concatenated line-wise (ServiceLoader
  * survives), signatures and {@code module-info} dropped, and the first writer
  * winning on any duplicate resource.
  *
- * <p>mjm's own dist ships as one {@code lib/mjm-<version>.jar}: the framework it
+ * <p>jeno's own dist ships as one {@code lib/jeno-<version>.jar}: the framework it
  * is built on (freeway, slf4j) is its skeleton, not a dependency a user could
  * swap. The lifecycle toolchain (junit) is deliberately *not* merged — it is
- * only needed by {@code mjm test}, and lives in {@code lib/toolchain/}.
+ * only needed by {@code jeno test}, and lives in {@code lib/toolchain/}.
  */
 final class UberJar {
 
@@ -68,16 +68,16 @@ final class UberJar {
             if (header.mainClass() != null && !header.mainClass().isBlank()) {
                 attributes.put(Attributes.Name.MAIN_CLASS, header.mainClass());
             }
-            attributes.put(new Attributes.Name("Built-By"), "mjm");
+            attributes.put(new Attributes.Name("Built-By"), "jeno");
             if (header.title() != null && !header.title().isBlank()) {
                 attributes.put(new Attributes.Name("Implementation-Title"), header.title());
             }
             if (header.version() != null && !header.version().isBlank()) {
                 attributes.put(new Attributes.Name("Implementation-Version"), header.version());
-                attributes.put(new Attributes.Name("mjm-Version"), header.version());
+                attributes.put(new Attributes.Name("jeno-Version"), header.version());
             }
             if (!input.dependencyLabels().isEmpty()) {
-                attributes.put(new Attributes.Name("mjm-Dependencies"),
+                attributes.put(new Attributes.Name("jeno-Dependencies"),
                         String.join(" ", input.dependencyLabels()));
             }
             // A multi-release jar only gets its META-INF/versions/* classes

@@ -34,7 +34,7 @@ class ResolverTest {
     /** The descriptor URL the resolver computes for a gh-hosted native release. */
     private static String ghDescriptor(String owner, String repo, String tag, String version) {
         return "https://github.com/" + owner + "/" + repo + "/releases/download/"
-                + tag + "/" + repo + "-" + version + ".mjm.toml";
+                + tag + "/" + repo + "-" + version + ".jeno.toml";
     }
 
     private static DescriptorSource descriptorSource(String... urlAndText) {
@@ -820,7 +820,7 @@ class ResolverTest {
             """), pomSource(
                 "com.example:lib-a:1.0.0", pom("com.example", "lib-a", "1.0.0", "")),
             descriptorSource(
-                "https://github.com/acme/mylib/releases/download/v1.2.0/mylib-1.2.0.mjm.toml", """
+                "https://github.com/acme/mylib/releases/download/v1.2.0/mylib-1.2.0.jeno.toml", """
                 [project]
                 name = "mylib"
                 version = "1.2.0"
@@ -833,7 +833,7 @@ class ResolverTest {
         assertEquals("gh:acme/mylib", mylib.source());
         assertEquals("https://github.com/acme/mylib/releases/download/v1.2.0/mylib-1.2.0.jar",
                 mylib.jarUrl(), "the GitHub release layout, tag as declared");
-        assertEquals("https://github.com/acme/mylib/releases/download/v1.2.0/mylib-1.2.0.mjm.toml",
+        assertEquals("https://github.com/acme/mylib/releases/download/v1.2.0/mylib-1.2.0.jeno.toml",
                 mylib.metadataUrl(), "the descriptor travels next to the jar");
         assertEquals(1, mylib.depth());
 
@@ -855,7 +855,7 @@ class ResolverTest {
             lib-x = "gh:acme/lib-x@v1.0.0"
             lib-y = "gh:acme/lib-y@v1.0.0"
             """), pomSource(), descriptorSource(
-                "https://github.com/acme/lib-x/releases/download/v1.0.0/lib-x-1.0.0.mjm.toml", """
+                "https://github.com/acme/lib-x/releases/download/v1.0.0/lib-x-1.0.0.jeno.toml", """
                 [project]
                 name = "lib-x"
                 version = "1.0.0"
@@ -863,7 +863,7 @@ class ResolverTest {
                 [deps]
                 mylib = "gh:acme/mylib@v1.0.0"
                 """,
-                "https://github.com/acme/lib-y/releases/download/v1.0.0/lib-y-1.0.0.mjm.toml", """
+                "https://github.com/acme/lib-y/releases/download/v1.0.0/lib-y-1.0.0.jeno.toml", """
                 [project]
                 name = "lib-y"
                 version = "1.0.0"
@@ -871,12 +871,12 @@ class ResolverTest {
                 [deps]
                 mylib = "gh:acme/mylib@v1.1.0"
                 """,
-                "https://github.com/acme/mylib/releases/download/v1.0.0/mylib-1.0.0.mjm.toml", """
+                "https://github.com/acme/mylib/releases/download/v1.0.0/mylib-1.0.0.jeno.toml", """
                 [project]
                 name = "mylib"
                 version = "1.0.0"
                 """,
-                "https://github.com/acme/mylib/releases/download/v1.1.0/mylib-1.1.0.mjm.toml", """
+                "https://github.com/acme/mylib/releases/download/v1.1.0/mylib-1.1.0.jeno.toml", """
                 [project]
                 name = "mylib"
                 version = "1.1.0"

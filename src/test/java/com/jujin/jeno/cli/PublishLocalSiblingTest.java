@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Publishing into a local mjm repository: a dependency declared from that same
+ * Publishing into a local jeno repository: a dependency declared from that same
  * directory is a sibling, whether the target is spelled relatively or
  * absolutely — both name one real directory.
  */
@@ -55,11 +55,11 @@ class PublishLocalSiblingTest {
         publishArtifact(vendor, "gadget", "0.9.0");
         Path project = producer();
 
-        Result result = publish(project, "mjm:local:../vendor");
+        Result result = publish(project, "jeno:local:../vendor");
 
         assertEquals(0, result.exit(), result.out() + result.err());
         String descriptor = Files.readString(
-                vendor.resolve("widget/0.1.0/widget-0.1.0.mjm.toml"));
+                vendor.resolve("widget/0.1.0/widget-0.1.0.jeno.toml"));
         assertTrue(descriptor.contains("\"gadget\" = \"0.9.0\""),
                 "the sibling travels as a bare name: " + descriptor);
     }
@@ -70,7 +70,7 @@ class PublishLocalSiblingTest {
         publishArtifact(vendor, "gadget", "0.9.0");
         Path project = producer();
 
-        Result result = publish(project, "mjm:local:" + vendor);
+        Result result = publish(project, "jeno:local:" + vendor);
 
         assertEquals(0, result.exit(), result.out() + result.err());
         assertTrue(Files.exists(vendor.resolve("widget/0.1.0/widget-0.1.0.jar")));
@@ -84,7 +84,7 @@ class PublishLocalSiblingTest {
         publishArtifact(other, "gadget", "0.9.0");
         Path project = producer();
 
-        Result result = publish(project, "mjm:local:" + other);
+        Result result = publish(project, "jeno:local:" + other);
 
         assertEquals(1, result.exit());
         assertTrue(result.err().contains("belongs to repository 'cascade'"), result.err());
@@ -95,11 +95,11 @@ class PublishLocalSiblingTest {
 
     @Test
     void httpsSiblingComparisonIsUnchanged() {
-        var repository = com.jujin.jeno.project.Repository.parse("r", "mjm:https://HOST/repo");
+        var repository = com.jujin.jeno.project.Repository.parse("r", "jeno:https://HOST/repo");
         assertEquals(
                 com.jujin.jeno.resolve.ArtifactLocations.canonicalLocation(repository),
                 com.jujin.jeno.resolve.ArtifactLocations.canonicalLocation(
-                        com.jujin.jeno.project.Repository.parse("r2", "mjm:https://host:443/repo/")),
+                        com.jujin.jeno.project.Repository.parse("r2", "jeno:https://host:443/repo/")),
                 "host case, default port and the trailing slash are spelling");
     }
 
@@ -108,13 +108,13 @@ class PublishLocalSiblingTest {
     private Path producer() throws Exception {
         Path project = root.resolve("producer");
         Files.createDirectories(project.resolve("src/main/java/widget"));
-        Files.writeString(project.resolve("mjm.toml"), """
+        Files.writeString(project.resolve("jeno.toml"), """
             [project]
             name = "widget"
             version = "0.1.0"
 
             [repos]
-            cascade = "mjm:local:../vendor"
+            cascade = "jeno:local:../vendor"
 
             [deps]
             "gadget" = "cascade:0.9.0"
@@ -140,7 +140,7 @@ class PublishLocalSiblingTest {
             zip.write(name.getBytes(StandardCharsets.UTF_8));
             zip.closeEntry();
         }
-        Files.writeString(dir.resolve(name + "-" + version + ".mjm.toml"), """
+        Files.writeString(dir.resolve(name + "-" + version + ".jeno.toml"), """
             [project]
             name = "%s"
             version = "%s"

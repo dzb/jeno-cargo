@@ -9,12 +9,12 @@ import java.util.List;
 /**
  * minisign signing for release assets: the tar, the bootstrap setup and
  * {@code release.json}. The secret key is never printed and never copied into
- * the repository; mjm only invokes the user's minisign binary.
+ * the repository; jeno only invokes the user's minisign binary.
  *
- * <p>Environment: {@code MJM_MINISIGN_KEY} (secret key path, required unless
- * {@code --allow-unsigned}), {@code MJM_MINISIGN_PUBKEY} (public key path,
+ * <p>Environment: {@code JENO_MINISIGN_KEY} (secret key path, required unless
+ * {@code --allow-unsigned}), {@code JENO_MINISIGN_PUBKEY} (public key path,
  * optional — derived with {@code minisign -R} when absent) and
- * {@code MJM_MINISIGN} (binary, default {@code minisign}).
+ * {@code JENO_MINISIGN} (binary, default {@code minisign}).
  */
 final class ReleaseSigner {
 
@@ -36,14 +36,14 @@ final class ReleaseSigner {
      * an unsigned release is allowed only by explicit request.
      */
     static Preview prepare(boolean allowUnsigned) {
-        String key = setting("MJM_MINISIGN_KEY", "mjm.minisign.key");
-        String binary = setting("MJM_MINISIGN", "mjm.minisign.bin");
+        String key = setting("JENO_MINISIGN_KEY", "jeno.minisign.key");
+        String binary = setting("JENO_MINISIGN", "jeno.minisign.bin");
         if (binary == null) {
             binary = "minisign";
         }
         if (key == null || key.isBlank()) {
             if (!allowUnsigned) {
-                throw new SigningException("MJM_MINISIGN_KEY is not set — sign the release"
+                throw new SigningException("JENO_MINISIGN_KEY is not set — sign the release"
                         + " (see README) or pass --allow-unsigned");
             }
             System.err.println("warning: releasing unsigned — no key, no signature;"
@@ -52,7 +52,7 @@ final class ReleaseSigner {
         }
         Path keyFile = Path.of(key);
         if (!Files.isRegularFile(keyFile)) {
-            throw new SigningException("MJM_MINISIGN_KEY points at " + key + ", which is not a file");
+            throw new SigningException("JENO_MINISIGN_KEY points at " + key + ", which is not a file");
         }
         return new Preview(true, publicKey(binary, keyFile));
     }
@@ -62,8 +62,8 @@ final class ReleaseSigner {
         if (!preview.signed()) {
             return List.of();
         }
-        String key = setting("MJM_MINISIGN_KEY", "mjm.minisign.key");
-        String binary = setting("MJM_MINISIGN", "mjm.minisign.bin");
+        String key = setting("JENO_MINISIGN_KEY", "jeno.minisign.key");
+        String binary = setting("JENO_MINISIGN", "jeno.minisign.bin");
         if (binary == null) {
             binary = "minisign";
         }
@@ -79,7 +79,7 @@ final class ReleaseSigner {
 
     /** Verifies one file against its signature with the given public key. */
     static void verify(Path file, Path signature, String publicKey) {
-        String binary = setting("MJM_MINISIGN", "mjm.minisign.bin");
+        String binary = setting("JENO_MINISIGN", "jeno.minisign.bin");
         if (binary == null) {
             binary = "minisign";
         }
@@ -90,12 +90,12 @@ final class ReleaseSigner {
 
     /** The public key's base64 line, from the env file or derived from the secret. */
     private static String publicKey(String binary, Path keyFile) {
-        String declared = setting("MJM_MINISIGN_PUBKEY", "mjm.minisign.pubkey");
+        String declared = setting("JENO_MINISIGN_PUBKEY", "jeno.minisign.pubkey");
         try {
             if (declared != null && !declared.isBlank()) {
                 return publicKeyLine(Path.of(declared));
             }
-            Path derived = Files.createTempFile("mjm-minisign-", ".pub");
+            Path derived = Files.createTempFile("jeno-minisign-", ".pub");
             try {
                 run(List.of(binary, "-R", "-s", keyFile.toString(),
                         "-p", derived.toString()), "could not derive the minisign public key");
@@ -161,7 +161,7 @@ final class ReleaseSigner {
             }
         } catch (IOException e) {
             throw new SigningException(what + " — cannot run minisign (" + e.getMessage()
-                    + "); set MJM_MINISIGN or install it");
+                    + "); set JENO_MINISIGN or install it");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new SigningException(what + " — interrupted");

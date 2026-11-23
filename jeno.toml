@@ -1,15 +1,15 @@
-# mjm builds itself with mjm (DESIGN.md M3/M5 acceptance). The freeway jars come
+# jeno builds itself with jeno (DESIGN.md M3/M5 acceptance). The freeway jars come
 # from the vendor directory — a local: Maven-layout repository whose poms are
 # curated standalone manifests (no parent chain), versions re-pinned without
-# the snapshot suffix. JUnit is a main dependency because MjmTestFork (part of
-# mjm's production surface) compiles against the Platform API; [toolchain]
+# the snapshot suffix. JUnit is a main dependency because JenoTestFork (part of
+# jeno's production surface) compiles against the Platform API; [toolchain]
 # below marks those jars as test-only for packaging, so they ship under
 # lib/toolchain/ instead of being merged into the launcher jar.
-# Every byte is sha256-pinned in mjm.lock.
+# Every byte is sha256-pinned in jeno.lock.
 [project]
-name = "mjm"
+name = "jeno"
 version = "0.2.21"
-main = "com.jujin.mjm.cli.Mjm"
+main = "com.jujin.jeno.cli.Jeno"
 
 [java]
 version = 25
@@ -33,9 +33,9 @@ vendor = "local:vendor"
 
 # Packaging metadata, not another dependency scope: BundleCommand omits these
 # ids from the launcher jar and ships them under lib/toolchain/ with
-# `mjm bundle --toolchain`. Every id must already be in the locked closure.
+# `jeno bundle --toolchain`. Every id must already be in the locked closure.
 [toolchain]
 jars = ["org.apiguardian:apiguardian-api", "org.junit.jupiter:junit-jupiter-api", "org.junit.jupiter:junit-jupiter-engine", "org.junit.platform:junit-platform-commons", "org.junit.platform:junit-platform-engine", "org.junit.platform:junit-platform-launcher", "org.opentest4j:opentest4j"]
 
 [scripts]
-bootstrap = "mjm run com.jujin.mjm.cli.Mjm"
+bootstrap = "jeno run com.jujin.jeno.cli.Jeno"

@@ -13,13 +13,13 @@ import java.util.List;
 import java.util.stream.Stream;
 
 /**
- * {@code mjm clean} — remove this project's build output.
+ * {@code jeno clean} — remove this project's build output.
  *
  * <pre>
- *   mjm clean                the whole target/ (the default)
- *   mjm clean --target       the same, spelled out for scripts
- *   mjm clean --dist         only target/dist/ (the deliverables; classes stay)
- *   mjm clean --target --dist  the whole target/ either way
+ *   jeno clean                the whole target/ (the default)
+ *   jeno clean --target       the same, spelled out for scripts
+ *   jeno clean --dist         only target/dist/ (the deliverables; classes stay)
+ *   jeno clean --target --dist  the whole target/ either way
  * </pre>
  *
  * <p>Cleaning a build means removing build output. {@code target/dist/} holds what
@@ -29,7 +29,7 @@ import java.util.stream.Stream;
  *
  * <p>Never touches the store. The store is content-addressed and
  * shared across projects: deleting it would cost every project a re-download,
- * which is the opposite of what "clean my build" means. {@code mjm lock} is
+ * which is the opposite of what "clean my build" means. {@code jeno lock} is
  * the command that refreshes it, and it does so without destroying anything.
  *
  * <p>The split between the two directories is the one established earlier:

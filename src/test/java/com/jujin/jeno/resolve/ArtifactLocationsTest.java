@@ -78,25 +78,25 @@ class ArtifactLocationsTest {
         assertEquals("https://github.com/acme/mylib/releases/download/v1.2.0/mylib-1.2.0.jar",
                 ArtifactLocations.releaseFile("https://github.com", "acme", "mylib",
                         "v1.2.0", "1.2.0", "jar"));
-        assertEquals("https://github.com/acme/mylib/releases/download/v1.2.0/mylib-1.2.0.mjm.toml",
+        assertEquals("https://github.com/acme/mylib/releases/download/v1.2.0/mylib-1.2.0.jeno.toml",
                 ArtifactLocations.releaseFile("https://github.com", "acme", "mylib",
-                        "v1.2.0", "1.2.0", "mjm.toml"), "the descriptor travels next to the jar");
+                        "v1.2.0", "1.2.0", "jeno.toml"), "the descriptor travels next to the jar");
     }
 
     @Test
     void canonicalBaseSeesThroughSpellingOnly() {
-        assertEquals(ArtifactLocations.canonicalBase("mjm:https://host/repo/"),
-                ArtifactLocations.canonicalBase("mjm:https://HOST/repo"),
+        assertEquals(ArtifactLocations.canonicalBase("jeno:https://host/repo/"),
+                ArtifactLocations.canonicalBase("jeno:https://HOST/repo"),
                 "host case and the trailing slash are spelling");
-        assertEquals(ArtifactLocations.canonicalBase("mjm:https://host/repo/"),
-                ArtifactLocations.canonicalBase("mjm:https://host:443/repo/"),
+        assertEquals(ArtifactLocations.canonicalBase("jeno:https://host/repo/"),
+                ArtifactLocations.canonicalBase("jeno:https://host:443/repo/"),
                 "the default port is spelling");
 
-        assertNotEquals(ArtifactLocations.canonicalBase("mjm:https://host/repo/"),
-                ArtifactLocations.canonicalBase("mjm:https://other-host/repo/"),
+        assertNotEquals(ArtifactLocations.canonicalBase("jeno:https://host/repo/"),
+                ArtifactLocations.canonicalBase("jeno:https://other-host/repo/"),
                 "a different host is a different repository");
-        assertNotEquals(ArtifactLocations.canonicalBase("mjm:https://host/repo/"),
-                ArtifactLocations.canonicalBase("mjm:https://host/other/"),
+        assertNotEquals(ArtifactLocations.canonicalBase("jeno:https://host/repo/"),
+                ArtifactLocations.canonicalBase("jeno:https://host/other/"),
                 "a different path is a different repository");
     }
 

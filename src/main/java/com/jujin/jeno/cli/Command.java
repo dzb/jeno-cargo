@@ -3,7 +3,7 @@ package com.jujin.jeno.cli;
 import java.util.List;
 
 /**
- * One mjm command ({@code lock}, {@code build}, {@code run} — the M3 set).
+ * One jeno command ({@code lock}, {@code build}, {@code run} — the M3 set).
  * Commands are contributed to the container and constructed with injection;
  * {@link CommandRunner} dispatches by name.
  */
@@ -74,7 +74,7 @@ public interface Command {
 
     /**
      * Extra help text, printed under the summary by
-     * {@code mjm <command> --help} — the rules of a command's output that do
+     * {@code jeno <command> --help} — the rules of a command's output that do
      * not fit on one line. Defaults to empty; each line is indented to match
      * the summary.
      */

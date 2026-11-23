@@ -16,12 +16,12 @@ class UiTest {
 
     @AfterEach
     void clearOverride() {
-        System.clearProperty("mjm.color");
+        System.clearProperty("jeno.color");
     }
 
     @Test
     void forcedColourUsesGlyphsAndAnsi() {
-        System.setProperty("mjm.color", "always");
+        System.setProperty("jeno.color", "always");
 
         assertTrue(Ui.enabled());
         assertTrue(Ui.ok("built").contains("✓"));
@@ -33,7 +33,7 @@ class UiTest {
 
     @Test
     void capturedStdoutNeverGetsAnsiUnlessColourIsForced() {
-        System.clearProperty("mjm.color");
+        System.clearProperty("jeno.color");
         PrintStream original = System.out;
         try {
             System.setOut(new PrintStream(new ByteArrayOutputStream(), true,
@@ -46,7 +46,7 @@ class UiTest {
 
     @Test
     void propertyAlwaysOverridesNoColor() {
-        System.setProperty("mjm.color", "always");
+        System.setProperty("jeno.color", "always");
 
         // NO_COLOR may be set in the real environment; the programmatic
         // property is an explicit override, not an environment choice.
@@ -54,7 +54,7 @@ class UiTest {
     }
 
     @Test
-    void mjmColorAlwaysAloneEnablesColour() {
+    void jenoColorAlwaysAloneEnablesColour() {
         assertTrue(Ui.enabled("always", false));
     }
 
@@ -65,13 +65,13 @@ class UiTest {
 
     @Test
     void neverKeepsTheExistingPlainText() {
-        System.setProperty("mjm.color", "never");
+        System.setProperty("jeno.color", "never");
 
         assertFalse(Ui.enabled());
         assertEquals("built", Ui.ok("built"));
         assertEquals("failed", Ui.fail("failed"));
-        assertEquals("mjm: missing", Ui.error("missing"));
-        assertEquals("mjm: ", Ui.errPrefix());
+        assertEquals("jeno: missing", Ui.error("missing"));
+        assertEquals("jeno: ", Ui.errPrefix());
         assertEquals("ok: present", Ui.check("present"));
         assertEquals("", Ui.duration(System.nanoTime() - 2_000_000L));
         assertEquals("error: broken", Ui.cross("broken"));

@@ -7,12 +7,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Reads a mj-native release descriptor ({@code {artifact}-{version}.mjm.toml})
+ * Reads a mj-native release descriptor ({@code {artifact}-{version}.jeno.toml})
  * into {@link Descriptor} under SPEC.md §3's closed schema. The descriptor is
- * facts only: dependencies in the same value shapes as mjm.toml, an optional
+ * facts only: dependencies in the same value shapes as jeno.toml, an optional
  * java requirement, an optional {@code [retract]} table. Everything that is a
  * rule — repositories, limits, overrides, scripts — is rejected here, because
- * the rules live only in the consumer's mjm.toml.
+ * the rules live only in the consumer's jeno.toml.
  *
  * <p>Consistency is part of the schema: the descriptor's name and version
  * must equal what the consumer asked for (they also appear in the file name;
@@ -32,14 +32,14 @@ public final class DescriptorReader {
     }
 
     /**
-     * The full form: {@code siblingRepository} is the {@code mjm:} repository the
+     * The full form: {@code siblingRepository} is the {@code jeno:} repository the
      * descriptor came from, where a bare name means another artifact in it.
      */
     public static Descriptor parse(String text, String expectedName, String expectedVersion,
                                    String siblingRepository) {
         Map<String, Object> root = TomlUtils.parse(text);
         SchemaSource source = SchemaSource.scan(text);
-        String file = expectedName + "-" + expectedVersion + ".mjm.toml";
+        String file = expectedName + "-" + expectedVersion + ".jeno.toml";
 
         for (Map.Entry<String, Object> entry : root.entrySet()) {
             if (!(entry.getValue() instanceof Map)) {
@@ -89,7 +89,7 @@ public final class DescriptorReader {
             javaVersion = requireInteger(javaSection, "java", "version");
         }
 
-        // identity facts — optional, immutable, read only by `mjm info`
+        // identity facts — optional, immutable, read only by `jeno info`
         String group = optionalString(projectSection, "project", "group");
         String summary = optionalString(projectSection, "project", "summary");
         String homepage = optionalString(projectSection, "project", "homepage");

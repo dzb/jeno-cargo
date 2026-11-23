@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * mjm.lock's round trip: what the resolver serializes, the reader returns —
+ * jeno.lock's round trip: what the resolver serializes, the reader returns —
  * and anything a hand slipped in is rejected.
  */
 class LockFileReaderTest {

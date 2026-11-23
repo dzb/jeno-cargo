@@ -36,7 +36,7 @@ class ProjectLockTest {
 
     @Test
     void theLockLivesOutsideTheProject() throws Exception {
-        Path root = Files.createTempDirectory("mjm-locks-test");
+        Path root = Files.createTempDirectory("jeno-locks-test");
         try {
             ProjectLock.useRoot(root);
             Path lock = ProjectLock.lockFile(dir);

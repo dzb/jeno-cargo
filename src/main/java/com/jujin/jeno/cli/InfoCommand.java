@@ -20,23 +20,23 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * {@code mjm info <id>} — everything there is to know about one locked
+ * {@code jeno info <id>} — everything there is to know about one locked
  * dependency: what it is, where it came from, what it needs, and where its
  * source lives.
  *
  * <pre>
- *   mjm info "acme:widget"             show the facts (never writes anything)
- *   mjm info "acme:widget" --source    also fetch the source tree and print its path
+ *   jeno info "acme:widget"             show the facts (never writes anything)
+ *   jeno info "acme:widget" --source    also fetch the source tree and print its path
  * </pre>
  *
- * <p>Source is addressed, not shipped: mjm never publishes a {@code -sources.jar}
+ * <p>Source is addressed, not shipped: jeno never publishes a {@code -sources.jar}
  * (Go and Cargo never split source from artifact), but the lockfile pins the
  * exact tag, so the tree is always reachable at a stable URL. Central
  * dependencies — which were published by a binary-first ecosystem — fall back
  * to the publisher's own sources jar when one exists.
  *
  * <p>The read/write split is deliberate: reading facts is free and safe, so
- * {@code mjm info} is pure output; fetching a source tree writes to
+ * {@code jeno info} is pure output; fetching a source tree writes to
  * the sources root, which only {@code --source} asks for.
  */
 public final class InfoCommand implements Command {
@@ -113,7 +113,7 @@ public final class InfoCommand implements Command {
             } else if (id == null) {
                 id = arg;
             } else {
-                String message = "info takes one dependency id — mjm info \"group:artifact\"";
+                String message = "info takes one dependency id — jeno info \"group:artifact\"";
                 if (json) {
                     JsonResult.error("info", 2, "USAGE", message).emit(2);
                 } else {
@@ -123,7 +123,7 @@ public final class InfoCommand implements Command {
             }
         }
         if (id == null) {
-            String message = "info needs a dependency id — mjm info \"group:artifact\"";
+            String message = "info needs a dependency id — jeno info \"group:artifact\"";
             if (json) {
                 JsonResult.error("info", 2, "USAGE", message).emit(2);
             } else {
@@ -141,9 +141,9 @@ public final class InfoCommand implements Command {
 
         List<LockedArtifact> locked;
         try {
-            locked = LockFileReader.read(Files.readString(projectDir.resolve("mjm.lock")));
+            locked = LockFileReader.read(Files.readString(projectDir.resolve("jeno.lock")));
         } catch (IOException e) {
-            String message = "no readable mjm.lock in " + projectDir + " — run mjm lock first";
+            String message = "no readable jeno.lock in " + projectDir + " — run jeno lock first";
             if (json) {
                 JsonResult.error("info", 1, "LOCK_UNREADABLE", message).emit(1);
             } else {
@@ -163,7 +163,7 @@ public final class InfoCommand implements Command {
                 .findFirst()
                 .orElse(null);
         if (artifact == null) {
-            String message = "'" + wanted + "' is not in the closure — mjm why " + wanted
+            String message = "'" + wanted + "' is not in the closure — jeno why " + wanted
                     + " shows what is";
             if (json) {
                 JsonResult.error("info", 1, "ARTIFACT_NOT_FOUND", message).emit(1);
@@ -222,7 +222,7 @@ public final class InfoCommand implements Command {
 
         if (!fetchSource) {
             if (sourcePage != null || !artifact.source().equals("url")) {
-                System.out.println("\nfetch the tree: mjm info \"" + artifact.id() + "\" --source");
+                System.out.println("\nfetch the tree: jeno info \"" + artifact.id() + "\" --source");
             }
             return 0;
         }
@@ -467,8 +467,8 @@ public final class InfoCommand implements Command {
         }
         Repository repository = artifact.source().equals("central")
                 ? null : Repository.parse(artifact.source());
-        if (repository != null && repository.layout() == Repository.Layout.MJM) {
-            System.err.println(Ui.errPrefix() + "'" + artifact.id() + "' comes from an mjm-layout repository — "
+        if (repository != null && repository.layout() == Repository.Layout.JENO) {
+            System.err.println(Ui.errPrefix() + "'" + artifact.id() + "' comes from an jeno-layout repository — "
                     + "this origin has no source tree (it publishes jars only)");
             return 1;
         }
@@ -588,7 +588,7 @@ public final class InfoCommand implements Command {
 
     /** The sources root ({@link com.jujin.jeno.store.Paths#sources()}) — extracted trees, not pinned bytes. */
     private static Path sourcesDir() {
-        String override = System.getProperty("mjm.sources.root");
+        String override = System.getProperty("jeno.sources.root");
         if (override != null && !override.isBlank()) {
             return Path.of(override);
         }

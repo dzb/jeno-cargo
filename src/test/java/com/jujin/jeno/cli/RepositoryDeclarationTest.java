@@ -76,20 +76,20 @@ class RepositoryDeclarationTest {
         assertEquals("local:../maven-vendor",
                 LockFileFirst.source(mavenProject));
 
-        // mjm + directory: a descriptor on disk
-        Path mjmVendor = root.resolve("mjm-vendor");
-        mjmArtifact(mjmVendor, "gadget", "0.9.0");
-        Path mjmProject = project("mjm-proj", """
+        // jeno + directory: a descriptor on disk
+        Path jenoVendor = root.resolve("jeno-vendor");
+        jenoArtifact(jenoVendor, "gadget", "0.9.0");
+        Path jenoProject = project("jeno-proj", """
             [repos.v]
-            type = "mjm"
-            url = "../mjm-vendor"
+            type = "jeno"
+            url = "../jeno-vendor"
 
             [deps]
             "gadget" = "v:0.9.0"
             """);
-        useRoot(mjmProject);
-        locks.refresh(mjmProject);
-        assertEquals("mjm:local:../mjm-vendor", LockFileFirst.source(mjmProject));
+        useRoot(jenoProject);
+        locks.refresh(jenoProject);
+        assertEquals("jeno:local:../jeno-vendor", LockFileFirst.source(jenoProject));
 
         // https forms are pure parsing: both layouts stay distinguishable
         JenoProject parsed = ProjectReader.parse("""
@@ -101,14 +101,14 @@ class RepositoryDeclarationTest {
             type = "maven"
             url = "https://a.example/"
 
-            [repos.mjmish]
-            type = "mjm"
+            [repos.jenoish]
+            type = "jeno"
             url = "https://b.example/"
             """);
         assertEquals(Repository.Layout.MAVEN, parsed.repos().get("mavenish").layout());
         assertEquals(Repository.Transport.NETWORK, parsed.repos().get("mavenish").transport());
-        assertEquals(Repository.Layout.MJM, parsed.repos().get("mjmish").layout());
-        assertEquals("mjm:https://b.example/", parsed.repos().get("mjmish").declaration());
+        assertEquals(Repository.Layout.JENO, parsed.repos().get("jenoish").layout());
+        assertEquals("jeno:https://b.example/", parsed.repos().get("jenoish").declaration());
     }
 
     @Test
@@ -123,7 +123,7 @@ class RepositoryDeclarationTest {
         server.createContext("/", exchange -> {
             String path = exchange.getRequestURI().getPath();
             byte[] body = switch (path) {
-                case "/widget/1.0.0/widget-1.0.0.mjm.toml" ->
+                case "/widget/1.0.0/widget-1.0.0.jeno.toml" ->
                         descriptor.getBytes(StandardCharsets.UTF_8);
                 case "/widget/1.0.0/widget-1.0.0.jar" -> jar;
                 default -> null;
@@ -141,7 +141,7 @@ class RepositoryDeclarationTest {
         String base = "http://localhost:" + server.getAddress().getPort();
         Path project = project("typed", """
             [repos.mine]
-            type = "mjm"
+            type = "jeno"
             url = "%s"
 
             [deps]
@@ -151,7 +151,7 @@ class RepositoryDeclarationTest {
 
         locks.refresh(project);
 
-        assertEquals("mjm:" + base, LockFileFirst.source(project),
+        assertEquals("jeno:" + base, LockFileFirst.source(project),
                 "the canonical declaration records the layout explicitly");
     }
 
@@ -168,9 +168,9 @@ class RepositoryDeclarationTest {
                     url = "https://host/"
                     """));
 
-        assertTrue(error.getMessage().contains("maven") && error.getMessage().contains("mjm"),
+        assertTrue(error.getMessage().contains("maven") && error.getMessage().contains("jeno"),
                 error.getMessage());
-        assertTrue(error.getMessage().contains("mjm.toml:6:1"), error.getMessage());
+        assertTrue(error.getMessage().contains("jeno.toml:6:1"), error.getMessage());
     }
 
     @Test
@@ -185,7 +185,7 @@ class RepositoryDeclarationTest {
                     urls = "https://host/"
                     """));
 
-        assertTrue(error.getMessage().contains("mjm.toml:6:1"), error.getMessage());
+        assertTrue(error.getMessage().contains("jeno.toml:6:1"), error.getMessage());
         assertTrue(error.getMessage().contains("allowed: type, url"), error.getMessage());
     }
 
@@ -198,10 +198,10 @@ class RepositoryDeclarationTest {
                     version = "1.0.0"
 
                     [repos.x]
-                    type = "mjm"
+                    type = "jeno"
                     """));
 
-        assertTrue(error.getMessage().contains("mjm.toml:5:1"), error.getMessage());
+        assertTrue(error.getMessage().contains("jeno.toml:5:1"), error.getMessage());
         assertTrue(error.getMessage().contains("needs a url"), error.getMessage());
     }
 
@@ -215,27 +215,27 @@ class RepositoryDeclarationTest {
             [repos]
             plain = "https://host/"
             maven-local = "local:../vendor"
-            native = "mjm:https://host/mine/"
-            native-local = "mjm:local:../vendor"
+            native = "jeno:https://host/mine/"
+            native-local = "jeno:local:../vendor"
             """);
 
         assertEquals(Repository.Layout.MAVEN, parsed.repos().get("plain").layout());
         assertEquals(Repository.Transport.NETWORK, parsed.repos().get("plain").transport());
         assertEquals(Repository.Layout.MAVEN, parsed.repos().get("maven-local").layout());
         assertEquals(Repository.Transport.LOCAL, parsed.repos().get("maven-local").transport());
-        assertEquals(Repository.Layout.MJM, parsed.repos().get("native").layout());
-        assertEquals("mjm:https://host/mine/", parsed.repos().get("native").declaration());
-        assertEquals(Repository.Layout.MJM, parsed.repos().get("native-local").layout());
-        assertEquals("mjm:local:../vendor", parsed.repos().get("native-local").declaration());
+        assertEquals(Repository.Layout.JENO, parsed.repos().get("native").layout());
+        assertEquals("jeno:https://host/mine/", parsed.repos().get("native").declaration());
+        assertEquals(Repository.Layout.JENO, parsed.repos().get("native-local").layout());
+        assertEquals("jeno:local:../vendor", parsed.repos().get("native-local").declaration());
     }
 
     @Test
     void theNewFormAndTheEquivalentLegacyFormWriteTheSameLock() throws Exception {
-        mjmArtifact(root.resolve("vendor"), "gadget", "0.9.0");
+        jenoArtifact(root.resolve("vendor"), "gadget", "0.9.0");
 
         Path newProject = project("new", """
             [repos.v]
-            type = "mjm"
+            type = "jeno"
             url = "../vendor"
 
             [deps]
@@ -243,7 +243,7 @@ class RepositoryDeclarationTest {
             """);
         Path oldProject = project("old", """
             [repos]
-            v = "mjm:local:../vendor"
+            v = "jeno:local:../vendor"
 
             [deps]
             "gadget" = "v:0.9.0"
@@ -253,8 +253,8 @@ class RepositoryDeclarationTest {
         useRoot(oldProject);
         locks.refresh(oldProject);
 
-        assertEquals(Files.readString(oldProject.resolve("mjm.lock")),
-                Files.readString(newProject.resolve("mjm.lock")),
+        assertEquals(Files.readString(oldProject.resolve("jeno.lock")),
+                Files.readString(newProject.resolve("jeno.lock")),
                 "the new spelling is a source form; the lock bytes are the same");
     }
 
@@ -265,7 +265,7 @@ class RepositoryDeclarationTest {
         static String source(Path project) throws IOException {
             List<com.jujin.jeno.store.LockedArtifact> rows =
                     com.jujin.jeno.store.LockFileReader.read(
-                            Files.readString(project.resolve("mjm.lock")));
+                            Files.readString(project.resolve("jeno.lock")));
             return rows.getFirst().source();
         }
     }
@@ -277,7 +277,7 @@ class RepositoryDeclarationTest {
     private Path project(String name, String body) throws IOException {
         Path dir = root.resolve(name);
         Files.createDirectories(dir);
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "%s"
             version = "0.1.0"
@@ -286,13 +286,13 @@ class RepositoryDeclarationTest {
         return dir;
     }
 
-    private static void mjmArtifact(Path repository, String name, String version)
+    private static void jenoArtifact(Path repository, String name, String version)
             throws IOException {
         Path dir = repository.resolve(name).resolve(version);
         Files.createDirectories(dir);
         Path jar = dir.resolve(name + "-" + version + ".jar");
         Files.write(jar, jarBytes(name));
-        Files.writeString(dir.resolve(name + "-" + version + ".mjm.toml"), """
+        Files.writeString(dir.resolve(name + "-" + version + ".jeno.toml"), """
             [project]
             name = "%s"
             version = "%s"

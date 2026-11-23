@@ -19,8 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code mjm remove} — the missing verb. Before it existed, dropping a
- * dependency meant hand-editing mjm.toml and remembering to re-lock; now one
+ * {@code jeno remove} — the missing verb. Before it existed, dropping a
+ * dependency meant hand-editing jeno.toml and remembering to re-lock; now one
  * line goes away, comments and layout survive, and the lock is refreshed.
  */
 class RemoveCommandTest {
@@ -102,7 +102,7 @@ class RemoveCommandTest {
 
     @Test
     void anUndeclaredIdIsAnErrorNamingTheDeclaredSet(@TempDir Path storeDir) throws Exception {
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -113,7 +113,7 @@ class RemoveCommandTest {
 
         int exit = remove(storeDir).execute(java.util.List.of("com.example:absent"));
         assertEquals(1, exit, "removing an undeclared id fails");
-        assertTrue(Files.readString(dir.resolve("mjm.toml")).contains("lib-a"),
+        assertTrue(Files.readString(dir.resolve("jeno.toml")).contains("lib-a"),
                 "the file was not touched");
     }
 
@@ -125,8 +125,8 @@ class RemoveCommandTest {
                 new StorePomSource(new ArtifactStore(warmStore)),
                 new StoreDescriptorSource(new ArtifactStore(warmStore)));
         warm.refresh(dir);
-        byte[] toml = Files.readAllBytes(dir.resolve("mjm.toml"));
-        byte[] locked = Files.readAllBytes(dir.resolve("mjm.lock"));
+        byte[] toml = Files.readAllBytes(dir.resolve("jeno.toml"));
+        byte[] locked = Files.readAllBytes(dir.resolve("jeno.lock"));
 
         // lib-b disappears from the repository; the store passed to remove has
         // never seen it, so the re-lock must fail
@@ -138,10 +138,10 @@ class RemoveCommandTest {
                 new StoreDescriptorSource(empty)), dir).execute(List.of("com.example:lib-a"));
 
         assertEquals(1, exit, "the remaining dependency cannot be resolved");
-        assertArrayEquals(toml, Files.readAllBytes(dir.resolve("mjm.toml")),
-                "mjm.toml is byte-for-byte what it was");
-        assertArrayEquals(locked, Files.readAllBytes(dir.resolve("mjm.lock")),
-                "mjm.lock is byte-for-byte what it was");
+        assertArrayEquals(toml, Files.readAllBytes(dir.resolve("jeno.toml")),
+                "jeno.toml is byte-for-byte what it was");
+        assertArrayEquals(locked, Files.readAllBytes(dir.resolve("jeno.lock")),
+                "jeno.lock is byte-for-byte what it was");
     }
 
     /** Two dependencies from a local Maven-layout repository under {@code dir}. */
@@ -160,7 +160,7 @@ class RemoveCommandTest {
                 """.formatted(artifact));
             Files.write(pom.resolveSibling(artifact + "-1.0.0.jar"), artifact.getBytes());
         }
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -194,8 +194,8 @@ class RemoveCommandTest {
         assertEquals("com.example:lib-a", json.getObject("removed").getString("id"));
         assertEquals(1, json.getInt("artifactCount"));
         assertEquals(true, json.getBoolean("lockUpdated"));
-        assertFalse(Files.readString(dir.resolve("mjm.toml")).contains("lib-a"));
-        assertTrue(Files.exists(dir.resolve("mjm.lock")));
+        assertFalse(Files.readString(dir.resolve("jeno.toml")).contains("lib-a"));
+        assertTrue(Files.exists(dir.resolve("jeno.lock")));
     }
 
     @Test

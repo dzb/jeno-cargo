@@ -59,9 +59,9 @@ class AddCommandTest {
         if (central != null) {
             central.stop(0);
         }
-        System.clearProperty("mjm.central.base");
-        System.clearProperty("mjm.github.host");
-        System.clearProperty("mjm.search.host");
+        System.clearProperty("jeno.central.base");
+        System.clearProperty("jeno.github.host");
+        System.clearProperty("jeno.search.host");
         ProjectLock.useUserRoot();
         resetOffline();
     }
@@ -92,7 +92,7 @@ class AddCommandTest {
             }
         });
         central.start();
-        System.setProperty("mjm.central.base",
+        System.setProperty("jeno.central.base",
                 "http://localhost:" + central.getAddress().getPort() + "/");
     }
 
@@ -106,7 +106,7 @@ class AddCommandTest {
         """;
 
     private AddCommand add() throws IOException {
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -127,12 +127,12 @@ class AddCommandTest {
         int exit = add().execute(List.of("com.example:lib-a", "1.0.0"));
 
         assertEquals(0, exit);
-        String mjToml = Files.readString(dir.resolve("mjm.toml"));
+        String mjToml = Files.readString(dir.resolve("jeno.toml"));
         assertTrue(mjToml.contains("\"com.example:lib-a\" = \"1.0.0\""),
                 "the line landed in [deps], got:\n" + mjToml);
 
         List<LockedArtifact> locked = LockFileReader.read(
-                Files.readString(dir.resolve("mjm.lock")));
+                Files.readString(dir.resolve("jeno.lock")));
         assertEquals(1, locked.size());
         assertEquals("com.example:lib-a", locked.getFirst().id());
         assertEquals(64, locked.getFirst().sha256().length(), "the re-lock pinned the digest");
@@ -165,7 +165,7 @@ class AddCommandTest {
         assertEquals("1.0.0", json.getObject("dependency").getString("value"));
         assertEquals(1, json.getInt("artifactCount"));
         assertEquals(true, json.getBoolean("lockUpdated"));
-        assertTrue(Files.readString(dir.resolve("mjm.toml"))
+        assertTrue(Files.readString(dir.resolve("jeno.toml"))
                 .contains("\"com.example:lib-a\" = \"1.0.0\""));
     }
 
@@ -177,8 +177,8 @@ class AddCommandTest {
         LockService lockService = new LockService(store, new StorePomSource(store),
                 new StoreDescriptorSource(store));
         lockService.refresh(project);
-        byte[] toml = Files.readAllBytes(project.resolve("mjm.toml"));
-        byte[] locked = Files.readAllBytes(project.resolve("mjm.lock"));
+        byte[] toml = Files.readAllBytes(project.resolve("jeno.toml"));
+        byte[] locked = Files.readAllBytes(project.resolve("jeno.lock"));
 
         // nothing serves this coordinate: the fetch fails inside prepare
         central = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
@@ -187,17 +187,17 @@ class AddCommandTest {
             exchange.close();
         });
         central.start();
-        System.setProperty("mjm.central.base",
+        System.setProperty("jeno.central.base",
                 "http://localhost:" + central.getAddress().getPort() + "/");
 
         int exit = new AddCommand(lockService, store, project)
                 .execute(List.of("com.example:absent", "1.0.0"));
 
         assertEquals(1, exit, "the dependency cannot be resolved");
-        assertArrayEquals(toml, Files.readAllBytes(project.resolve("mjm.toml")),
-                "mjm.toml is byte-for-byte what it was");
-        assertArrayEquals(locked, Files.readAllBytes(project.resolve("mjm.lock")),
-                "mjm.lock is byte-for-byte what it was");
+        assertArrayEquals(toml, Files.readAllBytes(project.resolve("jeno.toml")),
+                "jeno.toml is byte-for-byte what it was");
+        assertArrayEquals(locked, Files.readAllBytes(project.resolve("jeno.lock")),
+                "jeno.lock is byte-for-byte what it was");
     }
 
     /** A project whose one dependency comes from a local Maven-layout repo. */
@@ -206,7 +206,7 @@ class AddCommandTest {
         Files.createDirectories(pom.getParent());
         Files.writeString(pom, LIB_A_POM);
         Files.write(pom.resolveSibling("lib-a-1.0.0.jar"), "lib-a".getBytes());
-        Files.writeString(project.resolve("mjm.toml"), """
+        Files.writeString(project.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -227,7 +227,7 @@ class AddCommandTest {
                 LIB_A_POM.replace("lib-a", "lib-b"));
         Files.write(project.resolve("vendor/com/example/lib-b/1.0.0/lib-b-1.0.0.jar"),
                 "lib-b".getBytes());
-        Files.writeString(project.resolve("mjm.toml"), """
+        Files.writeString(project.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -248,10 +248,10 @@ class AddCommandTest {
         }
 
         assertEquals(0, exit);
-        assertTrue(Files.readString(project.resolve("mjm.toml"))
+        assertTrue(Files.readString(project.resolve("jeno.toml"))
                         .contains("\"com.example:lib-b\" = \"vendor:1.0.0\""),
                 "the value shape lands in [deps]");
-        assertTrue(Files.readString(project.resolve("mjm.lock"))
+        assertTrue(Files.readString(project.resolve("jeno.lock"))
                         .contains("source = \"local:vendor\""),
                 "and resolves through the named repository");
     }
@@ -264,7 +264,7 @@ class AddCommandTest {
             version = "1.0.0"
             """;
         HttpServer github = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        github.createContext("/acme/mylib/releases/download/v1.0.0/mylib-1.0.0.mjm.toml",
+        github.createContext("/acme/mylib/releases/download/v1.0.0/mylib-1.0.0.jeno.toml",
                 exchange -> {
                     byte[] body = descriptor.getBytes();
                     exchange.sendResponseHeaders(200, body.length);
@@ -280,10 +280,10 @@ class AddCommandTest {
                 });
         github.start();
         String host = "http://localhost:" + github.getAddress().getPort();
-        System.setProperty("mjm.github.host", host);
+        System.setProperty("jeno.github.host", host);
         try {
             Path project = Files.createDirectories(dir.resolve("native"));
-            Files.writeString(project.resolve("mjm.toml"), """
+            Files.writeString(project.resolve("jeno.toml"), """
                 [project]
                 name = "demo"
                 version = "0.1.0"
@@ -295,24 +295,24 @@ class AddCommandTest {
                     .execute(List.of("acme/mylib@v1.0.0"));
 
             assertEquals(0, exit);
-            assertTrue(Files.readString(project.resolve("mjm.toml"))
+            assertTrue(Files.readString(project.resolve("jeno.toml"))
                             .contains("\"mylib\" = \"gh:acme/mylib@v1.0.0\""),
                     "owner/repo@tag becomes the gh: value, keyed by the repo name");
         } finally {
             github.stop(0);
-            System.clearProperty("mjm.github.host");
+            System.clearProperty("jeno.github.host");
         }
     }
 
     @Test
     void aNativeShorthandWithoutATagIsRefused() throws Exception {
         Path project = Files.createDirectories(dir.resolve("no-tag"));
-        Files.writeString(project.resolve("mjm.toml"), """
+        Files.writeString(project.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
             """);
-        byte[] before = Files.readAllBytes(project.resolve("mjm.toml"));
+        byte[] before = Files.readAllBytes(project.resolve("jeno.toml"));
         ArtifactStore store = new ArtifactStore(storeDir);
 
         int exit = new AddCommand(new LockService(store, new StorePomSource(store),
@@ -320,7 +320,7 @@ class AddCommandTest {
                 .execute(List.of("acme/mylib"));
 
         assertEquals(2, exit);
-        assertArrayEquals(before, Files.readAllBytes(project.resolve("mjm.toml")),
+        assertArrayEquals(before, Files.readAllBytes(project.resolve("jeno.toml")),
                 "nothing was written");
     }
 
@@ -341,10 +341,10 @@ class AddCommandTest {
         try {
             lockService.refresh(project);
             // make the lock destination unwritable as a file: a non-empty directory
-            Files.delete(project.resolve("mjm.lock"));
-            Files.createDirectories(project.resolve("mjm.lock"));
-            Files.writeString(project.resolve("mjm.lock/keep"), "x");
-            before = Files.readAllBytes(project.resolve("mjm.toml"));
+            Files.delete(project.resolve("jeno.lock"));
+            Files.createDirectories(project.resolve("jeno.lock"));
+            Files.writeString(project.resolve("jeno.lock/keep"), "x");
+            before = Files.readAllBytes(project.resolve("jeno.toml"));
 
             int exit = new AddCommand(lockService, store, project)
                     .execute(List.of("com.example:lib-b", "vendor:1.0.0"));
@@ -354,7 +354,7 @@ class AddCommandTest {
             ArtifactLocations.useProjectRoot(Path.of("").toAbsolutePath());
         }
 
-        assertArrayEquals(before, Files.readAllBytes(project.resolve("mjm.toml")),
+        assertArrayEquals(before, Files.readAllBytes(project.resolve("jeno.toml")),
                 "a manifest written before the lock failed is restored byte for byte");
         try (var files = Files.list(project)) {
             assertFalse(files.anyMatch(path -> path.getFileName().toString().endsWith(".tmp")),
@@ -379,8 +379,8 @@ class AddCommandTest {
         try {
             lockService.refresh(project);
             shared = PosixFilePermissions.fromString("rw-r--r--");
-            Files.setPosixFilePermissions(project.resolve("mjm.toml"), shared);
-            Files.setPosixFilePermissions(project.resolve("mjm.lock"), shared);
+            Files.setPosixFilePermissions(project.resolve("jeno.toml"), shared);
+            Files.setPosixFilePermissions(project.resolve("jeno.lock"), shared);
 
             assertEquals(0, new AddCommand(lockService, store, project)
                     .execute(List.of("com.example:lib-b", "vendor:1.0.0")));
@@ -390,9 +390,9 @@ class AddCommandTest {
 
         // createTempFile makes an owner-only file; the manifest must not lose
         // the access a plain write would have kept
-        assertEquals(shared, Files.getPosixFilePermissions(project.resolve("mjm.toml")),
+        assertEquals(shared, Files.getPosixFilePermissions(project.resolve("jeno.toml")),
                 "the manifest keeps its permissions across an atomic rewrite");
-        assertEquals(shared, Files.getPosixFilePermissions(project.resolve("mjm.lock")),
+        assertEquals(shared, Files.getPosixFilePermissions(project.resolve("jeno.lock")),
                 "and so does the lockfile");
     }
 
@@ -443,7 +443,7 @@ class AddCommandTest {
     @Test
     void anAddWaitsWhileTheProjectLockIsHeld(@TempDir Path projectStore) throws Exception {
         Path project = Files.createDirectories(dir.resolve("waits"));
-        Files.writeString(project.resolve("mjm.toml"), """
+        Files.writeString(project.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -451,7 +451,7 @@ class AddCommandTest {
         ArtifactStore store = new ArtifactStore(projectStore);
         LockService lockService = new LockService(store, new StorePomSource(store),
                 new StoreDescriptorSource(store));
-        System.setProperty("mjm.central.base", "http://127.0.0.1:9/");
+        System.setProperty("jeno.central.base", "http://127.0.0.1:9/");
 
         CountDownLatch held = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
@@ -490,7 +490,7 @@ class AddCommandTest {
             Files.writeString(pom, LIB_A_POM.replace("lib-a", artifact));
             Files.write(pom.resolveSibling(artifact + "-1.0.0.jar"), artifact.getBytes());
         }
-        Files.writeString(project.resolve("mjm.toml"), """
+        Files.writeString(project.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -515,11 +515,11 @@ class AddCommandTest {
             ArtifactLocations.useProjectRoot(Path.of("").toAbsolutePath());
         }
 
-        String manifest = Files.readString(project.resolve("mjm.toml"));
+        String manifest = Files.readString(project.resolve("jeno.toml"));
         assertTrue(manifest.contains("\"com.example:lib-a\" = \"vendor:1.0.0\""), manifest);
         assertTrue(manifest.contains("\"com.example:lib-b\" = \"vendor:1.0.0\""),
                 "the second add read the first one's manifest: " + manifest);
-        assertEquals(2, LockFileReader.read(Files.readString(project.resolve("mjm.lock"))).size(),
+        assertEquals(2, LockFileReader.read(Files.readString(project.resolve("jeno.lock"))).size(),
                 "both dependencies are locked");
     }
 
@@ -531,7 +531,7 @@ class AddCommandTest {
 
         int exit = add.execute(List.of("com.example:lib-a", "2.0.0"));
 
-        assertEquals(1, exit, "an id may appear once — edit mjm.toml instead");
+        assertEquals(1, exit, "an id may appear once — edit jeno.toml instead");
     }
 
     @Test
@@ -541,7 +541,7 @@ class AddCommandTest {
         int exit = add.execute(List.of("mylib", "gh:acme/mylib@latest"));
 
         assertEquals(1, exit);
-        assertTrue(!Files.readString(dir.resolve("mjm.toml")).contains("mylib"),
+        assertTrue(!Files.readString(dir.resolve("jeno.toml")).contains("mylib"),
                 "nothing was written");
     }
 
@@ -555,7 +555,7 @@ class AddCommandTest {
             exchange.close();
         });
         central.start();
-        System.setProperty("mjm.central.base",
+        System.setProperty("jeno.central.base",
                 "http://localhost:" + central.getAddress().getPort() + "/");
 
         ArtifactStore.goOffline();
@@ -573,7 +573,7 @@ class AddCommandTest {
                 new StoreDescriptorSource(store));
 
         // warm the store and the URL index online: one real resolution
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -586,7 +586,7 @@ class AddCommandTest {
         // a second project on the same store: the explicit-version add must
         // need no network at all
         Path second = Files.createDirectories(dir.resolve("second"));
-        Files.writeString(second.resolve("mjm.toml"), """
+        Files.writeString(second.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -597,7 +597,7 @@ class AddCommandTest {
                 .execute(List.of("com.example:lib-a", "1.0.0"));
 
         assertEquals(0, exit, "an explicit version resolves from the store");
-        assertTrue(Files.readString(second.resolve("mjm.toml"))
+        assertTrue(Files.readString(second.resolve("jeno.toml"))
                         .contains("\"com.example:lib-a\" = \"1.0.0\""),
                 "the line landed in the second project's [deps]");
     }
@@ -646,12 +646,12 @@ class AddCommandTest {
             </metadata>
             """);
         AddCommand add = add();
-        String before = Files.readString(dir.resolve("mjm.toml"));
+        String before = Files.readString(dir.resolve("jeno.toml"));
 
         int exit = add.execute(List.of("com.example:lib-a"));
 
         assertEquals(0, exit, "a completed query is a success");
-        assertEquals(before, Files.readString(dir.resolve("mjm.toml")),
+        assertEquals(before, Files.readString(dir.resolve("jeno.toml")),
                 "a query never edits the manifest");
     }
 
@@ -670,12 +670,12 @@ class AddCommandTest {
              "latestVersion":"1.0.0"}]}}
             """);
         AddCommand add = add();
-        String before = Files.readString(dir.resolve("mjm.toml"));
+        String before = Files.readString(dir.resolve("jeno.toml"));
 
         int exit = add.execute(List.of("lib-a"));
 
         assertEquals(0, exit, "a completed search is a success");
-        assertEquals(before, Files.readString(dir.resolve("mjm.toml")),
+        assertEquals(before, Files.readString(dir.resolve("jeno.toml")),
                 "search only prints candidates");
     }
 
@@ -696,7 +696,7 @@ class AddCommandTest {
             }
         });
         central.start();
-        System.setProperty("mjm.central.base",
+        System.setProperty("jeno.central.base",
                 "http://localhost:" + central.getAddress().getPort() + "/");
     }
 
@@ -710,7 +710,7 @@ class AddCommandTest {
             }
         });
         central.start();
-        System.setProperty("mjm.search.host",
+        System.setProperty("jeno.search.host",
                 "http://localhost:" + central.getAddress().getPort());
     }
 }

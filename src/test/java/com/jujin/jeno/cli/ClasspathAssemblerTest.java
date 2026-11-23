@@ -77,10 +77,10 @@ class ClasspathAssemblerTest {
             exchange.close();
         });
         central.start();
-        System.setProperty("mjm.central.base",
+        System.setProperty("jeno.central.base",
                 "http://localhost:" + central.getAddress().getPort() + "/");
 
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -100,8 +100,8 @@ class ClasspathAssemblerTest {
         store = new ArtifactStore(dir.resolve("store"));
         new LockService(store, new StorePomSource(store), new StoreDescriptorSource(store))
                 .refresh(dir);
-        project = ProjectReader.parse(Files.readString(dir.resolve("mjm.toml")));
-        locked = LockFileReader.read(Files.readString(dir.resolve("mjm.lock")));
+        project = ProjectReader.parse(Files.readString(dir.resolve("jeno.toml")));
+        locked = LockFileReader.read(Files.readString(dir.resolve("jeno.lock")));
     }
 
     @AfterEach
@@ -109,7 +109,7 @@ class ClasspathAssemblerTest {
         if (central != null) {
             central.stop(0);
         }
-        System.clearProperty("mjm.central.base");
+        System.clearProperty("jeno.central.base");
         com.jujin.jeno.store.Paths.resetForTesting();
         ProjectLock.useUserRoot();
         com.jujin.jeno.resolve.ArtifactLocations.useProjectRoot(Path.of("").toAbsolutePath());
@@ -144,7 +144,7 @@ class ClasspathAssemblerTest {
 
         assertEquals(List.of(testClasses, classes), test.subList(0, 2));
         assertEquals(5, test.size(),
-                "test classes + main classes + two non-processor jars + the running mjm location");
+                "test classes + main classes + two non-processor jars + the running jeno location");
         assertTrue(test.get(2).endsWith(".jar"));
         assertEquals(classes, test.get(test.size() - 1),
                 "runtimeLocation is target/classes in the development layout");
@@ -159,7 +159,7 @@ class ClasspathAssemblerTest {
         assertEquals(4, exportTest.size(), "MAIN + DEV jars, processor excluded");
 
         // both test-shaped classpaths exclude the processor: it compiles code,
-        // it is not linked against; mjm test puts it on -processorpath instead
+        // it is not linked against; jeno test puts it on -processorpath instead
         String procJar = jarOf("com.example:lib-proc");
         assertFalse(test.contains(procJar));
         assertFalse(exportTest.contains(procJar));
@@ -171,7 +171,7 @@ class ClasspathAssemblerTest {
                 () -> ClasspathAssembler.of(ClasspathAssembler.Mode.COMPILE, dir, store,
                         ClasspathAssembler.Input.compile(project, List.of())));
 
-        assertTrue(error.getMessage().contains("mjm.lock is stale"), error.getMessage());
+        assertTrue(error.getMessage().contains("jeno.lock is stale"), error.getMessage());
         assertTrue(error.getMessage().contains("com.example:lib-main"), error.getMessage());
     }
 

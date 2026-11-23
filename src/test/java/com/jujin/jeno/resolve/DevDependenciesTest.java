@@ -15,9 +15,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * {@code [dev-deps]} — test-only requirements (Cargo's dev-dependencies).
- * They resolve into mjm.lock like any other requirement but carry
+ * They resolve into jeno.lock like any other requirement but carry
  * {@link Scope#DEV}: never compiled against, never run, never packaged,
- * never published — only {@code mjm test} sees them.
+ * never published — only {@code jeno test} sees them.
  */
 class DevDependenciesTest {
 

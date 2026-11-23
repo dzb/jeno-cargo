@@ -41,7 +41,7 @@ class SourceResourcesTest {
         Files.createDirectories(dir.resolve("src/main/resources/demo"));
         Files.createDirectories(dir.resolve("src/test/java/demo"));
         Files.createDirectories(dir.resolve("src/test/resources/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -81,7 +81,7 @@ class SourceResourcesTest {
                 }
             }
             """);
-        Files.writeString(dir.resolve("mjm.lock"),
+        Files.writeString(dir.resolve("jeno.lock"),
                 LockFile.serialize(new ResolvedGraph(List.of(), List.of(), Map.of()),
                         url -> "e".repeat(64)));
 
@@ -100,13 +100,13 @@ class SourceResourcesTest {
     @Test
     void aResourceOnlyModuleBuilds(@TempDir Path storeDir) throws Exception {
         Files.createDirectories(dir.resolve("src/main/resources/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "assets"
             version = "0.1.0"
             """);
         Files.writeString(dir.resolve("src/main/resources/demo/data.txt"), "payload");
-        Files.writeString(dir.resolve("mjm.lock"),
+        Files.writeString(dir.resolve("jeno.lock"),
                 LockFile.serialize(new ResolvedGraph(List.of(), List.of(), Map.of()),
                         url -> "e".repeat(64)));
 
@@ -119,12 +119,12 @@ class SourceResourcesTest {
 
     @Test
     void aProjectWithoutSourcesOrResourcesIsStillAnError(@TempDir Path storeDir) throws Exception {
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "empty"
             version = "0.1.0"
             """);
-        Files.writeString(dir.resolve("mjm.lock"),
+        Files.writeString(dir.resolve("jeno.lock"),
                 LockFile.serialize(new ResolvedGraph(List.of(), List.of(), Map.of()),
                         url -> "e".repeat(64)));
 

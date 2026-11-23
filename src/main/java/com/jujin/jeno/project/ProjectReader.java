@@ -12,7 +12,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Reads mjm.toml into {@link JenoProject} under SPEC.md §2's closed schema:
+ * Reads jeno.toml into {@link JenoProject} under SPEC.md §2's closed schema:
  * only the frozen sections and keys exist, every value type is checked, and
  * anything outside the subset — an unknown section, an unquoted version, a
  * malformed coordinate, a non-https repository — fails with the rule named.
@@ -52,7 +52,7 @@ public final class ProjectReader {
     private ProjectReader() {}
 
     public static JenoProject parse(String text) {
-        return parse(text, "mjm.toml", SPEC_SECTION);
+        return parse(text, "jeno.toml", SPEC_SECTION);
     }
 
     /**
@@ -67,7 +67,7 @@ public final class ProjectReader {
         for (Map.Entry<String, Object> entry : root.entrySet()) {
             if (!(entry.getValue() instanceof Map)) {
                 throw new ProjectException(entry.getKey()
-                        + " must be a table — every mjm.toml entry is a [section] (SPEC.md §2)");
+                        + " must be a table — every jeno.toml entry is a [section] (SPEC.md §2)");
             }
             switch (entry.getKey()) {
                 case "project", "java", "deps", "dev-deps", "repos", "limits", "overrides",
@@ -75,7 +75,7 @@ public final class ProjectReader {
 
                 default -> throw new ProjectException(at(file, source.section(entry.getKey()))
                         + "unknown section [" + entry.getKey()
-                        + "] — mjm.toml is a closed schema (SPEC.md §2)");
+                        + "] — jeno.toml is a closed schema (SPEC.md §2)");
             }
         }
 
@@ -147,7 +147,7 @@ public final class ProjectReader {
         Set<String> urlIds = new LinkedHashSet<>();
         Map<String, Object> depsSection = optionalSection(root, "deps");
         if (depsSection != null) {
-            requirements = extractDependencies(depsSection, repos, "mjm.toml");
+            requirements = extractDependencies(depsSection, repos, "jeno.toml");
             for (Requirement requirement : requirements) {
                 if (requirement.species() == Species.URL) {
                     urlIds.add(requirement.id());
@@ -162,7 +162,7 @@ public final class ProjectReader {
         List<Requirement> devRequirements = List.of();
         Map<String, Object> devDepsSection = optionalSection(root, "dev-deps");
         if (devDepsSection != null) {
-            devRequirements = extractDependencies(devDepsSection, repos, "mjm.toml");
+            devRequirements = extractDependencies(devDepsSection, repos, "jeno.toml");
             Set<String> mainIds = new LinkedHashSet<>();
             for (Requirement requirement : requirements) {
                 mainIds.add(requirement.id());
@@ -282,13 +282,13 @@ public final class ProjectReader {
     }
 
     /**
-     * Parses one dependency declaration the way {@code mjm add} receives it —
+     * Parses one dependency declaration the way {@code jeno add} receives it —
      * the same shapes and rules as the {@code [deps]} table, without a file.
      */
     public static Requirement parseRequirement(String key, String value) {
         // add validates the shape here; whether the named repository is declared
         // is checked when the edited manifest is parsed for real
-        return requirement(key, value, null, "mjm add", Map.of(), false);
+        return requirement(key, value, null, "jeno add", Map.of(), false);
     }
 
     // ------------------------------------------------------------------
@@ -298,7 +298,7 @@ public final class ProjectReader {
     /**
      * Extracts the requirements of one {@code [deps]} table. A nested table is
      * a named-repository group ({@code [deps.corp]}), which only exists in
-     * mjm.toml — descriptors pass {@code repos == null} and get an error
+     * jeno.toml — descriptors pass {@code repos == null} and get an error
      * instead (SPEC.md §3.2).
      */
     static List<Requirement> extractDependencies(
@@ -306,7 +306,7 @@ public final class ProjectReader {
         return extractDependencies(deps, repos, where, null);
     }
 
-    /** The full form: {@code sibling} is set when the file came from an mjm: repository. */
+    /** The full form: {@code sibling} is set when the file came from an jeno: repository. */
     static List<Requirement> extractDependencies(
             Map<String, Object> deps, Map<String, Repository> repos, String where, String sibling) {
 
@@ -318,7 +318,7 @@ public final class ProjectReader {
                 if (repos == null) {
                     throw new ProjectException("[" + where + "] [deps." + key
                             + "] — descriptors cannot declare repositories; rules live only "
-                            + "in the consumer's mjm.toml (SPEC.md §3.2)");
+                            + "in the consumer's jeno.toml (SPEC.md §3.2)");
                 }
                 if (!repos.containsKey(key)) {
                     throw new ProjectException("[deps." + key + "] names repository '" + key
@@ -375,7 +375,7 @@ public final class ProjectReader {
         Object typeValue = table.get("type");
         if (typeValue != null && !(typeValue instanceof String)) {
             throw new ProjectException(at(file, source.key("repos." + name, "type"))
-                    + "[repos]." + name + ".type must be \"maven\" or \"mjm\"");
+                    + "[repos]." + name + ".type must be \"maven\" or \"jeno\"");
         }
         String type = typeValue == null ? "maven" : (String) typeValue;
         Object urlValue = table.get("url");
@@ -398,7 +398,7 @@ public final class ProjectReader {
     }
 
     /**
-     * The full form. {@code sibling} is the {@code mjm:} repository a descriptor
+     * The full form. {@code sibling} is the {@code jeno:} repository a descriptor
      * was fetched from: a bare name there addresses another artifact in that same
      * repository — a descriptor cannot name repositories (they are rules), but it
      * can say "the sibling called gadget, version 0.9.0".
@@ -410,10 +410,10 @@ public final class ProjectReader {
                 && !raw.contains(":") && !key.contains(":")) {
             return nativeInNamedRepository(key, raw, sibling, where);
         }
-        // [deps.mine] where mine is an mjm: repository: the native layout, no group
+        // [deps.mine] where mine is an jeno: repository: the native layout, no group
         if (repository != null && repos != null
                 && repos.get(repository) != null
-                && repos.get(repository).layout() == Repository.Layout.MJM) {
+                && repos.get(repository).layout() == Repository.Layout.JENO) {
             return nativeInNamedRepository(key, (String) value, repository, where);
         }
         if (key.isBlank() || key.contains(" ") || key.contains("\t")) {
@@ -475,13 +475,13 @@ public final class ProjectReader {
                 if (repos == null) {
                     throw new ProjectException("[" + where + "] '" + key + " = \"" + raw
                             + "\"' — descriptors cannot declare repositories; rules live only "
-                            + "in the consumer's mjm.toml (SPEC.md §3.2)");
+                            + "in the consumer's jeno.toml (SPEC.md §3.2)");
                 }
                 boolean namedJeno = repos != null && checkRepos
                         && repos.get(name) != null
-                        && repos.get(name).layout() == Repository.Layout.MJM;
+                        && repos.get(name).layout() == Repository.Layout.JENO;
                 if (namedJeno || (!checkRepos && !key.contains(":"))) {
-                    // "name:version": a named mjm: repository, keyed by artifact name
+                    // "name:version": a named jeno: repository, keyed by artifact name
                     return nativeInNamedRepository(key, version, name, where);
                 }
                 if (checkRepos && !repos.containsKey(name)) {
@@ -517,7 +517,7 @@ public final class ProjectReader {
     }
 
     /**
-     * A dependency on a native release inside an {@code mjm:} repository: the key
+     * A dependency on a native release inside an {@code jeno:} repository: the key
      * is the artifact name (the layout has no group), the version is semver, and
      * metadata comes from the descriptor beside the jar — the same parse path as
      * gh:.
@@ -526,17 +526,17 @@ public final class ProjectReader {
                                                        String repository, String where) {
         if (key.contains(":")) {
             throw new ProjectException("[" + where + "] '" + key + "' — a dependency from a "
-                    + "mjm: repository is addressed by its artifact name (no group:artifact)");
+                    + "jeno: repository is addressed by its artifact name (no group:artifact)");
         }
         if (!NAME.matcher(key).matches()) {
             throw new ProjectException("[" + where + "] dependency name '" + key
-                    + "' must match [a-z][a-z0-9-]* for a mjm: repository");
+                    + "' must match [a-z][a-z0-9-]* for a jeno: repository");
         }
         String stripped = version == null ? "" : version.strip();
         Matcher tag = TAG.matcher(stripped);
         if (!tag.matches()) {
             throw new ProjectException("[" + where + "] '" + key + "' uses version '"
-                    + stripped + "' — a mjm: repository holds semver releases (1.2.3, 1.2.3-rc1)");
+                    + stripped + "' — a jeno: repository holds semver releases (1.2.3, 1.2.3-rc1)");
         }
         return new Requirement(key, Species.NAMED, null, null, tag.group(1), repository,
                 null, null, null, null);
@@ -545,11 +545,11 @@ public final class ProjectReader {
     private static void requireConcreteVersion(String key, String version, String where) {
         if (version.contains("${")) {
             throw new ProjectException("[" + where + "] '" + key
-                    + "' — mjm.toml does not interpolate properties; versions are literal");
+                    + "' — jeno.toml does not interpolate properties; versions are literal");
         }
         if (version.startsWith("[") || version.startsWith("(")) {
             throw new ProjectException("[" + where + "] '" + key
-                    + "' — version ranges are not supported; mjm pins exact versions");
+                    + "' — version ranges are not supported; jeno pins exact versions");
         }
         if (version.endsWith("-SNAPSHOT")) {
             throw new ProjectException("[" + where + "] '" + key

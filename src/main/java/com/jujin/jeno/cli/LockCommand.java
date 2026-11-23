@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * {@code mjm lock}: the shell around {@link LockService} — resolve, download,
+ * {@code jeno lock}: the shell around {@link LockService} — resolve, download,
  * pin (SPEC.md §4).
  */
 public final class LockCommand implements Command {
@@ -31,7 +31,7 @@ public final class LockCommand implements Command {
 
     @Override
     public String summary() {
-        return "resolve dependencies, download into the store, and pin mjm.lock";
+        return "resolve dependencies, download into the store, and pin jeno.lock";
     }
 
     @Override
@@ -83,7 +83,7 @@ public final class LockCommand implements Command {
             if (arg.equals("--check")) {
                 check = true;
             } else if (arg.equals("--refresh")) {
-                System.err.println(Ui.errPrefix() + "--refresh was removed — mjm lock always re-resolves; "
+                System.err.println(Ui.errPrefix() + "--refresh was removed — jeno lock always re-resolves; "
                         + "use --check to only compare");
                 return 2;
             } else {
@@ -101,7 +101,7 @@ public final class LockCommand implements Command {
             try {
                 var graph = lockService.refresh(projectDir);
                 System.out.println(Ui.ok("locked " + graph.artifacts().size()
-                        + " artifact(s) into mjm.lock") + Ui.duration(started));
+                        + " artifact(s) into jeno.lock") + Ui.duration(started));
                 return 0;
             } catch (RuntimeException e) {
                 System.err.println(Ui.errPrefix() + e.getMessage());
@@ -118,16 +118,16 @@ public final class LockCommand implements Command {
             return 1;
         }
         if (result.upToDate()) {
-            System.out.println(Ui.ok("mjm.lock is up to date ("
+            System.out.println(Ui.ok("jeno.lock is up to date ("
                     + result.artifacts() + " artifacts)"));
             return 0;
         }
 
-        System.out.println(Ui.warn("mjm.lock is out of date:"));
+        System.out.println(Ui.warn("jeno.lock is out of date:"));
         for (String line : result.differences()) {
             System.out.println("  " + Ui.dim(line));
         }
-        System.out.println("run mjm lock");
+        System.out.println("run jeno lock");
         return 1;
     }
 
@@ -200,7 +200,7 @@ public final class LockCommand implements Command {
             JsonObject entry = JsonUtils.object();
             entry.put("module", label);
             entry.put("path", moduleDir.toAbsolutePath().normalize().toString());
-            entry.put("lockFile", moduleDir.resolve("mjm.lock")
+            entry.put("lockFile", moduleDir.resolve("jeno.lock")
                     .toAbsolutePath().normalize().toString());
             entry.put("status", module.ok() ? "ok" : "failed");
             entry.put("exitCode", module.ok() ? 0 : 1);
@@ -217,7 +217,7 @@ public final class LockCommand implements Command {
                 result.diagnostic("error", module.fatalCode(), module.fatalMessage(), List.of());
             } else if (check && !module.upToDate()) {
                 result.diagnostic("error", "LOCK_STALE",
-                        "mjm.lock is out of date", List.of(List.of("mjm", "lock")));
+                        "jeno.lock is out of date", List.of(List.of("jeno", "lock")));
             }
             moduleArray.add(entry);
             totalArtifacts += module.artifacts();
@@ -263,16 +263,16 @@ public final class LockCommand implements Command {
         String manifest;
         String onDisk;
         try {
-            manifest = java.nio.file.Files.readString(dir.resolve("mjm.toml"));
+            manifest = java.nio.file.Files.readString(dir.resolve("jeno.toml"));
         } catch (java.io.IOException e) {
             return LockModule.fatal(dir, true, "MANIFEST_MISSING",
-                    "no mjm.toml in " + dir + " — run mjm init to create one");
+                    "no jeno.toml in " + dir + " — run jeno init to create one");
         }
         try {
-            onDisk = java.nio.file.Files.readString(dir.resolve("mjm.lock"));
+            onDisk = java.nio.file.Files.readString(dir.resolve("jeno.lock"));
         } catch (java.io.IOException e) {
             return LockModule.fatal(dir, true, "LOCK_MISSING",
-                    "no mjm.lock in " + dir + " — run mjm lock");
+                    "no jeno.lock in " + dir + " — run jeno lock");
         }
 
         LockService.Prepared prepared;

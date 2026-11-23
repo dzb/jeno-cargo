@@ -16,22 +16,22 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 /**
- * {@code mjm upgrade} ({@code mjm update} is an alias): checks GitHub Releases for a newer version and
+ * {@code jeno upgrade} ({@code jeno update} is an alias): checks GitHub Releases for a newer version and
  * self-upgrades — download the tar.gz, extract, run the setup.sh inside.
  * The same install mechanism as the one-liner, so the upgrade is atomic
- * (fresh install to $HOME/.mjm/, launcher regenerated, old version replaced).
+ * (fresh install to $HOME/.jeno/, launcher regenerated, old version replaced).
  *
- * <p>{@code mjm upgrade} is an alias — both verbs dispatch here.
+ * <p>{@code jeno upgrade} is an alias — both verbs dispatch here.
  *
  * <p>The running process cannot replace its own jar — the upgrade takes
- * effect on the next {@code mjm} invocation. This is standard behavior
+ * effect on the next {@code jeno} invocation. This is standard behavior
  * (same as rustup, gh, npm -g).
  */
 public final class UpdateCommand implements Command {
 
-    /** The default GitHub repo that hosts mjm's releases. */
+    /** The default GitHub repo that hosts jeno's releases. */
     private static final String RELEASES_API_DEFAULT =
-            "https://api.github.com/repos/dzb/mjm-cargo/releases/latest";
+            "https://api.github.com/repos/dzb/jeno-cargo/releases/latest";
 
     /**
      * GitHub's release assets have taken tens of seconds to appear at the CDN
@@ -39,7 +39,7 @@ public final class UpdateCommand implements Command {
      * between them give the asset about fifteen seconds to show up, and still
      * fail in bounded time.
      *
-     * <p>The waits are injectable ({@code -Dmjm.update.backoff.ms=1,1,1,1}) so
+     * <p>The waits are injectable ({@code -Djeno.update.backoff.ms=1,1,1,1}) so
      * the retry tests do not spend those fifteen seconds proving the logic.
      */
     private static final int DOWNLOAD_ATTEMPTS = 5;
@@ -59,10 +59,10 @@ public final class UpdateCommand implements Command {
 
     /**
      * The releases URL — overridable for in-house mirrors and the hermetic
-     * update test ({@code -Dmjm.update.api=<full releases/latest URL>}).
+     * update test ({@code -Djeno.update.api=<full releases/latest URL>}).
      */
     private static String releasesApi() {
-        return System.getProperty("mjm.update.api", RELEASES_API_DEFAULT);
+        return System.getProperty("jeno.update.api", RELEASES_API_DEFAULT);
     }
 
     @Override
@@ -153,12 +153,12 @@ public final class UpdateCommand implements Command {
             if (json) {
                 emitResult(json, latestVersion, updateAvailable, true, false, false);
             } else if (latestVersion.equals(Jeno.VERSION)) {
-                System.out.println("mjm " + Jeno.VERSION + " — already at the latest version");
+                System.out.println("jeno " + Jeno.VERSION + " — already at the latest version");
             } else if (updateAvailable) {
-                System.out.println("mjm " + Jeno.VERSION + " → " + latestVersion
+                System.out.println("jeno " + Jeno.VERSION + " → " + latestVersion
                         + " — update available");
             } else {
-                System.out.println("mjm " + Jeno.VERSION + " — latest release is " + latestVersion);
+                System.out.println("jeno " + Jeno.VERSION + " — latest release is " + latestVersion);
             }
             return 0;
         }
@@ -167,7 +167,7 @@ public final class UpdateCommand implements Command {
             if (json) {
                 emitResult(json, latestVersion, false, false, false, false);
             } else {
-                System.out.println("mjm " + Jeno.VERSION + " — already at the latest version");
+                System.out.println("jeno " + Jeno.VERSION + " — already at the latest version");
             }
             return 0;
         }
@@ -232,11 +232,11 @@ public final class UpdateCommand implements Command {
             }
 
             // download to temp
-            tempTar = Files.createTempFile("mjm-upgrade-", ".tar.gz");
+            tempTar = Files.createTempFile("jeno-upgrade-", ".tar.gz");
             Files.write(tempTar, fetch.body());
 
             // extract to temp
-            tempDir = Files.createTempDirectory("mjm-upgrade-");
+            tempDir = Files.createTempDirectory("jeno-upgrade-");
             Process tar = new ProcessBuilder("tar", "-xzf", tempTar.toString(),
                     "-C", tempDir.toString()).inheritIO().start();
             if (tar.waitFor() != 0) {
@@ -245,7 +245,7 @@ public final class UpdateCommand implements Command {
             }
 
             // find and run the setup.sh inside the distribution
-            Path installScript = tempDir.resolve("mjm-" + latestVersion + "/setup.sh");
+            Path installScript = tempDir.resolve("jeno-" + latestVersion + "/setup.sh");
             try (Stream<Path> stream = Files.walk(tempDir, 2)) {
                 installScript = stream
                         .filter(path -> path.getFileName().toString().equals("setup.sh"))
@@ -259,8 +259,8 @@ public final class UpdateCommand implements Command {
                 System.err.println(Ui.errPrefix() + "installation failed (exit " + exit + ")");
                 return 1;
             }
-            System.out.println("upgraded to mjm " + latestVersion
-                    + " — takes effect on the next mjm invocation");
+            System.out.println("upgraded to jeno " + latestVersion
+                    + " — takes effect on the next jeno invocation");
             return 0;
         } catch (IOException | InterruptedException e) {
             System.err.println(Ui.errPrefix() + "upgrade failed: " + e.getMessage());
@@ -324,7 +324,7 @@ public final class UpdateCommand implements Command {
 
     /** The shipped back-off, or the test override when one is set. */
     static long[] backoffMillis() {
-        String override = System.getProperty("mjm.update.backoff.ms");
+        String override = System.getProperty("jeno.update.backoff.ms");
         if (override != null && !override.isBlank()) {
             return java.util.Arrays.stream(override.split(","))
                     .map(String::strip)
@@ -353,13 +353,13 @@ public final class UpdateCommand implements Command {
     }
 
     /**
-     * The installer subprocess. {@code -Dmjm.update.home=<dir>} redirects the
+     * The installer subprocess. {@code -Djeno.update.home=<dir>} redirects the
      * packaged setup.sh's {@code $HOME} — the hermetic-update-test seam
      * (and an off-home install root, should one ever be wanted).
      */
     private static Process installProcess(Path installScript) throws IOException {
         ProcessBuilder builder = new ProcessBuilder("bash", installScript.toString());
-        String home = System.getProperty("mjm.update.home");
+        String home = System.getProperty("jeno.update.home");
         if (home != null && !home.isBlank()) {
             builder.environment().put("HOME", home);
         }

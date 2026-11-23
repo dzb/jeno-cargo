@@ -8,7 +8,7 @@ import java.io.OutputStream;
 import java.io.PrintStream;
 
 /**
- * mjm's entry point: one container per invocation, one command run inside it,
+ * jeno's entry point: one container per invocation, one command run inside it,
  * a plain exit code out. Failures print their message — the resolver, decoder
  * and store all speak in next-action errors, not stack traces.
  *
@@ -16,7 +16,7 @@ import java.io.PrintStream;
  * framework it is built on. Freeway announces its logging backend on stderr at
  * container startup (unconditionally), SLF4J announces its provider binding,
  * and the container INFO-logs every module it loads. Those are useful when a
- * server boots and useless-to-harmful when someone runs {@code mjm tree} and
+ * server boots and useless-to-harmful when someone runs {@code jeno tree} and
  * pipes the output.
  *
  * <p>So the bootstrap happens behind a closed door: stderr is silenced for the
@@ -27,9 +27,9 @@ import java.io.PrintStream;
 public final class Jeno {
 
     /**
-     * mjm's own version — derived from the build, never hand-maintained here.
-     * The one declaration is {@code mjm.toml [project].version}; the build
-     * writes it into {@code META-INF/mjm/version.properties} and the jar
+     * jeno's own version — derived from the build, never hand-maintained here.
+     * The one declaration is {@code jeno.toml [project].version}; the build
+     * writes it into {@code META-INF/jeno/version.properties} and the jar
      * manifest (see {@link Version}).
      */
     public static final String VERSION = Version.current();
@@ -38,7 +38,7 @@ public final class Jeno {
 
     public static void main(String[] args) {
         if (args.length == 1 && (args[0].equals("--version") || args[0].equals("-v"))) {
-            System.out.println(Ui.heading("mjm " + VERSION)
+            System.out.println(Ui.heading("jeno " + VERSION)
                     + Ui.dim(" — modern java manager"));
             return;
         }
@@ -69,12 +69,12 @@ public final class Jeno {
     /**
      * The message to show for a failure.
      *
-     * <p>mjm's own exceptions carry messages written for the user
-     * ("cannot read mjm.toml in /x — run mjm init"), while the JDK exceptions
+     * <p>jeno's own exceptions carry messages written for the user
+     * ("cannot read jeno.toml in /x — run jeno init"), while the JDK exceptions
      * they wrap do not ({@code NoSuchFileException.getMessage()} is the path
      * and nothing else, and some have no message at all). Walking to the
      * deepest cause therefore throws away the useful half — the outermost
-     * message is the one mjm wrote.
+     * message is the one jeno wrote.
      *
      * <p>So: use the outermost message when it says something, otherwise fall
      * back to the innermost, otherwise the class name.

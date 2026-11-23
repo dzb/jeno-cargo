@@ -11,8 +11,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Decodes Maven {@code pom.xml} documents into mjm's own model. This is the
- * compatibility layer of DESIGN.md §5: it exists so mjm can pull libraries
+ * Decodes Maven {@code pom.xml} documents into jeno's own model. This is the
+ * compatibility layer of DESIGN.md §5: it exists so jeno can pull libraries
  * from Maven Central, not because Maven's semantics are a goal. What it
  * supports is exactly what decoding a Central artifact needs:
  *
@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
  *       against the merged properties plus {@code project.*} /
  *       {@code project.parent.*} builtins ({@code pom.*} aliases included);
  *       the {@code ${revision}} CI-friendly version pattern works. An
- *       unresolvable property in a field mjm needs is an error, not a silent
+ *       unresolvable property in a field jeno needs is an error, not a silent
  *       literal.</li>
  *   <li><b>Dependency management</b> — own entries override the parent's;
  *       BOM imports ({@code <type>pom</type> <scope>import</scope>}) fill
@@ -40,8 +40,8 @@ import java.util.regex.Pattern;
  * <p>Everything outside the subset is rejected and named (DESIGN.md §5.2):
  * version ranges, snapshot versions, unsupported packaging and dependency
  * types, version mismatches between a pom and its coordinate. Poms never
- * point mjm at other repositories — the {@code <repositories>} section is
- * ignored, repository selection belongs to mjm.toml alone.
+ * point jeno at other repositories — the {@code <repositories>} section is
+ * ignored, repository selection belongs to jeno.toml alone.
  */
 public final class Poms {
 
@@ -226,7 +226,7 @@ public final class Poms {
             // The managed lookup needs the type/classifier, but the type is only
             // validated for dependencies that survive the scope filter: Maven
             // poms (log4j's among them) declare provided/zip helper artifacts
-            // that mjm never follows, and rejecting their type would fail the
+            // that jeno never follows, and rejecting their type would fail the
             // whole pom for a dependency that was about to be dropped anyway.
             String rawType = interpolate(raw.type(), resolved);
             String classifier = blank(raw.classifier()) ? null : interpolate(raw.classifier(), resolved);
@@ -441,7 +441,7 @@ public final class Poms {
         }
         if (version.startsWith("[") || version.startsWith("(")) {
             throw new PomException(named + " uses version range '" + version
-                    + "' — version ranges are not supported; mjm pins exact versions");
+                    + "' — version ranges are not supported; jeno pins exact versions");
         }
         if (version.endsWith("-SNAPSHOT")) {
             throw new PomException(named + " uses snapshot version '" + version

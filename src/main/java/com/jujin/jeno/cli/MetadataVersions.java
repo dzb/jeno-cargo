@@ -17,11 +17,11 @@ import java.util.List;
 
 /**
  * {@code maven-metadata.xml}'s version list, straight from the repository —
- * the one fact Maven's layout exposes that mjm's own descriptor formats do not
+ * the one fact Maven's layout exposes that jeno's own descriptor formats do not
  * repeat.
  *
- * <p>Shared by {@code mjm add} (choosing a version to declare) and
- * {@code mjm outdated} (comparing what is pinned against what exists), so both
+ * <p>Shared by {@code jeno add} (choosing a version to declare) and
+ * {@code jeno outdated} (comparing what is pinned against what exists), so both
  * answer "which versions are there" the same way — including the HTTP/file
  * fetch itself ({@link #text}), so the repository's wire format is read by one
  * piece of code.
@@ -55,7 +55,7 @@ final class MetadataVersions {
      * capped instead of trusted.
      */
     static java.time.Duration requestTimeout() {
-        long millis = Long.getLong("mjm.http.request.timeout.ms", 30_000L);
+        long millis = Long.getLong("jeno.http.request.timeout.ms", 30_000L);
         millis = Math.max(100L, Math.min(120_000L, millis));
         return java.time.Duration.ofMillis(millis);
     }
@@ -113,7 +113,7 @@ final class MetadataVersions {
         }
     }
 
-    /** One GET (or {@code file:} read) — metadata here, the Central index in {@code mjm add}. */
+    /** One GET (or {@code file:} read) — metadata here, the Central index in {@code jeno add}. */
     static String text(String url) {
         if (url.startsWith("file://")) {
             try {

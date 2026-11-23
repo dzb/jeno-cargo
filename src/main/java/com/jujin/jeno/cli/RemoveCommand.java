@@ -14,13 +14,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * {@code mjm remove <id>} — delete one dependency declaration and re-lock.
+ * {@code jeno remove <id>} — delete one dependency declaration and re-lock.
  *
- * <p>The counterpart of {@code mjm add}: before this command existed, dropping
- * a dependency meant hand-editing mjm.toml and remembering to re-lock. It
+ * <p>The counterpart of {@code jeno add}: before this command existed, dropping
+ * a dependency meant hand-editing jeno.toml and remembering to re-lock. It
  * removes exactly the one declaration line from {@code [deps]},
  * {@code [dev-deps]}, or their {@code .{repo}} groups — comments, layout and
- * every other line survive — then refreshes mjm.lock so the artifact leaves
+ * every other line survive — then refreshes jeno.lock so the artifact leaves
  * the graph immediately.
  *
  * <p>An id that is not declared is an error naming the declared set, never a
@@ -84,7 +84,7 @@ public final class RemoveCommand implements Command {
         }
         if (cleaned.size() != 1) {
             JsonResult.error("remove", 2, "USAGE",
-                    "remove needs exactly one dependency id — mjm remove \"group:artifact\"")
+                    "remove needs exactly one dependency id — jeno remove \"group:artifact\"")
                     .emit(2);
             return 2;
         }
@@ -129,16 +129,16 @@ public final class RemoveCommand implements Command {
         }
         try {
             int artifacts = LockFileReader.read(
-                    Files.readString(moduleDir.resolve("mjm.lock"))).size();
+                    Files.readString(moduleDir.resolve("jeno.lock"))).size();
             JsonObject removed = JsonUtils.object();
             removed.put("id", id);
             JsonResult.start("remove")
                     .workspace(moduleDir, "single")
                     .put("mode", "mutate")
                     .put("removed", removed)
-                    .put("manifest", moduleDir.resolve("mjm.toml")
+                    .put("manifest", moduleDir.resolve("jeno.toml")
                             .toAbsolutePath().normalize().toString())
-                    .put("lock", moduleDir.resolve("mjm.lock")
+                    .put("lock", moduleDir.resolve("jeno.lock")
                             .toAbsolutePath().normalize().toString())
                     .put("artifactCount", artifacts)
                     .put("lockUpdated", true)
@@ -158,7 +158,7 @@ public final class RemoveCommand implements Command {
         }
         if (args.size() != 1) {
             System.err.println(Ui.errPrefix() + "remove needs exactly one dependency id — "
-                    + "mjm remove \"group:artifact\"");
+                    + "jeno remove \"group:artifact\"");
             return 2;
         }
         String id = args.getFirst();
@@ -173,13 +173,13 @@ public final class RemoveCommand implements Command {
     }
 
     private int remove(String id) {
-        Path file = projectDir.resolve("mjm.toml");
+        Path file = projectDir.resolve("jeno.toml");
         String text;
         try {
             text = Files.readString(file);
         } catch (IOException e) {
-            System.err.println(Ui.errPrefix() + "no mjm.toml in " + projectDir
-                    + " — run mjm init to create one");
+            System.err.println(Ui.errPrefix() + "no jeno.toml in " + projectDir
+                    + " — run jeno init to create one");
             return 1;
         }
 
@@ -222,7 +222,7 @@ public final class RemoveCommand implements Command {
             return 1;
         }
         System.out.println(Ui.ok("removed " + id + " — locked "
-                + prepared.graph().artifacts().size() + " artifact(s) into mjm.lock"));
+                + prepared.graph().artifacts().size() + " artifact(s) into jeno.lock"));
         return 0;
     }
 

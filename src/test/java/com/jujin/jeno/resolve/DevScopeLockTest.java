@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * mjm.lock's {@code scope} field: DEV rows are written as {@code scope = "dev"},
+ * jeno.lock's {@code scope} field: DEV rows are written as {@code scope = "dev"},
  * MAIN rows carry no scope at all — so every lockfile written before
  * {@code [dev-deps]} existed reads back unchanged.
  */

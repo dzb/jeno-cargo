@@ -49,7 +49,7 @@ class PublishTest {
         String message = errors.toString(java.nio.charset.StandardCharsets.UTF_8);
         assertEquals(1, exit);
         assertTrue(message.contains("deliverables moved to target/dist"), message);
-        assertTrue(message.contains("rerun mjm package"), message);
+        assertTrue(message.contains("rerun jeno package"), message);
     }
 
     @Test
@@ -79,7 +79,7 @@ class PublishTest {
         String sha = Files.readString(dir.resolve("target/dist/demo-1.0.0.sha256")).strip();
         assertEquals(64, sha.length(), "the sha file holds the 64-hex digest");
 
-        String descriptor = Files.readString(dir.resolve("target/dist/demo-1.0.0.mjm.toml"));
+        String descriptor = Files.readString(dir.resolve("target/dist/demo-1.0.0.jeno.toml"));
         assertTrue(descriptor.contains("name = \"demo\""));
         assertTrue(descriptor.contains("version = \"1.0.0\""));
         assertTrue(descriptor.contains("\"com.example:lib-a\" = \"1.0.0\""));
@@ -91,7 +91,7 @@ class PublishTest {
         // the checklist is now printed only when no target is given
         assertEquals(1, new PublishCommand(dir).execute(
                         List.of("gh:acme/demo")),
-                "a target without a token prompts for MJM_GITHUB_TOKEN");
+                "a target without a token prompts for JENO_GITHUB_TOKEN");
     }
 
     @Test
@@ -105,7 +105,7 @@ class PublishTest {
         Result result = publishJson("--json", "--dry-run");
 
         assertEquals(0, result.exit());
-        assertFalse(Files.exists(dist.resolve("demo-1.0.0.mjm.toml")),
+        assertFalse(Files.exists(dist.resolve("demo-1.0.0.jeno.toml")),
                 "dry-run never writes the descriptor");
         assertFalse(Files.exists(dist.resolve("demo-1.0.0.sha256")),
                 "dry-run never writes the checksum");
@@ -123,7 +123,7 @@ class PublishTest {
         writeProject(dir);
 
         Result result = publishJson("--json", "--dry-run",
-                "mjm:local:" + dir.resolve("repo"));
+                "jeno:local:" + dir.resolve("repo"));
 
         assertEquals(1, result.exit());
         var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(result.out());
@@ -141,7 +141,7 @@ class PublishTest {
         Files.writeString(dist.resolve("demo-1.0.0.jar"), "jar bytes");
 
         Result result = publishJson("--json", "--dry-run",
-                "mjm:http://192.168.1.39:18080/upload/");
+                "jeno:http://192.168.1.39:18080/upload/");
 
         assertEquals(0, result.exit(), result.err());
         var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(result.out());
@@ -149,7 +149,7 @@ class PublishTest {
                 json.getArray("diagnostics").getObject(0).getString("code"));
         assertEquals("warning",
                 json.getArray("diagnostics").getObject(0).getString("severity"));
-        assertFalse(Files.exists(dist.resolve("demo-1.0.0.mjm.toml")),
+        assertFalse(Files.exists(dist.resolve("demo-1.0.0.jeno.toml")),
                 "the warning path is still a side-effect-free dry-run");
     }
 
@@ -164,7 +164,7 @@ class PublishTest {
         Result result = publishJson("--json");
 
         assertEquals(0, result.exit());
-        assertTrue(Files.exists(dist.resolve("demo-1.0.0.mjm.toml")));
+        assertTrue(Files.exists(dist.resolve("demo-1.0.0.jeno.toml")));
         assertTrue(Files.exists(dist.resolve("demo-1.0.0.sha256")));
         var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(result.out());
         assertEquals(false, json.getBoolean("dryRun"));
@@ -197,7 +197,7 @@ class PublishTest {
     void aRepoBoundDependencyCannotPublish() throws Exception {
         writeProject(dir);
         Files.createDirectories(dir.resolve("target/classes"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "1.0.0"
@@ -222,7 +222,7 @@ class PublishTest {
     }
 
     private static void writeProject(Path dir) throws IOException {
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "1.0.0"

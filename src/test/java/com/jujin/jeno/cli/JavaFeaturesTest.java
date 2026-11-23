@@ -46,7 +46,7 @@ class JavaFeaturesTest {
     @Test
     void javaVersionProducesBytecodeForThatTarget(@TempDir Path storeDir) throws Exception {
         Files.createDirectories(dir.resolve("src/main/java/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "1.0.0"
@@ -56,7 +56,7 @@ class JavaFeaturesTest {
             """);
         Files.writeString(dir.resolve("src/main/java/demo/App.java"),
                 "package demo; public final class App {}");
-        Files.writeString(dir.resolve("mjm.lock"), "");
+        Files.writeString(dir.resolve("jeno.lock"), "");
 
         assertEquals(0, new BuildCommand(new ArtifactStore(storeDir), dir).execute(List.of()));
 
@@ -70,7 +70,7 @@ class JavaFeaturesTest {
     @Test
     void aTargetNewerThanTheRunningJdkIsRefused(@TempDir Path storeDir) throws Exception {
         Files.createDirectories(dir.resolve("src/main/java/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "1.0.0"
@@ -80,7 +80,7 @@ class JavaFeaturesTest {
             """);
         Files.writeString(dir.resolve("src/main/java/demo/App.java"),
                 "package demo; public final class App {}");
-        Files.writeString(dir.resolve("mjm.lock"), "");
+        Files.writeString(dir.resolve("jeno.lock"), "");
 
         assertEquals(1, new BuildCommand(new ArtifactStore(storeDir), dir).execute(List.of()),
                 "a target above the running JDK cannot be honored and must not silently pass");
@@ -145,7 +145,7 @@ class JavaFeaturesTest {
     void testExcludesSkipMatchingSources(@TempDir Path storeDir) throws Exception {
         Files.createDirectories(dir.resolve("src/main/java/demo"));
         Files.createDirectories(dir.resolve("src/test/java/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "1.0.0"
@@ -177,7 +177,7 @@ class JavaFeaturesTest {
                 void fails() { JenoAssert.equals(1, 2); }
             }
             """);
-        Files.writeString(dir.resolve("mjm.lock"), "");
+        Files.writeString(dir.resolve("jeno.lock"), "");
 
         ArtifactStore store = new ArtifactStore(storeDir);
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
@@ -198,7 +198,7 @@ class JavaFeaturesTest {
     @Test
     void aMergedVersionedJarGetsTheMultiReleaseFlag(@TempDir Path storeDir) throws Exception {
         Files.createDirectories(dir.resolve("src/main/java/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "1.0.0"
@@ -220,7 +220,7 @@ class JavaFeaturesTest {
         Path placed = storeDir.resolve(ArtifactStore.sha256(dep) + ".jar");
         Files.createDirectories(storeDir);
         Files.copy(dep, placed);
-        Files.writeString(dir.resolve("mjm.lock"), """
+        Files.writeString(dir.resolve("jeno.lock"), """
             [[artifacts]]
             id = "com.acme:mr"
             version = "1.0.0"

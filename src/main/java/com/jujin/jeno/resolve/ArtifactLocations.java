@@ -12,7 +12,7 @@ import java.util.Map;
  * an https named repository, and a {@code local:} directory (a Maven-layout
  * folder on disk — the self-bootstrap channel of DESIGN.md Q9).
  *
- * <p>A {@code local:} artifact is written into {@code mjm.lock} as
+ * <p>A {@code local:} artifact is written into {@code jeno.lock} as
  * {@code file:vendor/com/…/x.jar} — relative to the project root, so the lock
  * does not bind one checkout's absolute path. Reading expands it against the
  * project root again ({@link #localPath}); {@code file:///abs/…} rows stay
@@ -51,18 +51,18 @@ public final class ArtifactLocations {
         return projectRoot;
     }
 
-    /** Maven Central's effective base — overridable by {@code -Dmjm.central.base} (mirrors, tests). */
+    /** Maven Central's effective base — overridable by {@code -Djeno.central.base} (mirrors, tests). */
     public static String centralBase() {
-        return System.getProperty("mjm.central.base", CENTRAL_BASE);
+        return System.getProperty("jeno.central.base", CENTRAL_BASE);
     }
 
     /**
      * The GitHub host, overridable by system property for tests and in-house
-     * mirrors: {@code -Dmjm.github.host=…}. The URL shapes stay frozen — only
+     * mirrors: {@code -Djeno.github.host=…}. The URL shapes stay frozen — only
      * the host swaps.
      */
     public static String githubHost() {
-        return System.getProperty("mjm.github.host", "https://github.com");
+        return System.getProperty("jeno.github.host", "https://github.com");
     }
 
     private ArtifactLocations() {}
@@ -215,13 +215,13 @@ public final class ArtifactLocations {
     }
 
     /**
-     * The mjm repository layout: {@code <base>/<name>/<version>/<name>-<version>.<ext>} —
-     * two levels, no group. {@code base} is the declaration — {@code mjm:https://…}
-     * or a private-network {@code mjm:http://<literal-ip>…} — whose prefix is
+     * The jeno repository layout: {@code <base>/<name>/<version>/<name>-<version>.<ext>} —
+     * two levels, no group. {@code base} is the declaration — {@code jeno:https://…}
+     * or a private-network {@code jeno:http://<literal-ip>…} — whose prefix is
      * stripped here.
      */
-    /** The mjm two-level layout under a repository, local or remote. */
-    public static String mjmFile(Repository repository, String name, String version,
+    /** The jeno two-level layout under a repository, local or remote. */
+    public static String jenoFile(Repository repository, String name, String version,
                                  String extension) {
         String path = name + "/" + version + "/" + name + "-" + version + "." + extension;
         if (repository.isLocal()) {
@@ -232,9 +232,9 @@ public final class ArtifactLocations {
     }
 
     /** Same, for a declaration read from a lock row or a command line. */
-    public static String mjmFile(String declaration, String name, String version,
+    public static String jenoFile(String declaration, String name, String version,
                                  String extension) {
-        return mjmFile(Repository.parse(declaration), name, version, extension);
+        return jenoFile(Repository.parse(declaration), name, version, extension);
     }
 
     /**

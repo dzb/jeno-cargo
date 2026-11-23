@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * The store's URL index: a second process must not re-download what the first
  * one already stored. Without it, {@code digestByUrl} dies with the process and
- * every {@code mjm lock} pays full network cost even when the bytes are on disk.
+ * every {@code jeno lock} pays full network cost even when the bytes are on disk.
  */
 class UrlIndexTest {
 

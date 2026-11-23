@@ -10,8 +10,8 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * Reads mjm.lock back into typed rows (SPEC.md §4). The schema is closed like
- * every mjm file: unknown keys in a row, a missing digest, or a depth below
+ * Reads jeno.lock back into typed rows (SPEC.md §4). The schema is closed like
+ * every jeno file: unknown keys in a row, a missing digest, or a depth below
  * one are errors — a hand-edited lock is a bug to surface, not a hint.
  */
 public final class LockFileReader {
@@ -24,7 +24,7 @@ public final class LockFileReader {
         Map<String, Object> root = TomlUtils.parse(text);
         for (Map.Entry<String, Object> entry : root.entrySet()) {
             if (!entry.getKey().equals("artifacts")) {
-                throw new StoreException("mjm.lock: unknown section [" + entry.getKey()
+                throw new StoreException("jeno.lock: unknown section [" + entry.getKey()
                         + "] — the lockfile holds [[artifacts]] rows only");
             }
         }
@@ -35,20 +35,20 @@ public final class LockFileReader {
             return List.of();
         }
         if (!(artifacts instanceof List<?> rows)) {
-            throw new StoreException("mjm.lock: [artifacts] is not an array of tables");
+            throw new StoreException("jeno.lock: [artifacts] is not an array of tables");
         }
         List<LockedArtifact> result = new ArrayList<>();
         Set<String> ids = new java.util.HashSet<>();
         for (Object rowObject : rows) {
             if (!(rowObject instanceof Map<?, ?> row)) {
-                throw new StoreException("mjm.lock: an [[artifacts]] row is not a table");
+                throw new StoreException("jeno.lock: an [[artifacts]] row is not a table");
             }
             @SuppressWarnings("unchecked")
             Map<String, Object> fields = (Map<String, Object>) row;
             for (String key : fields.keySet()) {
                 if (!Set.of("id", "version", "source", "url", "sha256", "meta-sha256", "depth",
                         "scope").contains(key)) {
-                    throw new StoreException("mjm.lock: unknown field '" + key
+                    throw new StoreException("jeno.lock: unknown field '" + key
                             + "' in the row for '" + fields.get("id") + "'");
                 }
             }
@@ -56,10 +56,10 @@ public final class LockFileReader {
             if (source.startsWith("gitee:")) {
                 // every reader of a lock gets the same sentence: build, info, test,
                 // outdated — the species is gone, the row has to be re-declared
-                throw new StoreException("this mjm.lock pins gitee: artifacts, and the "
+                throw new StoreException("this jeno.lock pins gitee: artifacts, and the "
                         + "gitee: species was removed (its release assets need a token to "
                         + "read) — give '" + fields.get("id") + "' a release jar URL or a "
-                        + "[repos] entry in mjm.toml, then run mjm lock");
+                        + "[repos] entry in jeno.toml, then run jeno lock");
             }
             LockedArtifact artifact = new LockedArtifact(
                     string(fields, "id"), string(fields, "version"), source,
@@ -67,16 +67,16 @@ public final class LockFileReader {
                     fields.containsKey("meta-sha256") ? string(fields, "meta-sha256") : null,
                     depth(fields), scope(fields));
             if (!HEX64.matcher(artifact.sha256()).matches()) {
-                throw new StoreException("mjm.lock: sha256 for '" + artifact.id()
+                throw new StoreException("jeno.lock: sha256 for '" + artifact.id()
                         + "' is not 64 hex characters");
             }
             if (artifact.metaSha256() != null
                     && !HEX64.matcher(artifact.metaSha256()).matches()) {
-                throw new StoreException("mjm.lock: meta-sha256 for '" + artifact.id()
+                throw new StoreException("jeno.lock: meta-sha256 for '" + artifact.id()
                         + "' is not 64 hex characters");
             }
             if (!ids.add(artifact.id())) {
-                throw new StoreException("mjm.lock: '" + artifact.id()
+                throw new StoreException("jeno.lock: '" + artifact.id()
                         + "' appears twice — one id, one version");
             }
             result.add(artifact);
@@ -87,7 +87,7 @@ public final class LockFileReader {
     private static String string(Map<String, Object> fields, String key) {
         Object value = fields.get(key);
         if (!(value instanceof String string) || string.isBlank()) {
-            throw new StoreException("mjm.lock: '" + key + "' must be a non-blank string");
+            throw new StoreException("jeno.lock: '" + key + "' must be a non-blank string");
         }
         return string;
     }
@@ -95,7 +95,7 @@ public final class LockFileReader {
     private static int depth(Map<String, Object> fields) {
         Object value = fields.get("depth");
         if (!(value instanceof Long depth) || depth < 1) {
-            throw new StoreException("mjm.lock: 'depth' must be an integer >= 1");
+            throw new StoreException("jeno.lock: 'depth' must be an integer >= 1");
         }
         return depth.intValue();
     }
@@ -110,13 +110,13 @@ public final class LockFileReader {
             return Scope.MAIN;
         }
         if (!(value instanceof String text)) {
-            throw new StoreException("mjm.lock: 'scope' is absent (main), \"dev\" or "
+            throw new StoreException("jeno.lock: 'scope' is absent (main), \"dev\" or "
                     + "\"processor\" — got " + value);
         }
         return switch (text) {
             case "dev" -> Scope.DEV;
             case "processor" -> Scope.PROCESSOR;
-            default -> throw new StoreException("mjm.lock: 'scope' is absent (main), \"dev\" "
+            default -> throw new StoreException("jeno.lock: 'scope' is absent (main), \"dev\" "
                     + "or \"processor\" — got \"" + text + "\"");
         };
     }

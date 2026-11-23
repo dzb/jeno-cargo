@@ -9,7 +9,7 @@ import com.jujin.jeno.store.LockedArtifact;
  * with different words made CI filters impossible to write.
  *
  * <p>The labels are about the <em>species and layout</em>, not about which
- * query failed: a {@code gh:} release is a native release, an {@code mjm:}
+ * query failed: a {@code gh:} release is a native release, an {@code jeno:}
  * repository (local or remote) has no version index or advisory coordinate, a
  * local Maven directory has no listing, and a bare URL is a leaf. Anything else
  * — including a source the parser cannot classify — is a named repository.
@@ -32,8 +32,8 @@ final class ArtifactReasons {
         } catch (IllegalArgumentException unknownSource) {
             return "named-repository";
         }
-        if (repository.layout() == Repository.Layout.MJM) {
-            return "mjm-repository";
+        if (repository.layout() == Repository.Layout.JENO) {
+            return "jeno-repository";
         }
         return repository.isLocal() ? "local-repository" : "named-repository";
     }

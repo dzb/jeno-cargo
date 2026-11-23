@@ -62,7 +62,7 @@ class TreeWhyTest {
             </dependencies>
             """);
 
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -148,7 +148,7 @@ class TreeWhyTest {
 
     @Test
     void treeWithoutALockSaysWhatToRunAndDrawsNothing() throws Exception {
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -168,7 +168,7 @@ class TreeWhyTest {
         }
 
         assertEquals(1, exit);
-        assertTrue(errors.toString().contains("no mjm.lock in " + dir), errors.toString());
+        assertTrue(errors.toString().contains("no jeno.lock in " + dir), errors.toString());
         assertEquals("", readConsole(), "nothing is drawn without a lock");
     }
 
@@ -177,7 +177,7 @@ class TreeWhyTest {
         Path repo = dir.resolve("fix-repo");
         pom(repo, "com/example/lib-a/1.0.0", "lib-a", "1.0.0", "");
         pom(repo, "com/example/lib-a/1.1.0", "lib-a", "1.1.0", "");
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -190,7 +190,7 @@ class TreeWhyTest {
             """.formatted(repo));
         writeLock();
         // bump the declaration without re-locking: the lock still pins 1.0.0
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -216,7 +216,7 @@ class TreeWhyTest {
         }
 
         assertEquals(1, exit);
-        assertTrue(errors.toString().contains("mjm.lock is out of date — run mjm lock"),
+        assertTrue(errors.toString().contains("jeno.lock is out of date — run jeno lock"),
                 errors.toString());
         assertTrue(errors.toString().contains("com.example:lib-a: lock 1.0.0, manifest 1.1.0"),
                 errors.toString());
@@ -232,7 +232,7 @@ class TreeWhyTest {
             System.setErr(originalErr);
         }
         assertEquals(1, exit);
-        assertTrue(errors.toString().contains("mjm.lock is out of date"), errors.toString());
+        assertTrue(errors.toString().contains("jeno.lock is out of date"), errors.toString());
         assertEquals("", readConsole(), "why draws no paths either");
     }
 
@@ -251,7 +251,7 @@ class TreeWhyTest {
         pom(repo, "com/example/core/1.0.0", "core", "1.0.0", "");
         Path module = dir.resolve("libs/core");
         Files.createDirectories(module);
-        Files.writeString(module.resolve("mjm.toml"), """
+        Files.writeString(module.resolve("jeno.toml"), """
             [project]
             name = "core"
             group = "com.example"
@@ -259,7 +259,7 @@ class TreeWhyTest {
             """);
         Path app = dir.resolve("app");
         Files.createDirectories(app);
-        Files.writeString(app.resolve("mjm.toml"), """
+        Files.writeString(app.resolve("jeno.toml"), """
             [project]
             name = "app"
             version = "0.1.0"
@@ -270,7 +270,7 @@ class TreeWhyTest {
             [deps]
             "com.example:core" = "v:1.0.0"
             """);
-        Files.writeString(dir.resolve("mjm.ws.toml"), """
+        Files.writeString(dir.resolve("jeno.ws.toml"), """
             [ws]
             modules = ["libs/core", "app"]
             """);
@@ -296,7 +296,7 @@ class TreeWhyTest {
     void treeMarksProcessorScopeOnTheHumanLine() throws Exception {
         Path repo = dir.resolve("vendor");
         pom(repo, "com/example/proc/1.0.0", "proc", "1.0.0", "");
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -304,7 +304,7 @@ class TreeWhyTest {
             [build]
             processors = ["com.example:proc:1.0.0"]
             """);
-        System.setProperty("mjm.central.base", "local:" + repo);
+        System.setProperty("jeno.central.base", "local:" + repo);
         try {
             ArtifactStore store = new ArtifactStore(dir.resolve("store"));
             com.jujin.jeno.resolve.ArtifactLocations.useProjectRoot(dir);
@@ -316,7 +316,7 @@ class TreeWhyTest {
                     text -> { throw new IllegalStateException("no natives here"); }, dir);
             assertEquals(0, tree.execute(List.of()));
         } finally {
-            System.clearProperty("mjm.central.base");
+            System.clearProperty("jeno.central.base");
         }
 
         String out = readConsole();
@@ -395,7 +395,7 @@ class TreeWhyTest {
             """);
         pom(repo, "com/example/common/1.0.0", "common", "1.0.0", "");
 
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -461,7 +461,7 @@ class TreeWhyTest {
             """);
         pom(repo, "com/example/lib-c/2.0.0", "lib-c", "2.0.0", "");
         pom(repo, "com/example/lib-d/1.0.0", "lib-d", "1.0.0", "");
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -485,7 +485,7 @@ class TreeWhyTest {
 
         String json = readConsole();
         var root = com.jujin.freeway.commons.json.JsonUtils.parseObject(json);
-        assertEquals(1, root.getInt("schemaVersion"));
+        assertEquals(2, root.getInt("schemaVersion"));
         assertEquals("tree", root.getString("command"));
         assertEquals("ok", root.getString("status"));
         assertEquals(0, root.getInt("exitCode"));
@@ -524,7 +524,7 @@ class TreeWhyTest {
             </dependencies>
             """);
         pom(repo, "com/example/lib-c/2.0.0", "lib-c", "2.0.0", "");
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"

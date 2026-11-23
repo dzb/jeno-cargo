@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code mjm classpath}: strict visibility by default (the direct jars only),
+ * {@code jeno classpath}: strict visibility by default (the direct jars only),
  * the whole closure with --test, store paths never copied.
  */
 class ClasspathCommandTest {
@@ -62,7 +62,7 @@ class ClasspathCommandTest {
                 """.formatted(artifact, dependencies));
             Files.write(pom.resolveSibling(artifact + "-1.0.0.jar"), artifact.getBytes());
         }
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
@@ -123,7 +123,7 @@ class ClasspathCommandTest {
         String out = run("--json");
 
         var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(out);
-        assertEquals(1, json.getInt("schemaVersion"));
+        assertEquals(2, json.getInt("schemaVersion"));
         assertEquals("classpath", json.getString("command"));
         assertEquals("compile", json.getString("mode"));
         assertEquals(entries().size(), json.getArray("entries").size());
@@ -133,7 +133,7 @@ class ClasspathCommandTest {
 
     @Test
     void jsonMissingLockIsOneStructuredError() throws Exception {
-        Files.delete(dir.resolve("mjm.lock"));
+        Files.delete(dir.resolve("jeno.lock"));
         PrintStream originalOut = System.out;
         PrintStream originalErr = System.err;
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -159,11 +159,11 @@ class ClasspathCommandTest {
 
     @Test
     void aMissingLockSaysWhatToRun() throws Exception {
-        Files.delete(dir.resolve("mjm.lock"));
+        Files.delete(dir.resolve("jeno.lock"));
 
         String errors = errorsOf("--test");
 
-        assertTrue(errors.contains("run mjm lock first"), errors);
+        assertTrue(errors.contains("run jeno lock first"), errors);
     }
 
     @Test
@@ -175,7 +175,7 @@ class ClasspathCommandTest {
 
         String errors = errorsOf();
 
-        assertTrue(errors.contains("is not in the store — run mjm lock"), errors);
+        assertTrue(errors.contains("is not in the store — run jeno lock"), errors);
         assertFalse(errors.contains("lib-b"), "the transitive jar is not blamed");
     }
 

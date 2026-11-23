@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * {@code mjm why &lt;id&gt;}: every introduction path of one artifact — the
+ * {@code jeno why &lt;id&gt;}: every introduction path of one artifact — the
  * "who pulled this in" answer that turns a depth-budget breach or a version
  * surprise into a readable decision (DESIGN.md §4.2's review moment).
  */
@@ -108,7 +108,7 @@ public final class WhyCommand implements Command {
             target = arg;
         }
         if (target == null) {
-            String message = "why needs an id — mjm why <group:artifact> (or a name)";
+            String message = "why needs an id — jeno why <group:artifact> (or a name)";
             if (json) {
                 JsonResult.error("why", 2, "USAGE", message).emit(2);
             } else {
@@ -120,9 +120,9 @@ public final class WhyCommand implements Command {
         final String wanted = target;
         JenoProject project;
         try {
-            project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
+            project = ProjectReader.parse(Files.readString(projectDir.resolve("jeno.toml")));
         } catch (IOException e) {
-            String message = "no mjm.toml in " + projectDir + " — run mjm init to create one";
+            String message = "no jeno.toml in " + projectDir + " — run jeno init to create one";
             if (json) {
                 JsonResult.error("why", 1, "MANIFEST_MISSING", message).emit(1);
             } else {

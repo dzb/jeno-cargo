@@ -27,7 +27,7 @@ import java.util.Set;
 import java.util.TreeMap;
 
 /**
- * The dependency-graph resolver — mjm's three-piece soul in one pass:
+ * The dependency-graph resolver — jeno's three-piece soul in one pass:
  *
  * <ol>
  *   <li><b>Constraint collection</b> — every requirement (declared or
@@ -248,11 +248,11 @@ public final class Resolver {
                     }
                     case GH -> {
                         // the same entry point jarUrl/metadataUrl use: a mirror
-                        // set through -Dmjm.github.host must cover the descriptor
+                        // set through -Djeno.github.host must cover the descriptor
                         // fetch too, or it is not a mirror
                         String url = ArtifactLocations.releaseFile(
                                 ArtifactLocations.githubHost(), template.owner(),
-                                template.repo(), template.tag(), version, "mjm.toml");
+                                template.repo(), template.tag(), version, "jeno.toml");
                         String text = descriptorSource.descriptor(url);
                         if (text == null || text.isBlank()) {
                             throw new ProjectException("no descriptor for "
@@ -271,8 +271,8 @@ public final class Resolver {
                         String base = template.repository() == null
                                 ? ArtifactLocations.centralBase()
                                 : project.repos().get(template.repository()).declaration();
-                        String url = ArtifactLocations.mjmFile(base, template.id(), version,
-                                "mjm.toml");
+                        String url = ArtifactLocations.jenoFile(base, template.id(), version,
+                                "jeno.toml");
                         String text = descriptorSource.descriptor(url);
                         if (text == null || text.isBlank()) {
                             throw new ProjectException("no descriptor at " + url);
@@ -383,7 +383,7 @@ public final class Resolver {
         /**
          * Same major takes the max; a cross-major demand is a hard conflict —
          * silent max-wins across a major is exactly the NoSuchMethodError
-         * trap mjm exists to close. Central versions without an extractable
+         * trap jeno exists to close. Central versions without an extractable
          * major fall back to plain max-wins.
          */
         private String maximum(String id, List<String> candidates, List<Constraint> constraints) {
@@ -480,7 +480,7 @@ public final class Resolver {
                         + " (budget is " + project.maxDepth() + "):\n  "
                         + String.join(" -> ", depths.longestPath(offender))
                         + "\nexits: swap it for a smaller (zero-dependency) library, or raise "
-                        + "[limits].max-depth in mjm.toml");
+                        + "[limits].max-depth in jeno.toml");
             }
 
             List<ResolvedGraph.ResolvedArtifact> artifacts = new ArrayList<>();
@@ -556,7 +556,7 @@ public final class Resolver {
                                 template.artifactId(), version, template.classifier(), "jar");
                 case GH -> ArtifactLocations.releaseFile(ArtifactLocations.githubHost(),
                         template.owner(), template.repo(), template.tag(), version, "jar");
-                case NAMED -> ArtifactLocations.mjmFile(named, template.id(), version, "jar");
+                case NAMED -> ArtifactLocations.jenoFile(named, template.id(), version, "jar");
                 case URL -> template.url();
             };
         }
@@ -570,8 +570,8 @@ public final class Resolver {
                         : ArtifactLocations.mavenFile(named, template.group(),
                                 template.artifactId(), version, "pom");
                 case GH -> ArtifactLocations.releaseFile(ArtifactLocations.githubHost(),
-                        template.owner(), template.repo(), template.tag(), version, "mjm.toml");
-                case NAMED -> ArtifactLocations.mjmFile(named, template.id(), version, "mjm.toml");
+                        template.owner(), template.repo(), template.tag(), version, "jeno.toml");
+                case NAMED -> ArtifactLocations.jenoFile(named, template.id(), version, "jeno.toml");
                 case URL -> null;  // a bare leaf has no metadata
             };
         }

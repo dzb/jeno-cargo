@@ -8,15 +8,15 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 
 /**
- * HTTP PUT/GET for mjm-layout repositories, shared by publish and release.
+ * HTTP PUT/GET for jeno-layout repositories, shared by publish and release.
  *
- * <p>Uploads use PUT, not POST. The mjm layout gives every byte a final,
+ * <p>Uploads use PUT, not POST. The jeno layout gives every byte a final,
  * deterministic URL, and PUT makes that URL the resource itself: retrying an
  * interrupted publish is idempotent and the server does not have to invent a
  * name or return a Location. POST is the right verb for a server-assigned
  * upload endpoint or a multipart form, but that would require a host-specific
- * protocol and break mjm's "a repository is a URL" contract. A POST-only host
- * can expose a small PUT gateway if it wants to serve mjm repositories.
+ * protocol and break jeno's "a repository is a URL" contract. A POST-only host
+ * can expose a small PUT gateway if it wants to serve jeno repositories.
  */
 final class JenoUploads {
 
@@ -33,10 +33,10 @@ final class JenoUploads {
         put(url, "application/octet-stream", bytes);
     }
 
-    /** One PUT, treating 200/201/204 as success; MJM_PUBLISH_TOKEN is optional. */
+    /** One PUT, treating 200/201/204 as success; JENO_PUBLISH_TOKEN is optional. */
     static void put(String url, String contentType, byte[] bytes)
             throws IOException, InterruptedException {
-        String token = System.getenv("MJM_PUBLISH_TOKEN");
+        String token = System.getenv("JENO_PUBLISH_TOKEN");
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
                 .header("Content-Type", contentType)
                 .PUT(HttpRequest.BodyPublishers.ofByteArray(bytes));

@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * {@code mjm tree}: the resolved graph from the declared roots down, each node
+ * {@code jeno tree}: the resolved graph from the declared roots down, each node
  * with its depth — the visible shape of the dependency budget (DESIGN.md
  * §4.2). Diagnosing re-resolves (idempotent; the lockfile stays the build's
  * input).
@@ -117,9 +117,9 @@ public final class TreeCommand implements Command {
         }
         JenoProject project;
         try {
-            project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
+            project = ProjectReader.parse(Files.readString(projectDir.resolve("jeno.toml")));
         } catch (IOException e) {
-            String message = "no mjm.toml in " + projectDir + " — run mjm init to create one";
+            String message = "no jeno.toml in " + projectDir + " — run jeno init to create one";
             if (json) {
                 JsonResult.error("tree", 1, "MANIFEST_MISSING", message).emit(1);
             } else {

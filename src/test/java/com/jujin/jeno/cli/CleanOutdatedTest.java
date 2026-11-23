@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code mjm clean} and {@code mjm outdated} — the two commands that close the
+ * {@code jeno clean} and {@code jeno outdated} — the two commands that close the
  * "housekeeping" gap. Neither is clever; what matters is what they refuse to
  * touch and how they classify what they cannot check.
  */
@@ -273,7 +273,7 @@ class CleanOutdatedTest {
     void snapshotsAreNeverCandidates() {
         List<String> available = List.of("2.0.0", "2.5.0-SNAPSHOT");
         assertEquals("2.0.0", OutdatedCommand.newest(available, true),
-                "mjm refuses snapshots, so it must not offer one");
+                "jeno refuses snapshots, so it must not offer one");
     }
 
     @Test
@@ -306,7 +306,7 @@ class CleanOutdatedTest {
             [[artifacts]]
             id = "widget"
             version = "1.0.0"
-            source = "mjm:https://repo.example/"
+            source = "jeno:https://repo.example/"
             url = "https://repo.example/widget/1.0.0/widget-1.0.0.jar"
             sha256 = "%s"
             meta-sha256 = "%s"
@@ -334,7 +334,7 @@ class CleanOutdatedTest {
             exchange.close();
         });
         server.start();
-        System.setProperty("mjm.central.base",
+        System.setProperty("jeno.central.base",
                 "http://localhost:" + server.getAddress().getPort() + "/");
         try {
             projectWithLock(centralRow("com.example:lib-a", "1.0.0")
@@ -352,7 +352,7 @@ class CleanOutdatedTest {
             String out = runOutdated(1, "--json");
 
             var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(out);
-            assertEquals(1, json.getInt("schemaVersion"));
+            assertEquals(2, json.getInt("schemaVersion"));
             assertEquals("outdated", json.getString("command"));
             assertEquals("ok", json.getString("status"));
             assertEquals(0, json.getInt("exitCode"));
@@ -371,14 +371,14 @@ class CleanOutdatedTest {
             assertEquals("com.example:lib-c", failures.getObject(0).getString("id"));
         } finally {
             server.stop(0);
-            System.clearProperty("mjm.central.base");
+            System.clearProperty("jeno.central.base");
         }
     }
 
     @Test
     void theJsonReportSaysUpToDateWhenItIs() throws Exception {
         HttpServer server = server(200, metadata("1.0.0"));
-        System.setProperty("mjm.central.base",
+        System.setProperty("jeno.central.base",
                 "http://localhost:" + server.getAddress().getPort() + "/");
         try {
             projectWithLock(centralRow("com.example:lib-a", "1.0.0"));
@@ -392,7 +392,7 @@ class CleanOutdatedTest {
             assertEquals(0, json.getArray("failures").size());
         } finally {
             server.stop(0);
-            System.clearProperty("mjm.central.base");
+            System.clearProperty("jeno.central.base");
         }
     }
 
@@ -419,7 +419,7 @@ class CleanOutdatedTest {
     @Test
     void aFailedLookupAlsoSuppressesTheUpToDateClaim() throws Exception {
         HttpServer server = server(404, null);
-        System.setProperty("mjm.central.base",
+        System.setProperty("jeno.central.base",
                 "http://localhost:" + server.getAddress().getPort() + "/");
         try {
             projectWithLock(centralRow("com.example:lib-a", "1.0.0"));
@@ -431,14 +431,14 @@ class CleanOutdatedTest {
                     "a failed comparison is not an up-to-date answer: " + out);
         } finally {
             server.stop(0);
-            System.clearProperty("mjm.central.base");
+            System.clearProperty("jeno.central.base");
         }
     }
 
     @Test
     void aFreshPinSaysUpToDateWhenSomethingWasActuallyChecked() throws Exception {
         HttpServer server = server(200, metadata("1.0.0"));
-        System.setProperty("mjm.central.base",
+        System.setProperty("jeno.central.base",
                 "http://localhost:" + server.getAddress().getPort() + "/");
         try {
             projectWithLock(centralRow("com.example:lib-a", "1.0.0"));
@@ -448,7 +448,7 @@ class CleanOutdatedTest {
             assertTrue(out.contains("everything is up to date"), out);
         } finally {
             server.stop(0);
-            System.clearProperty("mjm.central.base");
+            System.clearProperty("jeno.central.base");
         }
     }
 
@@ -468,7 +468,7 @@ class CleanOutdatedTest {
             exchange.close();
         });
         server.start();
-        System.setProperty("mjm.central.base",
+        System.setProperty("jeno.central.base",
                 "http://localhost:" + server.getAddress().getPort() + "/");
         try {
             projectWithLock(centralRow("com.example:lib-a", "1.0.0")
@@ -483,14 +483,14 @@ class CleanOutdatedTest {
             assertFalse(out.contains("everything is up to date"), out);
         } finally {
             server.stop(0);
-            System.clearProperty("mjm.central.base");
+            System.clearProperty("jeno.central.base");
         }
     }
 
     @Test
     void aMixedClosureIsNeverCalledUpToDate() throws Exception {
         HttpServer server = server(200, metadata("1.0.0"));
-        System.setProperty("mjm.central.base",
+        System.setProperty("jeno.central.base",
                 "http://localhost:" + server.getAddress().getPort() + "/");
         try {
             projectWithLock(centralRow("com.example:lib-a", "1.0.0") + """
@@ -511,14 +511,14 @@ class CleanOutdatedTest {
                     "one row was not compared, so the closure is not \"up to date\": " + out);
         } finally {
             server.stop(0);
-            System.clearProperty("mjm.central.base");
+            System.clearProperty("jeno.central.base");
         }
     }
 
     @Test
     void aClassifierRowChecksTheBaseArtifact() throws Exception {
         HttpServer server = server(200, metadata("1.0.0", "1.1.0"));
-        System.setProperty("mjm.central.base",
+        System.setProperty("jeno.central.base",
                 "http://localhost:" + server.getAddress().getPort() + "/");
         try {
             // the classifier is part of the identity, never of the metadata path
@@ -530,14 +530,14 @@ class CleanOutdatedTest {
                     "the metadata is the base artifact's, got: " + out);
         } finally {
             server.stop(0);
-            System.clearProperty("mjm.central.base");
+            System.clearProperty("jeno.central.base");
         }
     }
 
     @Test
     void anEmptyVersionListIsAFailureNotAnUpdate() throws Exception {
         HttpServer server = server(200, metadata());
-        System.setProperty("mjm.central.base",
+        System.setProperty("jeno.central.base",
                 "http://localhost:" + server.getAddress().getPort() + "/");
         try {
             projectWithLock(centralRow("com.example:lib-a", "1.0.0"));
@@ -548,26 +548,26 @@ class CleanOutdatedTest {
             assertFalse(out.contains("everything is up to date"), out);
         } finally {
             server.stop(0);
-            System.clearProperty("mjm.central.base");
+            System.clearProperty("jeno.central.base");
         }
     }
 
     @Test
     void theRequestTimeoutIsClamped() {
         try {
-            System.setProperty("mjm.http.request.timeout.ms", "0");
+            System.setProperty("jeno.http.request.timeout.ms", "0");
             assertEquals(java.time.Duration.ofMillis(100), MetadataVersions.requestTimeout(),
                     "0 would mean no deadline at all: raised to the floor");
 
-            System.setProperty("mjm.http.request.timeout.ms", "999999999");
+            System.setProperty("jeno.http.request.timeout.ms", "999999999");
             assertEquals(java.time.Duration.ofMillis(120_000), MetadataVersions.requestTimeout(),
                     "a huge value is a hang by another name: capped at the ceiling");
 
-            System.clearProperty("mjm.http.request.timeout.ms");
+            System.clearProperty("jeno.http.request.timeout.ms");
             assertEquals(java.time.Duration.ofMillis(30_000), MetadataVersions.requestTimeout(),
                     "the shipped default");
         } finally {
-            System.clearProperty("mjm.http.request.timeout.ms");
+            System.clearProperty("jeno.http.request.timeout.ms");
         }
     }
 
@@ -584,9 +584,9 @@ class CleanOutdatedTest {
             acceptor.setDaemon(true);
             acceptor.start();
 
-            System.setProperty("mjm.central.base",
+            System.setProperty("jeno.central.base",
                     "http://127.0.0.1:" + socket.getLocalPort() + "/");
-            System.setProperty("mjm.http.request.timeout.ms", "700");
+            System.setProperty("jeno.http.request.timeout.ms", "700");
             projectWithLock(centralRow("com.example:lib-a", "1.0.0"));
 
             long start = System.nanoTime();
@@ -597,8 +597,8 @@ class CleanOutdatedTest {
                     "a silent server must not hang the command; took " + elapsedMs + "ms");
             assertTrue(out.contains("could not check"), out);
         } finally {
-            System.clearProperty("mjm.central.base");
-            System.clearProperty("mjm.http.request.timeout.ms");
+            System.clearProperty("jeno.central.base");
+            System.clearProperty("jeno.http.request.timeout.ms");
         }
     }
 
@@ -609,19 +609,19 @@ class CleanOutdatedTest {
     private static final String SHA = "0".repeat(64);
 
     private void projectWithLock(String rows) throws Exception {
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"
             """);
-        Files.writeString(dir.resolve("mjm.lock"), """
-            # generated by mjm
+        Files.writeString(dir.resolve("jeno.lock"), """
+            # generated by jeno
             %s
             """.formatted(rows));
     }
 
     private String centralRow(String id, String version) {
-        String base = System.getProperty("mjm.central.base");
+        String base = System.getProperty("jeno.central.base");
         int colon = id.indexOf(':');
         String group = id.substring(0, colon);
         String artifact = id.substring(colon + 1);
@@ -746,8 +746,8 @@ class CleanOutdatedTest {
 
     @Test
     void outdatedNeedsOnlyTheLock() throws Exception {
-        Files.writeString(dir.resolve("mjm.lock"), """
-            # generated by mjm
+        Files.writeString(dir.resolve("jeno.lock"), """
+            # generated by jeno
             [[artifacts]]
             id = "acme:lib"
             version = "1.0.0"
@@ -761,6 +761,6 @@ class CleanOutdatedTest {
                 runOutdated(0, "--json"));
 
         assertEquals(1, json.getArray("notChecked").size(),
-                "a directory with a lock but no mjm.toml still answers");
+                "a directory with a lock but no jeno.toml still answers");
     }
 }

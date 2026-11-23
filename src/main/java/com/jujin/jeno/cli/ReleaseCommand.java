@@ -17,8 +17,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * {@code mjm release [target] [--dry-run]} — one step: take the installer that
- * {@code mjm bundle} produced and publish it.
+ * {@code jeno release [target] [--dry-run]} — one step: take the installer that
+ * {@code jeno bundle} produced and publish it.
  *
  * <p>It never builds, tests or bundles: those decisions belong to a project's
  * CI/flow, and a release step that quietly rebuilds is a release step whose
@@ -26,8 +26,8 @@ import java.util.List;
  * {@code target/dist/<name>-<version>.tar.gz}.
  *
  * <p>Without a target it prepares {@code target/dist/release/} and prints the
- * upload checklist. With {@code gh:}, {@code mjm:https://…},
- * {@code mjm:http://<private-ip>/} (LAN only) or {@code mjm:local:<dir>} it
+ * upload checklist. With {@code gh:}, {@code jeno:https://…},
+ * {@code jeno:http://<private-ip>/} (LAN only) or {@code jeno:local:<dir>} it
  * uploads the installer, a bootstrap {@code setup.sh},
  * a checksum and {@code release.json}, then reads the installer back and
  * compares its sha256 — a publish that cannot be verified is not done.
@@ -55,18 +55,18 @@ public final class ReleaseCommand implements Command {
 
     @Override
     public String summary() {
-        return "publish a bundled installer: gh:, mjm:https://host/,"
-                + " mjm:http://<private-ip>/, mjm:local:<dir>";
+        return "publish a bundled installer: gh:, jeno:https://host/,"
+                + " jeno:http://<private-ip>/, jeno:local:<dir>";
     }
 
     @Override
     public String help() {
         return """
-               needs target/dist/<name>-<version>.tar.gz (run mjm bundle first);
-               signed with minisign by default: set MJM_MINISIGN_KEY, and optionally
-               MJM_MINISIGN_PUBKEY/MJM_MINISIGN; --allow-unsigned is the explicit opt-out.
-               targets: gh:<owner>/<repo>, mjm:https://host/, mjm:http://<private-ip>/
-               (literal LAN address only; public hosts need https), mjm:local:<dir>.
+               needs target/dist/<name>-<version>.tar.gz (run jeno bundle first);
+               signed with minisign by default: set JENO_MINISIGN_KEY, and optionally
+               JENO_MINISIGN_PUBKEY/JENO_MINISIGN; --allow-unsigned is the explicit opt-out.
+               targets: gh:<owner>/<repo>, jeno:https://host/, jeno:http://<private-ip>/
+               (literal LAN address only; public hosts need https), jeno:local:<dir>.
                no target prepares target/dist/release/ and prints the upload list.
                --dry-run prepares the same files and shows the URLs without uploading.""";
     }
@@ -194,10 +194,10 @@ public final class ReleaseCommand implements Command {
 
         JenoProject project;
         try {
-            project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
+            project = ProjectReader.parse(Files.readString(projectDir.resolve("jeno.toml")));
         } catch (IOException e) {
-            System.err.println(Ui.errPrefix() + "no mjm.toml in " + projectDir
-                    + " — run mjm init to create one");
+            System.err.println(Ui.errPrefix() + "no jeno.toml in " + projectDir
+                    + " — run jeno init to create one");
             return 1;
         }
 
@@ -206,7 +206,7 @@ public final class ReleaseCommand implements Command {
         String tag = "v" + version;
         Path tar = projectDir.resolve(DIST).resolve(name + "-" + version + ".tar.gz");
         if (!Files.isRegularFile(tar)) {
-            System.err.println(Ui.errPrefix() + tar + " is missing — run mjm bundle first");
+            System.err.println(Ui.errPrefix() + tar + " is missing — run jeno bundle first");
             return 1;
         }
 
@@ -246,7 +246,7 @@ public final class ReleaseCommand implements Command {
         if (plan.repository != null && plan.repository.isPlainHttp()
                 && !plan.repository.isLoopbackNetwork()) {
             System.err.println("warning: releasing over plain HTTP ("
-                    + plan.repository.declaration() + ") — the traffic and MJM_PUBLISH_TOKEN"
+                    + plan.repository.declaration() + ") — the traffic and JENO_PUBLISH_TOKEN"
                     + " are not encrypted");
         }
 
@@ -371,17 +371,17 @@ public final class ReleaseCommand implements Command {
     private ReleasePlan releasePlan(Path moduleDir, String target, boolean allowUnsigned) {
         JenoProject project;
         try {
-            project = ProjectReader.parse(Files.readString(moduleDir.resolve("mjm.toml")));
+            project = ProjectReader.parse(Files.readString(moduleDir.resolve("jeno.toml")));
         } catch (IOException e) {
-            throw new IllegalStateException("no mjm.toml in " + moduleDir
-                    + " — run mjm init to create one");
+            throw new IllegalStateException("no jeno.toml in " + moduleDir
+                    + " — run jeno init to create one");
         }
         String name = project.name();
         String version = project.version();
         String tag = "v" + version;
         Path tar = moduleDir.resolve(DIST).resolve(name + "-" + version + ".tar.gz");
         if (!Files.isRegularFile(tar)) {
-            throw new IllegalStateException(tar + " is missing — run mjm bundle first");
+            throw new IllegalStateException(tar + " is missing — run jeno bundle first");
         }
         String sha = ArtifactStore.sha256(tar);
         ReleaseSigner.Preview signing;
@@ -430,7 +430,7 @@ public final class ReleaseCommand implements Command {
     private void emitPlan(ReleasePlan plan, boolean dryRun) {
         if (dryRun && plan.insecureHttp()) {
             System.err.println("warning: releasing over plain HTTP ("
-                    + plan.plan().target + ") — the traffic and MJM_PUBLISH_TOKEN"
+                    + plan.plan().target + ") — the traffic and JENO_PUBLISH_TOKEN"
                     + " are not encrypted");
         }
         if (dryRun) {
@@ -497,7 +497,7 @@ public final class ReleaseCommand implements Command {
         if (plan.insecureHttp()) {
             result.diagnostic("warning", "PLAIN_HTTP_INSECURE",
                     "releasing over plain HTTP (" + plan.plan().target + ") — the traffic and"
-                            + " MJM_PUBLISH_TOKEN are not encrypted", List.of());
+                            + " JENO_PUBLISH_TOKEN are not encrypted", List.of());
         }
         result.emit(0);
     }
@@ -534,10 +534,10 @@ public final class ReleaseCommand implements Command {
         }
 
         Repository repository = Repository.parse(target);
-        if (repository.layout() != Repository.Layout.MJM) {
+        if (repository.layout() != Repository.Layout.JENO) {
             throw new IllegalArgumentException("release publishes installers, not Maven "
-                    + "artifacts — use gh:<owner>/<repo>, mjm:https://host/,"
-                    + " mjm:http://<private-ip>/ (LAN only) or mjm:local:<dir>");
+                    + "artifacts — use gh:<owner>/<repo>, jeno:https://host/,"
+                    + " jeno:http://<private-ip>/ (LAN only) or jeno:local:<dir>");
         }
         String root = repository.isLocal()
                 ? repository.directory(ArtifactLocations.projectRoot()).toUri().toString()
@@ -623,7 +623,7 @@ public final class ReleaseCommand implements Command {
                 ReleaseSigner.verify(tar, signature, signing.publicKey());
                 if (!plan.repository.isLocal()) {
                     byte[] remoteSignature = JenoUploads.get(plan.installerUrl + ".minisig");
-                    Path temp = Files.createTempFile("mjm-remote-", ".minisig");
+                    Path temp = Files.createTempFile("jeno-remote-", ".minisig");
                     try {
                         Files.write(temp, remoteSignature);
                         ReleaseSigner.verify(tar, temp, signing.publicKey());
@@ -651,7 +651,7 @@ public final class ReleaseCommand implements Command {
                                 ReleaseSigner.Preview signing) {
         String token = GitHubReleases.token();
         if (token == null || token.isBlank()) {
-            System.err.println(Ui.errPrefix() + "MJM_GITHUB_TOKEN environment variable is not set — "
+            System.err.println(Ui.errPrefix() + "JENO_GITHUB_TOKEN environment variable is not set — "
                     + "set it to your GitHub personal access token, or run with --dry-run");
             return 1;
         }
@@ -664,7 +664,7 @@ public final class ReleaseCommand implements Command {
         try {
             releaseId = GitHubReleases.create(origin, owner, repo, tag, token,
                     "{\"tag_name\":\"" + tag + "\",\"name\":\"" + tag
-                            + "\",\"body\":\"released with mjm release\"}");
+                            + "\",\"body\":\"released with jeno release\"}");
             tarDownload = null;
             for (Path file : concat(tar, files)) {
                 String download = GitHubReleases.upload(owner, repo, releaseId, file, token);
@@ -704,7 +704,7 @@ public final class ReleaseCommand implements Command {
             if (signing.signed()) {
                 Path signature = projectDir.resolve(RELEASE)
                         .resolve(tar.getFileName() + ".minisig");
-                Path temp = Files.createTempFile("mjm-gh-", ".tar.gz");
+                Path temp = Files.createTempFile("jeno-gh-", ".tar.gz");
                 try {
                     Files.write(temp, readBack);
                     ReleaseSigner.verify(temp, signature, signing.publicKey());
@@ -746,7 +746,7 @@ public final class ReleaseCommand implements Command {
     }
 
     private static void writeAtomically(Path target, byte[] bytes) throws IOException {
-        Path temp = Files.createTempFile(target.getParent(), ".mjm-release-", ".tmp");
+        Path temp = Files.createTempFile(target.getParent(), ".jeno-release-", ".tmp");
         try {
             Files.write(temp, bytes);
             Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
@@ -820,7 +820,7 @@ public final class ReleaseCommand implements Command {
         root.put("artifact", artifact);
         root.put("sha256", sha);
         root.put("jdk", jdk);
-        root.put("mjm", Jeno.VERSION);
+        root.put("jeno", Jeno.VERSION);
         root.put("platform", "any");
         root.put("signed", signing.signed());
         if (signing.signed()) {

@@ -31,15 +31,15 @@ class RepositoryTest {
         assertEquals(Path.of("/work/libs/vendor"),
                 mavenLocal.directory(Path.of("/work/libs/app")));
 
-        Repository mjmHttps = Repository.parse("r", "mjm:https://host/repo");
-        assertEquals(Repository.Layout.MJM, mjmHttps.layout());
-        assertEquals(Repository.Transport.NETWORK, mjmHttps.transport());
-        assertEquals("https://host/repo/", mjmHttps.networkBase());
+        Repository jenoHttps = Repository.parse("r", "jeno:https://host/repo");
+        assertEquals(Repository.Layout.JENO, jenoHttps.layout());
+        assertEquals(Repository.Transport.NETWORK, jenoHttps.transport());
+        assertEquals("https://host/repo/", jenoHttps.networkBase());
 
-        Repository mjmLocal = Repository.parse("r", "mjm:local:../vendor");
-        assertEquals(Repository.Layout.MJM, mjmLocal.layout());
-        assertEquals(Repository.Transport.LOCAL, mjmLocal.transport());
-        assertEquals("mjm:local:../vendor", mjmLocal.declaration());
+        Repository jenoLocal = Repository.parse("r", "jeno:local:../vendor");
+        assertEquals(Repository.Layout.JENO, jenoLocal.layout());
+        assertEquals(Repository.Transport.LOCAL, jenoLocal.transport());
+        assertEquals("jeno:local:../vendor", jenoLocal.declaration());
     }
 
 
@@ -60,7 +60,7 @@ class RepositoryTest {
                 "http://[fe80::1]/")) {
             assertTrue(Repository.isLocalNetworkHttp(url), url + " is a private network");
             assertEquals(Repository.Transport.NETWORK,
-                    Repository.parse("r", "mjm:" + url).transport(), url);
+                    Repository.parse("r", "jeno:" + url).transport(), url);
         }
         for (String url : List.of(
                 "http://8.8.8.8/",
@@ -73,11 +73,11 @@ class RepositoryTest {
                 "http://[2001:db8::1]/")) {
             assertFalse(Repository.isLocalNetworkHttp(url), url + " is not private");
             assertThrows(IllegalArgumentException.class,
-                    () -> Repository.parse("r", "mjm:" + url), url);
+                    () -> Repository.parse("r", "jeno:" + url), url);
         }
-        // https with a hostname is unchanged (the URL is not resolved by mjm)
+        // https with a hostname is unchanged (the URL is not resolved by jeno)
         assertEquals(Repository.Transport.NETWORK,
-                Repository.parse("r", "mjm:https://repo.example/").transport());
+                Repository.parse("r", "jeno:https://repo.example/").transport());
     }
 
 
@@ -125,9 +125,9 @@ class RepositoryTest {
     @Test
     void anUnknownLocationNamesBothDimensions() {
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> Repository.parse("r", "mjm:../vendor"));
-        assertTrue(error.getMessage().contains("mjm:https://"), error.getMessage());
-        assertTrue(error.getMessage().contains("mjm:local:"), error.getMessage());
+                () -> Repository.parse("r", "jeno:../vendor"));
+        assertTrue(error.getMessage().contains("jeno:https://"), error.getMessage());
+        assertTrue(error.getMessage().contains("jeno:local:"), error.getMessage());
     }
 
     @Test
@@ -140,7 +140,7 @@ class RepositoryTest {
         try (Stream<Path> stream = Files.walk(sources)) {
             for (Path file : stream.filter(p -> p.toString().endsWith(".java")).toList()) {
                 String text = Files.readString(file);
-                boolean sniffs = text.contains("startsWith(\"mjm:\")")
+                boolean sniffs = text.contains("startsWith(\"jeno:\")")
                         || text.contains("startsWith(\"local:\")");
                 if (sniffs && !file.getFileName().toString().equals("Repository.java")) {
                     offenders.add(file.toString());

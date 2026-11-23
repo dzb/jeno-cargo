@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * A Maven-layout target is refused: mjm writes no POM, so neither mjm nor
+ * A Maven-layout target is refused: jeno writes no POM, so neither jeno nor
  * Maven could read the triple back. Nothing is uploaded, nothing is rewritten.
  */
 class PublishToHostTest {
@@ -61,9 +61,9 @@ class PublishToHostTest {
 
             assertEquals(1, result.exit());
             assertTrue(result.err().contains("Maven-layout target"), result.err());
-            assertTrue(result.err().contains("mjm:local:"), result.err());
+            assertTrue(result.err().contains("jeno:local:"), result.err());
             assertTrue(received.isEmpty(), "zero requests: " + received.keySet());
-            assertFalse(Files.exists(dir.resolve("target/dist/widget-1.2.0.mjm.toml")),
+            assertFalse(Files.exists(dir.resolve("target/dist/widget-1.2.0.jeno.toml")),
                     "the descriptor was not rewritten");
             assertFalse(Files.exists(dir.resolve("target/dist/widget-1.2.0.sha256")),
                     "no half-published triple");
@@ -126,7 +126,7 @@ class PublishToHostTest {
             exchange.close();
         });
         server.start();
-        String base = "mjm:http://localhost:" + server.getAddress().getPort() + "/repo/";
+        String base = "jeno:http://localhost:" + server.getAddress().getPort() + "/repo/";
 
         try {
             project();
@@ -151,7 +151,7 @@ class PublishToHostTest {
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
         assertEquals(0, new PackageCommand(store, dir).execute(List.of()));
 
-        Result result = publish("mjm:http://203.0.113.1/");
+        Result result = publish("jeno:http://203.0.113.1/");
 
         assertEquals(1, result.exit());
         assertTrue(result.err().contains("private network"), result.err());
@@ -179,7 +179,7 @@ class PublishToHostTest {
 
     private void project() throws IOException {
         Files.createDirectories(dir.resolve("src/main/java/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "widget"
             group = "com.acme"
@@ -188,7 +188,7 @@ class PublishToHostTest {
             """);
         Files.writeString(dir.resolve("src/main/java/demo/App.java"),
                 "package demo; public final class App {}");
-        Files.writeString(dir.resolve("mjm.lock"),
+        Files.writeString(dir.resolve("jeno.lock"),
                 com.jujin.jeno.resolve.LockFile.serialize(
                         new com.jujin.jeno.resolve.ResolvedGraph(List.of(), List.of(), Map.of()),
                         url -> "e".repeat(64)));

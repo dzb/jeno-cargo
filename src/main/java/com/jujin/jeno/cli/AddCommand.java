@@ -17,13 +17,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * {@code mjm add &lt;key&gt; [value]}: appends one dependency to mjm.toml's
+ * {@code jeno add &lt;key&gt; [value]}: appends one dependency to jeno.toml's
  * {@code [deps]} and re-locks. Without a value:
  *
  * <ul>
  *   <li>a Central coordinate ({@code group:artifact}) lists every version
  *       the repository publishes ({@link MetadataVersions})</li>
- *   <li>a bare name searches the Central index ({@code mjm add jackson}) —
+ *   <li>a bare name searches the Central index ({@code jeno add jackson}) —
  *       the fuzzy search Q1 scheduled for M5</li>
  * </ul>
  */
@@ -86,8 +86,8 @@ public final class AddCommand implements Command {
         }
         if (cleaned.isEmpty() || cleaned.size() > 2) {
             JsonResult.error("add", 2, "USAGE",
-                    "add needs a key and an optional value — mjm add \"group:artifact\" 1.2.3"
-                            + " | mjm add mylib gh:owner/repo@v1.0.0").emit(2);
+                    "add needs a key and an optional value — jeno add \"group:artifact\" 1.2.3"
+                            + " | jeno add mylib gh:owner/repo@v1.0.0").emit(2);
             return 2;
         }
 
@@ -143,7 +143,7 @@ public final class AddCommand implements Command {
                     ? key.substring(key.indexOf('/') + 1, key.indexOf('@'))
                     : key;
             int artifacts = LockFileReader.read(
-                    Files.readString(moduleDir.resolve("mjm.lock"))).size();
+                    Files.readString(moduleDir.resolve("jeno.lock"))).size();
             JsonObject dependency = JsonUtils.object();
             dependency.put("id", id);
             if (value != null) {
@@ -153,9 +153,9 @@ public final class AddCommand implements Command {
                     .workspace(moduleDir, "single")
                     .put("mode", "mutate")
                     .put("dependency", dependency)
-                    .put("manifest", moduleDir.resolve("mjm.toml")
+                    .put("manifest", moduleDir.resolve("jeno.toml")
                             .toAbsolutePath().normalize().toString())
-                    .put("lock", moduleDir.resolve("mjm.lock")
+                    .put("lock", moduleDir.resolve("jeno.lock")
                             .toAbsolutePath().normalize().toString())
                     .put("artifactCount", artifacts)
                     .put("lockUpdated", true)
@@ -175,13 +175,13 @@ public final class AddCommand implements Command {
         }
         if (args.isEmpty() || args.size() > 2) {
             System.err.println(Ui.errPrefix() + "add needs a key and an optional value — "
-                    + "mjm add \"group:artifact\" 1.2.3 | mjm add mylib gh:owner/repo@v1.0.0");
+                    + "jeno add \"group:artifact\" 1.2.3 | jeno add mylib gh:owner/repo@v1.0.0");
             return 2;
         }
         String key = args.get(0);
         String value = args.size() == 2 ? args.get(1) : null;
 
-        // add writes mjm.toml and mjm.lock; build/test/clean/lock take the same
+        // add writes jeno.toml and jeno.lock; build/test/clean/lock take the same
         // project lock, so a concurrent writer waits instead of interleaving.
         // No nesting: the body calls prepare/commit directly, never refresh.
         return ProjectLock.with(projectDir, () -> add(key, value));
@@ -195,10 +195,10 @@ public final class AddCommand implements Command {
     private int add(String key, String value) {
         String mjToml;
         try {
-            mjToml = Files.readString(projectDir.resolve("mjm.toml"));
+            mjToml = Files.readString(projectDir.resolve("jeno.toml"));
         } catch (IOException e) {
-            System.err.println(Ui.errPrefix() + "no mjm.toml in " + projectDir
-                    + " — run mjm init to create one");
+            System.err.println(Ui.errPrefix() + "no jeno.toml in " + projectDir
+                    + " — run jeno init to create one");
             return 1;
         }
 
@@ -212,7 +212,7 @@ public final class AddCommand implements Command {
     }
 
     /**
-     * {@code mjm add acme/mylib@v1.2.0} — the gh: shape without spelling gh:
+     * {@code jeno add acme/mylib@v1.2.0} — the gh: shape without spelling gh:
      * out. The artifact name is the repository name (DESIGN.md's convention for
      * native releases). A native release has no version index, so the tag is
      * mandatory; there is nothing to list and nothing to guess.
@@ -221,7 +221,7 @@ public final class AddCommand implements Command {
         int at = key.indexOf('@');
         if (at < 0) {
             System.err.println(Ui.errPrefix() + "a native dependency has no version index — give the tag: "
-                    + "mjm add " + key + "@v1.2.0");
+                    + "jeno add " + key + "@v1.2.0");
             return 2;
         }
         String origin = key.substring(0, at);
@@ -261,7 +261,7 @@ public final class AddCommand implements Command {
             return 1;
         }
         System.out.println(Ui.ok("added " + requirement.id() + "@" + value + " — locked "
-                + prepared.graph().artifacts().size() + " artifact(s) into mjm.lock"));
+                + prepared.graph().artifacts().size() + " artifact(s) into jeno.lock"));
         return 0;
     }
 
@@ -284,14 +284,14 @@ public final class AddCommand implements Command {
                 if (versions.isEmpty()) {
                     System.err.println(Ui.errPrefix() + "no versions found for " + key
                             + " — if it belongs to a named repository, declare it as \""
-                            + key + "\" = \"<repo>:<version>\" in mjm.toml");
+                            + key + "\" = \"<repo>:<version>\" in jeno.toml");
                     return 1;
                 }
                 System.out.println(Ui.heading("versions of " + key + " (newest last):"));
                 for (String version : versions) {
                     System.out.println("  " + version);
                 }
-                System.out.println("choose one: mjm add \"" + key + "\" <version>");
+                System.out.println("choose one: jeno add \"" + key + "\" <version>");
                 return 0;
             }
             return search(key);
@@ -303,7 +303,7 @@ public final class AddCommand implements Command {
 
     /** Central's index search: bare name in, group:artifact + latest version out. */
     private int search(String name) {
-        String host = System.getProperty("mjm.search.host", "https://search.maven.org");
+        String host = System.getProperty("jeno.search.host", "https://search.maven.org");
         String url = host + "/solrsearch/select?q=a:" + name + "&rows=20&wt=json";
         String body = MetadataVersions.text(url);
         Object response = JsonUtils.parseObject(body).toMap().get("response");
@@ -323,7 +323,7 @@ public final class AddCommand implements Command {
                         + ")");
             }
         }
-        System.out.println(Ui.dim("add one: mjm add \"<group:artifact>\" <version>"));
+        System.out.println(Ui.dim("add one: jeno add \"<group:artifact>\" <version>"));
         return 0;
     }
 

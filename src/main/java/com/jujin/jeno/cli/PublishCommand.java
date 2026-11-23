@@ -27,28 +27,28 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * {@code mjm publish [target]} — the decentralized release (DESIGN.md §7.2).
+ * {@code jeno publish [target]} — the decentralized release (DESIGN.md §7.2).
  *
  * <p>Generates the three-piece artifact into target/dist/, then — when a target is
  * given — uploads it via the platform's release API:
  *
  * <pre>
- *   mjm publish                    → target/dist/ + upload hint
- *   mjm publish gh:owner/repo     → target/dist/ + GitHub native upload
- *   mjm publish mjm:https://host/ → target/dist/ + mjm layout PUT (no group needed)
+ *   jeno publish                    → target/dist/ + upload hint
+ *   jeno publish gh:owner/repo     → target/dist/ + GitHub native upload
+ *   jeno publish jeno:https://host/ → target/dist/ + jeno layout PUT (no group needed)
  *                                  and GET-read-back verification of all three files
- *   mjm publish mjm:http://192.168.1.39:8080/upload/ → same, plain http on a
+ *   jeno publish jeno:http://192.168.1.39:8080/upload/ → same, plain http on a
  *                                 literal private-network address (warning: not encrypted)
- *   mjm publish mjm:local:<dir>   → target/dist/ + the same layout on disk
+ *   jeno publish jeno:local:<dir>   → target/dist/ + the same layout on disk
  * </pre>
  *
  * <p>A Maven-layout target ({@code https://host/}, {@code local:<dir>}) is
- * refused: mjm writes no POM, so neither mjm nor Maven could read back the
+ * refused: jeno writes no POM, so neither jeno nor Maven could read back the
  * triple. Reading Maven repositories stays supported; only publishing to one
  * is not.
  *
- * <p>Authentication: {@code MJM_GITHUB_TOKEN} for gh: targets, and
- * {@code MJM_PUBLISH_TOKEN} for mjm-layout hosts that want one. Without a
+ * <p>Authentication: {@code JENO_GITHUB_TOKEN} for gh: targets, and
+ * {@code JENO_PUBLISH_TOKEN} for jeno-layout hosts that want one. Without a
  * token, the files are generated but not uploaded — the checklist is printed
  * instead.
  */
@@ -73,20 +73,20 @@ public final class PublishCommand implements Command {
 
     @Override
     public String summary() {
-        return "write the release triple and upload it: gh:, mjm:https://host/,"
-                + " mjm:http://<private-ip>/, mjm:local:<dir>";
+        return "write the release triple and upload it: gh:, jeno:https://host/,"
+                + " jeno:http://<private-ip>/, jeno:local:<dir>";
     }
 
     @Override
     public String help() {
         return """
-               targets mjm can read back: gh:<owner>/<repo>, mjm:https://host/,
-               mjm:http://<private-ip>/, mjm:local:<dir>; no target only prepares
+               targets jeno can read back: gh:<owner>/<repo>, jeno:https://host/,
+               jeno:http://<private-ip>/, jeno:local:<dir>; no target only prepares
                target/dist/. --dry-run validates the plan without writing target/dist
                or uploading. plain http is for literal private addresses only
                (LAN); public hosts need https.
                a Maven-layout target (https://host/, local:<dir>) is refused:
-               mjm writes no POM, so neither mjm nor Maven could consume it.""";
+               jeno writes no POM, so neither jeno nor Maven could consume it.""";
     }
     @Override
     public String usage() {
@@ -216,28 +216,28 @@ public final class PublishCommand implements Command {
     private int publish(List<String> args) {
         JenoProject project;
         try {
-            project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
+            project = ProjectReader.parse(Files.readString(projectDir.resolve("jeno.toml")));
         } catch (IOException e) {
-            System.err.println(Ui.errPrefix() + "no mjm.toml in " + projectDir
-                    + " — run mjm init to create one");
+            System.err.println(Ui.errPrefix() + "no jeno.toml in " + projectDir
+                    + " — run jeno init to create one");
             return 1;
         }
 
         String name = project.name();
         String version = project.version();
         String jarName = name + "-" + version + ".jar";
-        String descriptorName = name + "-" + version + ".mjm.toml";
+        String descriptorName = name + "-" + version + ".jeno.toml";
         String shaName = name + "-" + version + ".sha256";
 
         Path classes = projectDir.resolve(CLASSES);
         if (!Files.isDirectory(classes)) {
-            System.err.println(Ui.errPrefix() + CLASSES + " is missing — run mjm build first");
+            System.err.println(Ui.errPrefix() + CLASSES + " is missing — run jeno build first");
             return 1;
         }
 
         String target = args.isEmpty() ? null : args.getFirst();
-        // Only targets mjm itself can read back. Maven layouts are refused
-        // before anything is written: mjm emits no POM, so neither mjm nor
+        // Only targets jeno itself can read back. Maven layouts are refused
+        // before anything is written: jeno emits no POM, so neither jeno nor
         // Maven could consume what it just uploaded.
         Repository publishTarget = null;
         if (target != null && !target.startsWith("gh:")) {
@@ -248,15 +248,15 @@ public final class PublishCommand implements Command {
                 return 1;
             }
             if (publishTarget.layout() == Repository.Layout.MAVEN) {
-                System.err.println(Ui.errPrefix() + "cannot publish to a Maven-layout target — mjm writes "
-                        + "no POM, so neither mjm nor Maven can read it back; use "
-                        + "gh:<owner>/<repo>, mjm:https://host/,"
-                        + " mjm:http://<private-ip>/ (or mjm:local:<dir>)");
+                System.err.println(Ui.errPrefix() + "cannot publish to a Maven-layout target — jeno writes "
+                        + "no POM, so neither jeno nor Maven can read it back; use "
+                        + "gh:<owner>/<repo>, jeno:https://host/,"
+                        + " jeno:http://<private-ip>/ (or jeno:local:<dir>)");
                 return 1;
             }
             if (publishTarget.isPlainHttp() && !publishTarget.isLoopbackNetwork()) {
                 System.err.println("warning: publishing over plain HTTP ("
-                        + publishTarget.declaration() + ") — the traffic and MJM_PUBLISH_TOKEN"
+                        + publishTarget.declaration() + ") — the traffic and JENO_PUBLISH_TOKEN"
                         + " are not encrypted");
             }
         }
@@ -296,14 +296,14 @@ public final class PublishCommand implements Command {
         if (!Files.isDirectory(projectDir.resolve("target/dist"))
                 && DistOutput.legacyPresent(projectDir)) {
             System.err.println(Ui.errPrefix() + "deliverables moved to target/dist — the old dist/ is "
-                    + "no longer read; rerun mjm package (or bundle) to write the new location");
+                    + "no longer read; rerun jeno package (or bundle) to write the new location");
             return 1;
         }
 
         Path dist;
         try {
             dist = DistOutput.dist(projectDir);
-            // clear only what publish writes. The jar belongs to `mjm package`
+            // clear only what publish writes. The jar belongs to `jeno package`
             // — publishing does not regenerate it, and deleting it here would
             // make the two commands fight over the same path.
             for (String file : List.of(descriptorName, shaName)) {
@@ -315,12 +315,12 @@ public final class PublishCommand implements Command {
         }
 
         // publish uploads what package built — it never builds its own jar.
-        // Building one here would silently overwrite mjm package's output with a
+        // Building one here would silently overwrite jeno package's output with a
         // different (manifest-less) jar, and a release would then carry bytes
         // nobody reviewed.
         Path jarFile = dist.resolve(jarName);
         if (!Files.exists(jarFile)) {
-            System.err.println(Ui.errPrefix() + jarFile + " is missing — run mjm package first "
+            System.err.println(Ui.errPrefix() + jarFile + " is missing — run jeno package first "
                     + "(publish uploads what package builds; it does not build its own jar)");
             return 1;
         }
@@ -340,15 +340,15 @@ public final class PublishCommand implements Command {
         System.out.println("  " + dist.resolve(shaName));
 
         if (args.isEmpty()) {
-            System.out.println("upload the three files to a GitHub release or an mjm: "
+            System.out.println("upload the three files to a GitHub release or an jeno: "
                     + "repository, then tell a teammate:");
-            System.out.println("  mjm add \"" + name + "\" gh:<owner>/" + name + "@v" + version);
-            System.out.println("  (or publish mjm:https://host/ — or"
-                    + " mjm:http://<private-ip>/ on a LAN — to host it yourself)");
+            System.out.println("  jeno add \"" + name + "\" gh:<owner>/" + name + "@v" + version);
+            System.out.println("  (or publish jeno:https://host/ — or"
+                    + " jeno:http://<private-ip>/ on a LAN — to host it yourself)");
             return 0;
         }
 
-        // target given — only the mjm layout is allowed by this point
+        // target given — only the jeno layout is allowed by this point
         if (publishTarget != null) {
             return publishTarget.isLocal()
                     ? publishToLocalJenoRepository(publishTarget, project, dist,
@@ -359,7 +359,7 @@ public final class PublishCommand implements Command {
 
         String token = GitHubReleases.token();
         if (token == null || token.isBlank()) {
-            System.err.println(Ui.errPrefix() + "MJM_GITHUB_TOKEN environment variable is not set — "
+            System.err.println(Ui.errPrefix() + "JENO_GITHUB_TOKEN environment variable is not set — "
                     + "set it to your GitHub personal access token, or run without the "
                     + "target to get the upload checklist");
             return 1;
@@ -370,27 +370,27 @@ public final class PublishCommand implements Command {
     }
 
     // ------------------------------------------------------------------
-    // mjm-layout uploads — HTTP PUT or a local directory
+    // jeno-layout uploads — HTTP PUT or a local directory
     // ------------------------------------------------------------------
 
     /**
-     * Publishes the triple to an mjm-layout repository over HTTP:
-     * {@code <base>/<name>/<version>/<name>-<version>.{jar,mjm.toml,sha256}}.
-     * The same two-level layout {@code [repos]} reads for an {@code mjm:}
+     * Publishes the triple to an jeno-layout repository over HTTP:
+     * {@code <base>/<name>/<version>/<name>-<version>.{jar,jeno.toml,sha256}}.
+     * The same two-level layout {@code [repos]} reads for an {@code jeno:}
      * entry, so a library published here needs no platform, account or registry
      * — and no {@code [project].group}.
      *
      * <p>Upload is HTTP PUT (WebDAV/object-store semantics), one file per
      * request, followed by GET-read-back verification. PUT is deliberate: the
-     * mjm layout gives each byte a final deterministic URL, PUT is idempotent,
+     * jeno layout gives each byte a final deterministic URL, PUT is idempotent,
      * and a retry cannot create a duplicate. POST is for server-assigned
      * upload endpoints and multipart forms; using it here would need a
      * host-specific protocol and would make the published layout unknowable.
      * A POST-only host can front the repository with a PUT-capable gateway.
      *
      * <p>A host that accepts PUT is enough (nginx with dav_module, Apache
-     * mod_dav, most object-storage gateways); {@code MJM_PUBLISH_TOKEN}, when
-     * set, is sent as a bearer token. mjm speaks exactly one upload protocol on
+     * mod_dav, most object-storage gateways); {@code JENO_PUBLISH_TOKEN}, when
+     * set, is sent as a bearer token. jeno speaks exactly one upload protocol on
      * purpose — and it writes no POM, which is why a Maven-layout target is not
      * accepted at all.
      */
@@ -412,8 +412,8 @@ public final class PublishCommand implements Command {
                 JenoUploads.put(url, contentType(file), bytes);
             } catch (IOException | InterruptedException e) {
                 System.err.println(Ui.errPrefix() + "PUT " + url + " failed — " + e.getMessage());
-                System.err.println("  mjm uploads to the final artifact URL with HTTP PUT because "
-                        + "the mjm layout is deterministic and retries must be idempotent.");
+                System.err.println("  jeno uploads to the final artifact URL with HTTP PUT because "
+                        + "the jeno layout is deterministic and retries must be idempotent.");
                 System.err.println("  the host must accept HTTP PUT (WebDAV/object-store style); "
                         + "a POST-only upload form is not enough.");
                 return 1;
@@ -431,7 +431,7 @@ public final class PublishCommand implements Command {
             } catch (IOException | InterruptedException e) {
                 System.err.println(Ui.errPrefix() + "uploaded " + url
                         + " but could not read it back — " + e.getMessage());
-                System.err.println("  an mjm repository must be anonymously readable; fix the "
+                System.err.println("  an jeno repository must be anonymously readable; fix the "
                         + "read path and re-run publish");
                 return 1;
             }
@@ -485,7 +485,7 @@ public final class PublishCommand implements Command {
 
     /** Writes beside the target and moves it into place, so a reader never sees half a file. */
     private static void writeAtomically(Path target, byte[] bytes) throws IOException {
-        Path temp = Files.createTempFile(target.getParent(), ".mjm-publish-", ".tmp");
+        Path temp = Files.createTempFile(target.getParent(), ".jeno-publish-", ".tmp");
         try {
             Files.write(temp, bytes);
             try {
@@ -499,13 +499,13 @@ public final class PublishCommand implements Command {
         }
     }
 
-    /** The content type of one mjm-layout artifact. */
+    /** The content type of one jeno-layout artifact. */
     private static String contentType(Path file) {
         String name = file.getFileName().toString();
         if (name.endsWith(".jar")) {
             return "application/java-archive";
         }
-        if (name.endsWith(".mjm.toml")) {
+        if (name.endsWith(".jeno.toml")) {
             return "application/toml; charset=utf-8";
         }
         if (name.endsWith(".sha256")) {
@@ -528,13 +528,13 @@ public final class PublishCommand implements Command {
     private PublishPlan publishPlan(Path moduleDir, String target) {
         JenoProject project;
         try {
-            project = ProjectReader.parse(Files.readString(moduleDir.resolve("mjm.toml")));
+            project = ProjectReader.parse(Files.readString(moduleDir.resolve("jeno.toml")));
         } catch (IOException e) {
-            throw new IllegalStateException("no mjm.toml in " + moduleDir
-                    + " — run mjm init to create one");
+            throw new IllegalStateException("no jeno.toml in " + moduleDir
+                    + " — run jeno init to create one");
         }
         if (!Files.isDirectory(moduleDir.resolve(CLASSES))) {
-            throw new IllegalStateException(CLASSES + " is missing — run mjm build first");
+            throw new IllegalStateException(CLASSES + " is missing — run jeno build first");
         }
 
         Repository repository = null;
@@ -546,19 +546,19 @@ public final class PublishCommand implements Command {
                 repository = Repository.parse(target);
                 if (repository.layout() == Repository.Layout.MAVEN) {
                     throw new IllegalStateException("cannot publish to a Maven-layout target — "
-                            + "mjm writes no POM; use gh:<owner>/<repo> or mjm:https://host/");
+                            + "jeno writes no POM; use gh:<owner>/<repo> or jeno:https://host/");
                 }
                 network = !repository.isLocal();
             }
         }
 
         String jarName = project.name() + "-" + project.version() + ".jar";
-        String descriptorName = project.name() + "-" + project.version() + ".mjm.toml";
+        String descriptorName = project.name() + "-" + project.version() + ".jeno.toml";
         String shaName = project.name() + "-" + project.version() + ".sha256";
         Path dist = moduleDir.resolve("target/dist");
         Path jar = dist.resolve(jarName);
         if (!Files.isRegularFile(jar)) {
-            throw new IllegalStateException(jar + " is missing — run mjm package first");
+            throw new IllegalStateException(jar + " is missing — run jeno package first");
         }
 
         List<PlannedArtifact> artifacts = new ArrayList<>();
@@ -639,7 +639,7 @@ public final class PublishCommand implements Command {
     private void emitPlan(PublishPlan plan, boolean dryRun) {
         if (dryRun && plan.insecureHttp()) {
             System.err.println("warning: publishing over plain HTTP ("
-                    + plan.target() + ") — the traffic and MJM_PUBLISH_TOKEN"
+                    + plan.target() + ") — the traffic and JENO_PUBLISH_TOKEN"
                     + " are not encrypted");
         }
         if (dryRun) {
@@ -691,7 +691,7 @@ public final class PublishCommand implements Command {
         if (plan.insecureHttp()) {
             result.diagnostic("warning", "PLAIN_HTTP_INSECURE",
                     "publishing over plain HTTP (" + plan.target() + ") — the traffic and"
-                            + " MJM_PUBLISH_TOKEN are not encrypted", List.of());
+                            + " JENO_PUBLISH_TOKEN are not encrypted", List.of());
         }
         result.emit(0);
     }
@@ -711,14 +711,14 @@ public final class PublishCommand implements Command {
 
         List<Path> files = List.of(
                 dist.resolve(project.name() + "-" + version + ".jar"),
-                dist.resolve(project.name() + "-" + version + ".mjm.toml"),
+                dist.resolve(project.name() + "-" + version + ".jeno.toml"),
                 dist.resolve(project.name() + "-" + version + ".sha256"));
 
         String releaseId;
         try {
             releaseId = GitHubReleases.create(origin, owner, repo, tag, token,
                     "{\"tag_name\":\"" + tag + "\",\"name\":\"" + tag
-                            + "\",\"body\":\"released with mjm publish\"}");
+                            + "\",\"body\":\"released with jeno publish\"}");
         } catch (IOException | InterruptedException e) {
             System.err.println(Ui.errPrefix() + e.getMessage());
             return 1;
@@ -735,7 +735,7 @@ public final class PublishCommand implements Command {
         }
 
         System.out.println(Ui.ok("uploaded; share it with:"));
-        System.out.println("  mjm add \"" + project.name() + "\" " + target + "@" + tag);
+        System.out.println("  jeno add \"" + project.name() + "\" " + target + "@" + tag);
 
         System.out.println("  " + host + "/" + owner + "/" + repo + "/releases/tag/" + tag);
         return 0;
@@ -749,7 +749,7 @@ public final class PublishCommand implements Command {
             out.append("group = \"").append(escape(project.group())).append("\"\n");
         }
         out.append("version = \"").append(project.version()).append("\"\n");
-        // identity facts travel with the release: they are what `mjm info`
+        // identity facts travel with the release: they are what `jeno info`
         // shows a stranger who is deciding whether to depend on this
         if (project.summary() != null) {
             out.append("summary = \"").append(escape(project.summary())).append("\"\n");

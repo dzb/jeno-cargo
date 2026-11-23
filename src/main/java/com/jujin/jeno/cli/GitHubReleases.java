@@ -31,19 +31,19 @@ final class GitHubReleases {
     private GitHubReleases() {}
 
     static String apiBase() {
-        return System.getProperty("mjm.github.api", "https://api.github.com");
+        return System.getProperty("jeno.github.api", "https://api.github.com");
     }
 
     static String uploadsBase() {
-        return System.getProperty("mjm.github.uploads", "https://uploads.github.com");
+        return System.getProperty("jeno.github.uploads", "https://uploads.github.com");
     }
 
     /** The documented environment variable, or a property for tests/CI. */
     static String token() {
-        String fromEnvironment = System.getenv("MJM_GITHUB_TOKEN");
+        String fromEnvironment = System.getenv("JENO_GITHUB_TOKEN");
         return fromEnvironment != null && !fromEnvironment.isBlank()
                 ? fromEnvironment
-                : System.getProperty("mjm.github.token");
+                : System.getProperty("jeno.github.token");
     }
 
     /** Creates a release or attaches to the existing one; returns its id. */

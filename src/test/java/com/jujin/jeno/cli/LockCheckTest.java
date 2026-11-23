@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code mjm lock --check}: would today's manifest regenerate the lock on disk?
+ * {@code jeno lock --check}: would today's manifest regenerate the lock on disk?
  * It resolves in memory and never writes — the point is Cargo's {@code --locked},
  * which catches version drift that build's "id is locked" check misses.
  */
@@ -48,27 +48,27 @@ class LockCheckTest {
     @Test
     void anUpToDateLockExitsZeroAndTouchesNothing() throws Exception {
         lockProject();
-        byte[] lock = Files.readAllBytes(dir.resolve("mjm.lock"));
-        FileTime modified = Files.getLastModifiedTime(dir.resolve("mjm.lock"));
+        byte[] lock = Files.readAllBytes(dir.resolve("jeno.lock"));
+        FileTime modified = Files.getLastModifiedTime(dir.resolve("jeno.lock"));
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         int exit = run(out, "--check");
 
         assertEquals(0, exit);
-        assertTrue(out.toString(StandardCharsets.UTF_8).contains("mjm.lock is up to date"),
+        assertTrue(out.toString(StandardCharsets.UTF_8).contains("jeno.lock is up to date"),
                 out.toString(StandardCharsets.UTF_8));
-        assertArrayEquals(lock, Files.readAllBytes(dir.resolve("mjm.lock")),
+        assertArrayEquals(lock, Files.readAllBytes(dir.resolve("jeno.lock")),
                 "the lock is byte-for-byte unchanged");
-        assertEquals(modified, Files.getLastModifiedTime(dir.resolve("mjm.lock")),
+        assertEquals(modified, Files.getLastModifiedTime(dir.resolve("jeno.lock")),
                 "and was not even rewritten");
     }
 
     @Test
     void aDriftedManifestShowsTheDifferenceAndFails() throws Exception {
         lockProject();
-        byte[] lock = Files.readAllBytes(dir.resolve("mjm.lock"));
-        Files.writeString(dir.resolve("mjm.toml"),
-                Files.readString(dir.resolve("mjm.toml"))
+        byte[] lock = Files.readAllBytes(dir.resolve("jeno.lock"));
+        Files.writeString(dir.resolve("jeno.toml"),
+                Files.readString(dir.resolve("jeno.toml"))
                         .replace("\"com.example:lib-a\" = \"vendor:1.0.0\"",
                                 "\"com.example:lib-a\" = \"vendor:1.2.0\""));
 
@@ -80,8 +80,8 @@ class LockCheckTest {
         assertTrue(message.contains("out of date"), message);
         assertTrue(message.contains("- version = \"1.0.0\""), message);
         assertTrue(message.contains("+ version = \"1.2.0\""), message);
-        assertTrue(message.contains("run mjm lock"), message);
-        assertArrayEquals(lock, Files.readAllBytes(dir.resolve("mjm.lock")),
+        assertTrue(message.contains("run jeno lock"), message);
+        assertArrayEquals(lock, Files.readAllBytes(dir.resolve("jeno.lock")),
                 "the check never writes the lock");
     }
 
@@ -107,8 +107,8 @@ class LockCheckTest {
     @Test
     void jsonDriftIsAStructuredFailureWithADifference() throws Exception {
         lockProject();
-        Files.writeString(dir.resolve("mjm.toml"),
-                Files.readString(dir.resolve("mjm.toml"))
+        Files.writeString(dir.resolve("jeno.toml"),
+                Files.readString(dir.resolve("jeno.toml"))
                         .replace("\"com.example:lib-a\" = \"vendor:1.0.0\"",
                                 "\"com.example:lib-a\" = \"vendor:1.2.0\""));
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -179,7 +179,7 @@ class LockCheckTest {
             Files.write(pom.resolveSibling("lib-a-" + version + ".jar"),
                     ("jar-" + version).getBytes());
         }
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "demo"
             version = "0.1.0"

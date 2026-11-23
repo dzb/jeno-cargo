@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** {@code mjm init --pom} on a multi-module root writes nothing and says why. */
+/** {@code jeno init --pom} on a multi-module root writes nothing and says why. */
 class InitPomTest {
 
     @TempDir
@@ -38,10 +38,10 @@ class InitPomTest {
         Result result = run();
 
         assertEquals(1, result.exit());
-        assertFalse(Files.exists(dir.resolve("mjm.toml")), "the root did not become a module");
+        assertFalse(Files.exists(dir.resolve("jeno.toml")), "the root did not become a module");
         assertTrue(result.err().contains("multi-module pom root"), result.err());
         assertTrue(result.err().contains("app, lib"), result.err());
-        assertTrue(result.err().contains("mjm init --ws"), result.err());
+        assertTrue(result.err().contains("jeno init --ws"), result.err());
     }
 
     private Result run() {

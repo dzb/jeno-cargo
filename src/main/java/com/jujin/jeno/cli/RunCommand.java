@@ -16,20 +16,20 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * {@code mjm run &lt;main-class&gt; [args...]} — runs the program on the full
+ * {@code jeno run &lt;main-class&gt; [args...]} — runs the program on the full
  * resolved closure plus {@code target/classes}: the runtime side of strict
  * visibility (every transitively allowed jar is here, nothing more). With no
  * argument it runs {@code [project].main}, the same entry {@code package}
  * writes into the manifest and {@code bundle} into the launcher.
  *
- * <p>{@code mjm run <script-name>} runs a {@code [scripts]} entry through the
+ * <p>{@code jeno run <script-name>} runs a {@code [scripts]} entry through the
  * system shell instead. A script inherits the same computed classpath as
  * environment variables, so it can launch the project without rebuilding it
  * by hand:
  *
  * <pre>
- *   MJM_CLASSPATH   target/classes + every MAIN jar, path-separator joined
- *   MJM_HOME        the project directory
+ *   JENO_CLASSPATH   target/classes + every MAIN jar, path-separator joined
+ *   JENO_HOME        the project directory
  * </pre>
  *
  * <p>Extra arguments after the script name arrive as {@code $1}, {@code $2}…
@@ -62,9 +62,9 @@ public final class RunCommand implements Command {
     public String help() {
         return """
                a [scripts] name wins over a main class of the same name.
-               mjm's flags (--module, --offline) are read only before the target;
+               jeno's flags (--module, --offline) are read only before the target;
                after it they are the program's arguments.
-               -- ends mjm's options; everything after it goes to the program.""";
+               -- ends jeno's options; everything after it goes to the program.""";
     }
 
     @Override
@@ -79,7 +79,7 @@ public final class RunCommand implements Command {
     }
 
     /**
-     * mjm's own flags end at the target: {@code run --module x --offline app}
+     * jeno's own flags end at the target: {@code run --module x --offline app}
      * has its flags before {@code app}, and {@code run app --offline} gives
      * {@code --offline} to the program.
      */
@@ -135,15 +135,15 @@ public final class RunCommand implements Command {
         if (workspace != null) {
             return workspace;
         }
-        // The file is read first: in a directory with no mjm.toml, "no mjm.toml"
+        // The file is read first: in a directory with no jeno.toml, "no jeno.toml"
         // is the real problem, with or without arguments — the usage hint would
         // send the user looking for a main class that cannot exist yet.
         JenoProject project;
         try {
-            project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
+            project = ProjectReader.parse(Files.readString(projectDir.resolve("jeno.toml")));
         } catch (IOException e) {
-            System.err.println(Ui.errPrefix() + "no mjm.toml in " + projectDir
-                    + " — run mjm init to create one");
+            System.err.println(Ui.errPrefix() + "no jeno.toml in " + projectDir
+                    + " — run jeno init to create one");
             return 1;
         }
 
@@ -154,8 +154,8 @@ public final class RunCommand implements Command {
             rest = List.copyOf(passthrough);
             if (target == null || target.isBlank()) {
                 System.err.println(Ui.errPrefix() + "run needs a main class or a script name — "
-                        + "mjm run <main-class> [args...] | mjm run <script-name>, or set "
-                        + "[project].main in mjm.toml");
+                        + "jeno run <main-class> [args...] | jeno run <script-name>, or set "
+                        + "[project].main in jeno.toml");
                 return 2;
             }
         } else {
@@ -186,7 +186,7 @@ public final class RunCommand implements Command {
         command.add(classpath);
         command.add(target);
         command.addAll(rest);
-        return exec(command, null, "mjm run");
+        return exec(command, null, "jeno run");
     }
 
     // ------------------------------------------------------------------
@@ -199,12 +199,12 @@ public final class RunCommand implements Command {
         // entirely. Absent a lockfile or build output the variables are simply
         // not set — a script that does not need them still runs.
         Map<String, String> environment = new LinkedHashMap<>();
-        environment.put("MJM_HOME", projectDir.toAbsolutePath().toString());
+        environment.put("JENO_HOME", projectDir.toAbsolutePath().toString());
         try {
             String classpath = classpath();
-            environment.put("MJM_CLASSPATH", classpath);
+            environment.put("JENO_CLASSPATH", classpath);
         } catch (RuntimeException e) {
-            System.err.println(Ui.errPrefix() + "running '" + name + "' without MJM_CLASSPATH — " + e.getMessage());
+            System.err.println(Ui.errPrefix() + "running '" + name + "' without JENO_CLASSPATH — " + e.getMessage());
         }
 
         List<String> command = new ArrayList<>();
@@ -215,7 +215,7 @@ public final class RunCommand implements Command {
         // so a placeholder keeps the caller's arguments at $1 and beyond.
         command.add(name);
         command.addAll(rest);
-        return exec(command, environment, "mjm run script '" + name + "'");
+        return exec(command, environment, "jeno run script '" + name + "'");
     }
 
     // ------------------------------------------------------------------
@@ -229,17 +229,17 @@ public final class RunCommand implements Command {
     private String classpath() {
         Path output = projectDir.resolve(OUTPUT);
         if (!Files.isDirectory(output)) {
-            throw new IllegalStateException(output + " is missing — run mjm build first");
+            throw new IllegalStateException(output + " is missing — run jeno build first");
         }
-        Path lock = projectDir.resolve("mjm.lock");
+        Path lock = projectDir.resolve("jeno.lock");
         if (!Files.exists(lock)) {
-            throw new IllegalStateException("no mjm.lock in " + projectDir + " — run mjm lock first");
+            throw new IllegalStateException("no jeno.lock in " + projectDir + " — run jeno lock first");
         }
         List<LockedArtifact> locked;
         try {
             locked = LockFileReader.read(Files.readString(lock));
         } catch (IOException e) {
-            throw new IllegalStateException("cannot read mjm.lock", e);
+            throw new IllegalStateException("cannot read jeno.lock", e);
         }
 
         return ClasspathAssembler.of(ClasspathAssembler.Mode.RUN, projectDir, store,
@@ -249,7 +249,7 @@ public final class RunCommand implements Command {
     private int exec(List<String> command, Map<String, String> environment,
                      String what) {
         // a script runs from the project root: relative paths in a script mean
-        // the project, exactly as they do when the user runs mjm from there
+        // the project, exactly as they do when the user runs jeno from there
         ProcessBuilder builder = new ProcessBuilder(command)
                 .directory(projectDir.toFile())
                 .inheritIO();

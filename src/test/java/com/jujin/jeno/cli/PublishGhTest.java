@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code mjm publish gh:} against a loopback API: a 422 is whatever GitHub says
+ * {@code jeno publish gh:} against a loopback API: a 422 is whatever GitHub says
  * it is (an empty repository is not "the release already exists"), and a 422
  * with a real release behind it still attaches instead of failing.
  */
@@ -54,16 +54,16 @@ class PublishGhTest {
         if (server != null) {
             server.stop(0);
         }
-        System.clearProperty("mjm.github.api");
-        System.clearProperty("mjm.github.uploads");
-        System.clearProperty("mjm.github.token");
+        System.clearProperty("jeno.github.api");
+        System.clearProperty("jeno.github.uploads");
+        System.clearProperty("jeno.github.token");
         ProjectLock.useUserRoot();
     }
 
     @Test
     void anEmptyRepositoryReportsTheApisOwnReason() throws Exception {
         start(false);
-        System.setProperty("mjm.github.token", "test-token");
+        System.setProperty("jeno.github.token", "test-token");
 
         Result result = publish();
 
@@ -79,7 +79,7 @@ class PublishGhTest {
     @Test
     void a422WithAnExistingReleaseStillAttaches() throws Exception {
         start(true);
-        System.setProperty("mjm.github.token", "test-token");
+        System.setProperty("jeno.github.token", "test-token");
 
         Result result = publish();
 
@@ -93,7 +93,7 @@ class PublishGhTest {
 
     private void project() throws IOException {
         Files.createDirectories(dir.resolve("src/main/java/demo"));
-        Files.writeString(dir.resolve("mjm.toml"), """
+        Files.writeString(dir.resolve("jeno.toml"), """
             [project]
             name = "widget"
             group = "com.acme"
@@ -101,7 +101,7 @@ class PublishGhTest {
             """);
         Files.writeString(dir.resolve("src/main/java/demo/App.java"),
                 "package demo; public final class App {}");
-        Files.writeString(dir.resolve("mjm.lock"), "");
+        Files.writeString(dir.resolve("jeno.lock"), "");
     }
 
     private void start(boolean releaseExists) throws IOException {
@@ -127,8 +127,8 @@ class PublishGhTest {
         });
         server.start();
         String base = "http://localhost:" + server.getAddress().getPort();
-        System.setProperty("mjm.github.api", base);
-        System.setProperty("mjm.github.uploads", base);
+        System.setProperty("jeno.github.api", base);
+        System.setProperty("jeno.github.uploads", base);
     }
 
     private static void respond(HttpExchange exchange, int status, String body) throws IOException {

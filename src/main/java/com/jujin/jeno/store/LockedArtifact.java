@@ -3,7 +3,7 @@ package com.jujin.jeno.store;
 import com.jujin.jeno.resolve.Scope;
 
 /**
- * One row of mjm.lock: the resolution facts the build runs on — identity,
+ * One row of jeno.lock: the resolution facts the build runs on — identity,
  * origin, the pinned bytes (SPEC.md §4). {@code metaSha256} is null for bare
  * URL leaves, which have no metadata; {@code scope} is {@link Scope#MAIN}
  * for production artifacts and {@link Scope#DEV} for test-only ones (the

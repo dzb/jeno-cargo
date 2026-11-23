@@ -23,7 +23,7 @@ import java.util.function.IntSupplier;
  * under a running fork (a lazily loaded class dies with
  * {@code NoClassDefFoundError}) or deletes output mid-build.
  *
- * <p>The lock file lives under {@code ~/.mjm/locks/}, never inside the project:
+ * <p>The lock file lives under {@code ~/.jeno/locks/}, never inside the project:
  * a lock inside {@code target/} is deleted by the very command that needs it,
  * and a new process would then lock a different inode — no one would be
  * waiting on anyone.
@@ -44,7 +44,7 @@ final class ProjectLock {
     private ProjectLock() {}
 
     /**
-     * {@code ~/.mjm/locks/<sha256(real path)>.lock} — keyed by the canonical
+     * {@code ~/.jeno/locks/<sha256(real path)>.lock} — keyed by the canonical
      * path, so two symlinked routes into one project are one lock.
      */
     static Path lockFile(Path projectDir) {
@@ -92,7 +92,7 @@ final class ProjectLock {
         try (FileChannel channel = FileChannel.open(lockPath,
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              FileLock ignored = channel.lock()) {
-            // a sidecar, written once: `mjm cache prune` can then tell a dead
+            // a sidecar, written once: `jeno cache prune` can then tell a dead
             // project's lock from a live one. Old empty files stay empty.
             if (channel.size() == 0) {
                 String project = "project=" + canonical(projectDir) + "\n";

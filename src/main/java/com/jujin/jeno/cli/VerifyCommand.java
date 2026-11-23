@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * {@code mjm verify} — a local pre-release gate.
+ * {@code jeno verify} — a local pre-release gate.
  *
  * <p>It answers the questions a lockfile cannot answer by itself: do the
  * declared requirements still match the pinned rows, are the bytes the lock
@@ -258,11 +258,11 @@ public final class VerifyCommand implements Command {
         JenoProject project;
         List<LockedArtifact> locked;
         try {
-            project = ProjectReader.parse(Files.readString(dir.resolve("mjm.toml")));
-            locked = LockFileReader.read(Files.readString(dir.resolve("mjm.lock")));
+            project = ProjectReader.parse(Files.readString(dir.resolve("jeno.toml")));
+            locked = LockFileReader.read(Files.readString(dir.resolve("jeno.lock")));
         } catch (IOException e) {
             return VerifyModule.fatal(dir, "MANIFEST_OR_LOCK_UNREADABLE",
-                    "cannot read mjm.toml/mjm.lock — run mjm lock");
+                    "cannot read jeno.toml/jeno.lock — run jeno lock");
         } catch (RuntimeException e) {
             return VerifyModule.fatal(dir, "MANIFEST_OR_LOCK_INVALID", e.getMessage());
         }
@@ -285,25 +285,25 @@ public final class VerifyCommand implements Command {
             LockedArtifact row = byId.get(requirement.id());
             if (row == null) {
                 checks.add(CheckResult.failed("declaration.not-locked",
-                        "declared '" + requirement.id() + "' is not in mjm.lock — run mjm lock"));
+                        "declared '" + requirement.id() + "' is not in jeno.lock — run jeno lock"));
                 continue;
             }
             if (!row.version().equals(requirement.version())) {
                 checks.add(CheckResult.failed("declaration.version-mismatch",
-                        requirement.id() + ": mjm.toml " + requirement.version()
-                        + ", mjm.lock " + row.version() + " — run mjm lock"));
+                        requirement.id() + ": jeno.toml " + requirement.version()
+                        + ", jeno.lock " + row.version() + " — run jeno lock"));
             }
             String source = expectedSource(project, requirement);
             if (source != null && !row.source().equals(source)) {
                 checks.add(CheckResult.failed("declaration.source-mismatch",
-                        requirement.id() + ": mjm.toml source " + source
-                        + ", mjm.lock source " + row.source() + " — run mjm lock"));
+                        requirement.id() + ": jeno.toml source " + source
+                        + ", jeno.lock source " + row.source() + " — run jeno lock"));
             }
             if (row.scope() != com.jujin.jeno.resolve.Scope.MAIN) {
                 checks.add(CheckResult.failed("declaration.scope-mismatch",
                         requirement.id() + ": [deps] is MAIN but the lock row is "
                         + row.scope().name().toLowerCase(java.util.Locale.ROOT)
-                        + " — run mjm lock"));
+                        + " — run jeno lock"));
             }
         }
         for (Requirement requirement : project.devRequirements()) {
@@ -312,17 +312,17 @@ public final class VerifyCommand implements Command {
             if (row == null) {
                 checks.add(CheckResult.failed("declaration.dev-not-locked",
                         "declared dev dependency '" + requirement.id()
-                        + "' is not in mjm.lock — run mjm lock"));
+                        + "' is not in jeno.lock — run jeno lock"));
             } else if (!row.version().equals(requirement.version())) {
                 checks.add(CheckResult.failed("declaration.dev-version-mismatch",
                         "declared dev dependency '" + requirement.id()
-                        + "' does not match mjm.lock — run mjm lock"));
+                        + "' does not match jeno.lock — run jeno lock"));
             } else {
                 String source = expectedSource(project, requirement);
                 if (source != null && !row.source().equals(source)) {
                     checks.add(CheckResult.failed("declaration.dev-source-mismatch",
-                            requirement.id() + ": dev mjm.toml source " + source
-                            + ", mjm.lock source " + row.source() + " — run mjm lock"));
+                            requirement.id() + ": dev jeno.toml source " + source
+                            + ", jeno.lock source " + row.source() + " — run jeno lock"));
                 }
             }
         }
@@ -332,17 +332,17 @@ public final class VerifyCommand implements Command {
             if (row == null) {
                 checks.add(CheckResult.failed("declaration.processor-not-locked",
                         "declared processor '" + requirement.id()
-                        + "' is not in mjm.lock — run mjm lock"));
+                        + "' is not in jeno.lock — run jeno lock"));
             } else if (!row.version().equals(requirement.version())) {
                 checks.add(CheckResult.failed("declaration.processor-version-mismatch",
                         "declared processor '" + requirement.id()
-                        + "' does not match mjm.lock — run mjm lock"));
+                        + "' does not match jeno.lock — run jeno lock"));
             } else {
                 String source = expectedSource(project, requirement);
                 if (source != null && !row.source().equals(source)) {
                     checks.add(CheckResult.failed("declaration.processor-source-mismatch",
-                            requirement.id() + ": processor mjm.toml source " + source
-                            + ", mjm.lock source " + row.source() + " — run mjm lock"));
+                            requirement.id() + ": processor jeno.toml source " + source
+                            + ", jeno.lock source " + row.source() + " — run jeno lock"));
                 }
             }
         }
@@ -378,11 +378,11 @@ public final class VerifyCommand implements Command {
             if (jar == null) {
                 checks.add(CheckResult.failed("store.jar-missing",
                         artifact.id() + "@" + artifact.version()
-                        + ": jar is not in the store — run mjm lock"));
+                        + ": jar is not in the store — run jeno lock"));
             } else if (!ArtifactStore.sha256(jar).equals(artifact.sha256())) {
                 checks.add(CheckResult.failed("store.jar-digest",
                         artifact.id() + "@" + artifact.version()
-                        + ": store jar digest does not match mjm.lock"));
+                        + ": store jar digest does not match jeno.lock"));
             } else {
                 jars++;
             }
@@ -416,20 +416,20 @@ public final class VerifyCommand implements Command {
         List<CheckResult> checks = new ArrayList<>();
         String stem = project.name() + "-" + project.version();
         Path jar = dist.resolve(stem + ".jar");
-        Path descriptor = dist.resolve(stem + ".mjm.toml");
+        Path descriptor = dist.resolve(stem + ".jeno.toml");
         Path sha = dist.resolve(stem + ".sha256");
         boolean anyTriple = Files.exists(jar) || Files.exists(descriptor) || Files.exists(sha);
         if (Files.isRegularFile(jar) && !Files.exists(descriptor) && !Files.exists(sha)) {
-            // package writes only the jar; mjm publish adds the descriptor and sha256.
+            // package writes only the jar; jeno publish adds the descriptor and sha256.
             checks.add(CheckResult.skipped("artifacts.triple",
                     "publish triple: not prepared (package artifact present;"
-                    + " mjm publish writes the descriptor and sha256)"));
+                    + " jeno publish writes the descriptor and sha256)"));
         } else if (anyTriple) {
             if (!Files.isRegularFile(jar) || !Files.isRegularFile(descriptor)
                     || !Files.isRegularFile(sha)) {
                 checks.add(CheckResult.failed("artifacts.triple-incomplete",
                         "publish triple is incomplete in " + dist
-                        + " — run mjm package, then mjm publish"));
+                        + " — run jeno package, then jeno publish"));
             } else {
                 try {
                     DescriptorReader.parse(Files.readString(descriptor),
@@ -459,7 +459,7 @@ public final class VerifyCommand implements Command {
             checks.addAll(checksums(bundle, sums));
         } else if (Files.isDirectory(bundle)) {
             checks.add(CheckResult.failed("artifacts.bundle-incomplete",
-                    "bundle is incomplete at " + bundle + " — run mjm bundle"));
+                    "bundle is incomplete at " + bundle + " — run jeno bundle"));
         } else {
             checks.add(CheckResult.skipped("artifacts.bundle",
                     "bundle: not built (skipped)"));
@@ -541,7 +541,7 @@ public final class VerifyCommand implements Command {
     }
 
     /**
-     * Metadata may be a POM or an mjm descriptor. The store extension is part
+     * Metadata may be a POM or an jeno descriptor. The store extension is part
      * of its kind, so try both rather than re-deriving repository layout from a
      * source string; the content-addressed digest is the fact that matters.
      */
@@ -561,8 +561,8 @@ public final class VerifyCommand implements Command {
         return CheckResult.failed(present ? "store.metadata-digest" : "store.metadata-missing",
                 artifact.id() + "@" + artifact.version()
                 + (present
-                ? ": store metadata digest does not match mjm.lock"
-                : ": metadata is not in the store — run mjm lock"));
+                ? ": store metadata digest does not match jeno.lock"
+                : ": metadata is not in the store — run jeno lock"));
     }
 
     private static void render(CheckResult check) {

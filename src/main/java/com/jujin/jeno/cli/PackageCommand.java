@@ -25,7 +25,7 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 /**
- * {@code mjm package} — the packaging verb. Two output formats:
+ * {@code jeno package} — the packaging verb. Two output formats:
  *
  * <ul>
  *   <li><b>default (dist)</b> — a distribution directory with a launcher,
@@ -111,7 +111,7 @@ public final class PackageCommand implements Command {
         }
         try {
             JenoProject project = ProjectReader.parse(
-                    Files.readString(moduleDir.resolve("mjm.toml")));
+                    Files.readString(moduleDir.resolve("jeno.toml")));
             boolean uber = args.contains("--uber");
             String main = requestedMain(args, project);
             String fileName = project.name() + "-" + project.version()
@@ -192,16 +192,16 @@ public final class PackageCommand implements Command {
         Map<String, Path> jars;
         Substitutions substitutions;
         try {
-            var mjToml = projectDir.resolve("mjm.toml");
-            var mjLock = projectDir.resolve("mjm.lock");
+            var mjToml = projectDir.resolve("jeno.toml");
+            var mjLock = projectDir.resolve("jeno.lock");
             if (!Files.exists(mjToml)) {
-                System.err.println(Ui.errPrefix() + "no mjm.toml in " + projectDir
-                    + " — run mjm init to create one");
+                System.err.println(Ui.errPrefix() + "no jeno.toml in " + projectDir
+                    + " — run jeno init to create one");
                 return 1;
             }
             project = ProjectReader.parse(Files.readString(mjToml));
             if (!Files.exists(mjLock)) {
-                System.err.println(Ui.errPrefix() + "no mjm.lock — run mjm lock first");
+                System.err.println(Ui.errPrefix() + "no jeno.lock — run jeno lock first");
                 return 1;
             }
             locked = LockFileReader.read(Files.readString(mjLock));
@@ -244,7 +244,7 @@ public final class PackageCommand implements Command {
         Path classes = projectDir.resolve(CLASSES);
 
         if (!Files.isDirectory(classes)) {
-            System.err.println(Ui.errPrefix() + CLASSES + " is missing — run mjm build first");
+            System.err.println(Ui.errPrefix() + CLASSES + " is missing — run jeno build first");
             return 1;
         }
 
@@ -259,7 +259,7 @@ public final class PackageCommand implements Command {
                 if (mainClass != null) {
                     attrs.put(java.util.jar.Attributes.Name.MAIN_CLASS, mainClass);
                 }
-                attrs.put(new java.util.jar.Attributes.Name("Built-By"), "mjm");
+                attrs.put(new java.util.jar.Attributes.Name("Built-By"), "jeno");
                 attrs.put(new java.util.jar.Attributes.Name("Implementation-Title"), name);
                 attrs.put(new java.util.jar.Attributes.Name("Implementation-Version"), version);
                 out.putNextEntry(ZipEntries.entry("META-INF/MANIFEST.MF"));
@@ -306,7 +306,7 @@ public final class PackageCommand implements Command {
         Path classes = projectDir.resolve(CLASSES);
 
         if (!Files.isDirectory(classes)) {
-            System.err.println(Ui.errPrefix() + CLASSES + " is missing — run mjm build first");
+            System.err.println(Ui.errPrefix() + CLASSES + " is missing — run jeno build first");
             return 1;
         }
         // the closure in lock order: a workspace module contributes its classes,

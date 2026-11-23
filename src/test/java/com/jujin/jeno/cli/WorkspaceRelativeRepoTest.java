@@ -77,7 +77,7 @@ class WorkspaceRelativeRepoTest {
         // b's vendor lives beside it; a's vendor serves the published-looking b
         vendor(root.resolve("libs/vendor"), "org.example", "lib", "1.0.0", "lib-bytes");
         vendor(root.resolve("apps/vendor-a"), "com.example", "b", "0.1.0", "b-jar-bytes");
-        Files.writeString(root.resolve("mjm.ws.toml"), """
+        Files.writeString(root.resolve("jeno.ws.toml"), """
             [ws]
             modules = ["apps/a", "libs/b"]
             """);
@@ -97,7 +97,7 @@ class WorkspaceRelativeRepoTest {
 
         assertEquals(0, result.exit(), result.out() + result.err());
         List<LockedArtifact> locked = LockFileReader.read(
-                Files.readString(b.resolve("mjm.lock")));
+                Files.readString(b.resolve("jeno.lock")));
         LockedArtifact lib = locked.stream()
                 .filter(artifact -> artifact.id().equals("org.example:lib"))
                 .findFirst().orElseThrow();
@@ -105,8 +105,8 @@ class WorkspaceRelativeRepoTest {
                 "the declaration is kept as the module wrote it");
         assertTrue(lib.url().contains("/libs/vendor/org/example/lib/1.0.0/lib-1.0.0.jar"),
                 "the URL points at libs/b/../vendor, not at the workspace root: " + lib.url());
-        assertTrue(Files.exists(b.resolve("mjm.lock")), "b's own lock was written");
-        assertTrue(Files.exists(a.resolve("mjm.lock")), "and a's was too");
+        assertTrue(Files.exists(b.resolve("jeno.lock")), "b's own lock was written");
+        assertTrue(Files.exists(a.resolve("jeno.lock")), "and a's was too");
     }
 
     @Test
@@ -144,7 +144,7 @@ class WorkspaceRelativeRepoTest {
 
         assertEquals(0, result.exit(), result.out() + result.err());
         List<LockedArtifact> locked = LockFileReader.read(
-                Files.readString(solo.resolve("mjm.lock")));
+                Files.readString(solo.resolve("jeno.lock")));
         assertTrue(locked.getFirst().url().contains("/vendor-solo/org/example/lib"),
                 locked.getFirst().url());
     }
@@ -180,7 +180,7 @@ class WorkspaceRelativeRepoTest {
             """);
         vendor(one.resolve("vendor"), "org.example", "lib", "1.0.0", "one-bytes");
         vendor(two.resolve("vendor"), "org.example", "lib", "1.0.0", "two-bytes");
-        Files.writeString(root.resolve("mjm.ws.toml"), """
+        Files.writeString(root.resolve("jeno.ws.toml"), """
             [ws]
             modules = ["one", "two"]
             """);
@@ -209,7 +209,7 @@ class WorkspaceRelativeRepoTest {
     }
 
     private static String firstSha(Path module) throws IOException {
-        return LockFileReader.read(Files.readString(module.resolve("mjm.lock")))
+        return LockFileReader.read(Files.readString(module.resolve("jeno.lock")))
                 .getFirst().sha256();
     }
 
@@ -223,7 +223,7 @@ class WorkspaceRelativeRepoTest {
         String header = "[project]\nname = \"" + name + "\"\n"
                 + (group == null ? "" : "group = \"" + group + "\"\n")
                 + "version = \"" + (name.equals("b") ? "0.1.0" : "0.1.0") + "\"\n";
-        Files.writeString(dir.resolve("mjm.toml"), header + body);
+        Files.writeString(dir.resolve("jeno.toml"), header + body);
         Files.writeString(dir.resolve("src/main/java/" + name + "/"
                 + name.substring(0, 1).toUpperCase() + name.substring(1) + ".java"), source);
     }

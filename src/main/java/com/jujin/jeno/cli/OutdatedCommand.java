@@ -13,11 +13,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * {@code mjm outdated} — which pinned dependencies have newer versions.
+ * {@code jeno outdated} — which pinned dependencies have newer versions.
  *
- * <p>mjm pins exact versions, so "outdated" is not a decision it makes for
+ * <p>jeno pins exact versions, so "outdated" is not a decision it makes for
  * you: it reports what exists above what you pinned, and you choose. Nothing
- * is written; {@code mjm lock} is what applies a change.
+ * is written; {@code jeno lock} is what applies a change.
  *
  * <p>Only Central artifacts can be checked. A {@code gh:} release carries no
  * version index — the tag is the version — and a bare URL leaf has no metadata
@@ -118,9 +118,9 @@ public final class OutdatedCommand implements Command {
         }
         // The lock is the only input: it is what build/run/package consume, and
         // it outlives any particular manifest wording.
-        Path lock = projectDir.resolve("mjm.lock");
+        Path lock = projectDir.resolve("jeno.lock");
         if (!Files.exists(lock)) {
-            String message = "no mjm.lock in " + projectDir + " — run mjm lock first";
+            String message = "no jeno.lock in " + projectDir + " — run jeno lock first";
             if (json) {
                 JsonResult.error("outdated", 1, "LOCK_MISSING", message).emit(1);
             } else {
@@ -132,7 +132,7 @@ public final class OutdatedCommand implements Command {
         try {
             locked = LockFileReader.read(Files.readString(lock));
         } catch (IOException e) {
-            String message = "cannot read mjm.lock in " + projectDir;
+            String message = "cannot read jeno.lock in " + projectDir;
             if (json) {
                 JsonResult.error("outdated", 1, "LOCK_UNREADABLE", message).emit(1);
             } else {
@@ -174,9 +174,9 @@ public final class OutdatedCommand implements Command {
                         "local repository: no version listing"));
                 continue;
             }
-            if (reason.equals("mjm-repository")) {
+            if (reason.equals("jeno-repository")) {
                 unchecked.add(new Skipped(artifact.id(), reason,
-                        "mjm layout: no version index"));
+                        "jeno layout: no version index"));
                 continue;
             }
             Repository repository;
@@ -208,7 +208,7 @@ public final class OutdatedCommand implements Command {
             checked++;
             String pinned = artifact.version();
             // A pre-release is not an "update" for someone on a stable version:
-            // mjm pins exactly, so picking an alpha is a decision, not a patch.
+            // jeno pins exactly, so picking an alpha is a decision, not a patch.
             // Someone already on a pre-release does see newer ones.
             String newest = newest(available, allowsPrerelease(pinned));
             if (newest == null || Versions.compare(newest, pinned) <= 0) {
@@ -327,7 +327,7 @@ public final class OutdatedCommand implements Command {
         }
         if (!updates.isEmpty()) {
             System.out.println();
-            System.out.println(Ui.dim("to apply: edit mjm.toml, then run mjm lock"));
+            System.out.println(Ui.dim("to apply: edit jeno.toml, then run jeno lock"));
         }
     }
 
@@ -359,14 +359,14 @@ public final class OutdatedCommand implements Command {
 
     /**
      * The highest listed version, by the resolver's own ordering. Snapshots are
-     * never candidates (mjm does not resolve them), and pre-releases are only
+     * never candidates (jeno does not resolve them), and pre-releases are only
      * candidates when the caller is already on one.
      */
     static String newest(List<String> versions, boolean includePrerelease) {
         String best = null;
         for (String candidate : versions) {
             if (candidate.toLowerCase(java.util.Locale.ROOT).endsWith("-snapshot")) {
-                continue;  // mjm does not resolve snapshots
+                continue;  // jeno does not resolve snapshots
             }
             if (!includePrerelease && isPrerelease(candidate)) {
                 continue;  // an alpha is not a routine update

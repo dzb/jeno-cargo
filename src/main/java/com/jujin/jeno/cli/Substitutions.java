@@ -20,15 +20,15 @@ import java.util.Set;
  * module resolves to that module's {@code target/classes} instead of the jar in
  * the store.
  *
- * <p>This is the whole of the workspace feature: nothing else in mjm knows that
+ * <p>This is the whole of the workspace feature: nothing else in jeno knows that
  * a lock row can come from a directory. {@link ClasspathAssembler} asks here
  * before it asks the store, so build, test, run and classpath all see local
  * code; packaging asks the same question, so a bundle cannot embed the stale jar
  * while a run uses the fresh classes.
  *
  * <p>A local checkout is not silently trusted. The classes directory must exist
- * (otherwise: run mjm build there) and its build stamp must name the version the
- * module's own {@code mjm.toml} declares (otherwise the classes are an older
+ * (otherwise: run jeno build there) and its build stamp must name the version the
+ * module's own {@code jeno.toml} declares (otherwise the classes are an older
  * build). A version difference from the lock row is <em>not</em> an error — the
  * workspace exists precisely to try local versions out — so it is a one-line
  * note, printed once per id per run.
@@ -71,9 +71,9 @@ final class Substitutions {
             JenoProject project;
             try {
                 project = ProjectReader.parse(
-                        Files.readString(moduleDir.resolve("mjm.toml")));
+                        Files.readString(moduleDir.resolve("jeno.toml")));
             } catch (IOException | RuntimeException e) {
-                throw new LocalException("cannot read " + moduleDir.resolve("mjm.toml")
+                throw new LocalException("cannot read " + moduleDir.resolve("jeno.toml")
                         + " — " + e.getMessage());
             }
             String id = project.group() == null || project.group().isBlank()
@@ -118,25 +118,25 @@ final class Substitutions {
 
     /**
      * The classes directory of a local module, after checking that it is usable:
-     * it exists, and the build stamp names the version its mjm.toml declares.
+     * it exists, and the build stamp names the version its jeno.toml declares.
      * Also prints the local/locked note the first time this run needs the module.
      */
     Path localClasses(Module module, String lockedVersion) {
         Path classes = module.classes();
         if (!Files.isDirectory(classes)) {
             throw new LocalException(module.id() + ": no classes at " + display(root, module.dir())
-                    + " — run mjm build in " + display(root, module.dir()) + " first");
+                    + " — run jeno build in " + display(root, module.dir()) + " first");
         }
         String stamped = stampedVersion(classes);
         if (stamped == null) {
             throw new LocalException(module.id() + ": " + display(root, module.dir())
-                    + " has no build stamp (target/classes/META-INF/mjm/version.properties)"
-                    + " — run mjm build in " + display(root, module.dir()));
+                    + " has no build stamp (target/classes/META-INF/jeno/version.properties)"
+                    + " — run jeno build in " + display(root, module.dir()));
         }
         if (!stamped.equals(module.version())) {
             throw new LocalException(module.id() + ": " + display(root, module.dir())
-                    + " was built as " + stamped + " but mjm.toml says " + module.version()
-                    + " — run mjm build in " + display(root, module.dir()));
+                    + " was built as " + stamped + " but jeno.toml says " + module.version()
+                    + " — run jeno build in " + display(root, module.dir()));
         }
         if (lockedVersion != null && !lockedVersion.equals(module.version())) {
             noteOnce(module, lockedVersion);
@@ -164,7 +164,7 @@ final class Substitutions {
         Path jar = store.findByDigest(artifact.sha256(), ArtifactStore.Kind.JAR);
         if (jar == null && !tolerateMissing) {
             throw new LocalException(artifact.id() + "@" + artifact.version()
-                    + " is not in the store — run mjm lock");
+                    + " is not in the store — run jeno lock");
         }
         return jar;
     }
@@ -180,9 +180,9 @@ final class Substitutions {
         }
     }
 
-    /** The {@code version=} line mjm's build writes next to the classes. */
+    /** The {@code version=} line jeno's build writes next to the classes. */
     private static String stampedVersion(Path classes) {
-        Path stamp = classes.resolve("META-INF/mjm/version.properties");
+        Path stamp = classes.resolve("META-INF/jeno/version.properties");
         if (!Files.isRegularFile(stamp)) {
             return null;
         }
