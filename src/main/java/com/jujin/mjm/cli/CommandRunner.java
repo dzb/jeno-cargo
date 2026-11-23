@@ -286,6 +286,8 @@ public final class CommandRunner {
         System.out.println(Ui.heading("Global flags"));
         System.out.println("  " + pad("--json", column)
                 + Ui.dim("machine-readable output; with --help it prints the command catalog"));
+        System.out.println("  " + pad("--format=json", column)
+                + Ui.dim("long-form alias of --json"));
         System.out.println("  " + pad("-o, --offline", column)
                 + Ui.dim("refuse all network access; remote publish/release targets, "
                 + "update/outdated/audit are rejected; local targets remain allowed"));

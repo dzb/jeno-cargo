@@ -45,6 +45,16 @@ class UiTest {
     }
 
     @Test
+    void mjmColorAlwaysAloneEnablesColour() {
+        assertTrue(Ui.enabled("always", false));
+    }
+
+    @Test
+    void noColorOverridesMjmColorAlways() {
+        assertFalse(Ui.enabled("always", true));
+    }
+
+    @Test
     void neverKeepsTheExistingPlainText() {
         System.setProperty("mjm.color", "never");
 

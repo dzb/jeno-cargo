@@ -6,15 +6,20 @@ import com.jujin.mjm.store.ArtifactStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import com.sun.net.httpserver.HttpServer;
+
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -81,9 +86,25 @@ class CommandCatalogTest {
         assertEquals(true, cache.get("supportsDryRun"));
         assertEquals("conditional", cache.get("confirmation"));
 
+        for (String name : List.of("build", "package", "bundle")) {
+            assertEquals("never", commands.get(name).get("network"), name);
+        }
+        Map<String, Object> classpath = commands.get("classpath");
+        assertEquals("never", classpath.get("network"));
+        assertEquals(List.of("project"), asList(classpath.get("writes")));
+        Map<String, Object> runCapabilities = commands.get("run");
+        assertEquals("never", runCapabilities.get("network"));
+        assertEquals(List.of(), asList(runCapabilities.get("writes")));
+        Map<String, Object> test = commands.get("test");
+        assertEquals("optional", test.get("network"));
+        assertEquals(List.of("target", "cache"), asList(test.get("writes")));
+        Map<String, Object> init = commands.get("init");
+        assertEquals(List.of("project", "cache"), asList(init.get("writes")));
+
         Map<String, Object> release = commands.get("release");
         assertEquals(true, release.get("supportsDryRun"));
         assertEquals(List.of("target", "remote"), asList(release.get("writes")));
+        assertEquals("requires-signature", release.get("confirmation"));
     }
 
     @Test
@@ -239,6 +260,88 @@ class CommandCatalogTest {
         }
     }
 
+    @Test
+    void humanHelpListsTheFormatJsonAlias() {
+        Result result = run("--help");
+
+        assertEquals(0, result.exit(), result.err());
+        assertTrue(result.out().contains("--format=json"), result.out());
+    }
+
+    @Test
+    void earlyJsonErrorsCarryDryRunAndOffline() {
+        resetOffline();
+        try {
+            Map<String, Object> missing = parse(run("--json").out());
+            assertEquals(false, missing.get("dryRun"));
+            assertEquals(false, missing.get("offline"));
+
+            Map<String, Object> unknown = parse(run("--json", "nosuch").out());
+            assertEquals(false, unknown.get("dryRun"));
+            assertEquals(false, unknown.get("offline"));
+
+            Map<String, Object> unsupported = parse(run("--json", "run").out());
+            assertEquals(false, unsupported.get("dryRun"));
+            assertEquals(false, unsupported.get("offline"));
+
+            Map<String, Object> offline = parse(run("--json", "--offline", "outdated").out());
+            assertEquals(false, offline.get("dryRun"));
+            assertEquals(true, offline.get("offline"));
+        } finally {
+            resetOffline();
+        }
+    }
+
+    @Test
+    void coldStoreClasspathAndBuildDoNotDownloadOrWriteCache() throws Exception {
+        AtomicInteger requests = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            requests.incrementAndGet();
+            byte[] body = "jar".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            try (var out = exchange.getResponseBody()) {
+                out.write(body);
+            }
+        });
+        server.start();
+        try {
+            Path project = Files.createDirectories(dir.resolve("cold-project"));
+            int port = server.getAddress().getPort();
+            String url = "http://127.0.0.1:" + port + "/com/example/lib/1.0.0/lib-1.0.0.jar";
+            Files.writeString(project.resolve("mjm.toml"), """
+                    [project]
+                    name = "cold"
+                    version = "0.1.0"
+
+                    [deps]
+                    "com.example:lib" = "1.0.0"
+                    """);
+            Files.writeString(project.resolve("mjm.lock"), """
+                    [[artifacts]]
+                    id = "com.example:lib"
+                    version = "1.0.0"
+                    source = "central"
+                    url = "%s"
+                    sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+                    depth = 1
+                    """.formatted(url));
+            Path storeDir = dir.resolve("cold-store");
+            ArtifactStore store = new ArtifactStore(storeDir);
+
+            new ClasspathCommand(store, project).execute(List.of());
+            assertEquals(0, requests.get(), "classpath must not fetch a missing jar");
+            assertFalse(Files.exists(storeDir), "classpath must not write the cache");
+
+            int buildExit = new BuildCommand(store, project).execute(List.of());
+            assertTrue(buildExit != 0, "a cold store makes build fail with a next action");
+            assertEquals(0, requests.get(), "build must report the missing jar, not download it");
+            assertFalse(Files.exists(storeDir), "build must not fill the cache");
+        } finally {
+            server.stop(0);
+        }
+    }
+
     // ------------------------------------------------------------------
 
     private List<Command> commands() {
@@ -323,6 +426,16 @@ class CommandCatalogTest {
             result.put(String.valueOf(command.get("name")), command);
         }
         return result;
+    }
+
+    private static void resetOffline() {
+        try {
+            var field = ArtifactStore.class.getDeclaredField("offline");
+            field.setAccessible(true);
+            field.set(null, false);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("cannot reset the offline flag", e);
+        }
     }
 
     private record Result(int exit, String out, String err) {}

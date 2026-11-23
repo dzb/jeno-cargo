@@ -149,7 +149,11 @@ public final class DoctorCommand implements Command {
                 checks.add(CheckResult.ok("manifest", "mjm.toml (" + project.name() + "@"
                         + project.version() + ")"));
             } catch (IOException | RuntimeException e) {
-                checks.add(CheckResult.failed("manifest-invalid", "mjm.toml: " + e.getMessage()));
+                String message = e.getMessage();
+                if (!message.contains("mjm.toml")) {
+                    message = "mjm.toml: " + message;
+                }
+                checks.add(CheckResult.failed("manifest-invalid", message));
             }
         }
 
@@ -164,6 +168,8 @@ public final class DoctorCommand implements Command {
                 checks.add(CheckResult.failed("lock-invalid", "mjm.lock: " + e.getMessage()));
             }
         }
+        checks.add(CheckResult.skipped("declarations",
+                "not compared with mjm.lock — run mjm lock --check"));
         return new ModuleReport(label, dir, checks, project);
     }
 

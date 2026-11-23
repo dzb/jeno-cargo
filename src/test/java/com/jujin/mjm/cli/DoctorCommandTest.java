@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** {@code mjm doctor}: names before schema, never a fallback to the old mj files. */
@@ -164,7 +165,25 @@ class DoctorCommandTest {
         var module = modules.getObject(0);
         assertEquals(".", module.getString("module"));
         assertEquals("ok", module.getString("status"));
-        assertEquals(2, module.getArray("checks").size());
+        assertEquals(3, module.getArray("checks").size());
+        boolean declarationsSkipped = module.getArray("checks").toList().stream()
+                .anyMatch(value -> value instanceof java.util.Map<?, ?> check
+                        && "declarations".equals(check.get("id"))
+                        && "skipped".equals(check.get("status")));
+        assertTrue(declarationsSkipped, result.out());
+        assertTrue(result.out().contains("run mjm lock --check"), result.out());
+    }
+
+    @Test
+    void aMalformedManifestNamesTheFileOnlyOnce() throws Exception {
+        Path project = Files.createDirectories(root.resolve("broken"));
+        Files.writeString(project.resolve("mjm.toml"), "not = [valid\n");
+
+        Result result = run(project);
+
+        assertEquals(1, result.exit());
+        assertTrue(result.out().contains("mjm.toml:"), result.out());
+        assertFalse(result.out().contains("mjm.toml: mjm.toml:"), result.out());
     }
 
     // ------------------------------------------------------------------

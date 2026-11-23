@@ -29,7 +29,15 @@ final class Ui {
 
     /** Whether human presentation should include ANSI colour and glyphs. */
     static boolean enabled() {
-        String mode = System.getProperty("mjm.color", System.getenv("MJM_COLOR"));
+        return enabled(System.getProperty("mjm.color", System.getenv("MJM_COLOR")),
+                System.getenv().containsKey("NO_COLOR"));
+    }
+
+    /** The decision seam; tests can exercise it without mutating the process env. */
+    static boolean enabled(String mode, boolean noColor) {
+        if (noColor) {
+            return false;
+        }
         if (mode != null) {
             if (mode.equalsIgnoreCase("always")) {
                 return true;
@@ -37,9 +45,6 @@ final class Ui {
             if (mode.equalsIgnoreCase("never")) {
                 return false;
             }
-        }
-        if (System.getenv().containsKey("NO_COLOR")) {
-            return false;
         }
         if ("dumb".equalsIgnoreCase(System.getenv("TERM"))) {
             return false;
