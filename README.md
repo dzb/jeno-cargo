@@ -150,7 +150,7 @@ The layout is [SPEC.md](SPEC.md) §7; a Maven-layout target is refused because m
 |---|---|---|
 | GitHub Releases | `gh:owner/repo@v1.2.3` | `mjm publish gh:owner/repo` |
 | ~~Gitee Releases~~ | 已移除:附件匿名下载需令牌,违反零配置;用裸 URL 或自建主机 | — |
-| **your own host** — mjm layout | `[repos.mine]` `type = "mjm"`, `url = "https://my.host/"` + `"lib" = "mine:1.2.3"` | `mjm publish mjm:https://my.host/` — two levels, no `group` needed |
+| **your own host** — mjm layout | `[repos.mine]` `type = "mjm"`, `url = "https://my.host/"` (or a literal private-network `http://192.168.x.x/`, with a warning) + `"lib" = "mine:1.2.3"` | `mjm publish mjm:https://my.host/` — two levels, no `group` needed |
 | **your own host** — Maven layout (the default type) | `[repos.corp]` `url = "https://nexus.corp/"` + `"com.corp:lib" = "corp:1.2.3"` | readable by mjm, but **not a publish target**: mjm writes no POM. Publish the layout with your own tooling, or use the mjm layout |
 | a local directory | `[repos.vend]` `type = "mjm"`, `url = "vendor"` (or the legacy `local:/path` string) | `mjm publish mjm:local:vendor` (writes the triple in place) |
 | any static server | a bare `https://…/x.jar` leaf | upload the jar your way (a leaf carries no descriptor, so it is not a `publish` target) |
@@ -295,6 +295,7 @@ export MJM_MINISIGN_KEY=~/.minisign/minisign.key
 export MJM_MINISIGN_PUBKEY=~/.minisign/minisign.pub   # optional; derived if omitted
 mjm bundle
 mjm release mjm:https://my.host/
+# LAN: mjm release mjm:http://192.168.1.39:8080/upload/   (plain http, private IP only)
 ```
 
 `MJM_MINISIGN` points at the binary (default `minisign`). Every release carries
