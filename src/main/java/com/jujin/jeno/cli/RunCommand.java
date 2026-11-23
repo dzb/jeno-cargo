@@ -106,6 +106,9 @@ public final class RunCommand implements Command {
     }
 
     public int execute(List<String> args) {
+        if (ProjectFiles.rejectLegacy(projectDir)) {
+            return 1;
+        }
         return execute(args, List.of());
     }
 

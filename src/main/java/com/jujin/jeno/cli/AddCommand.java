@@ -79,6 +79,9 @@ public final class AddCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        if (ProjectFiles.rejectLegacy(projectDir)) {
+            return 1;
+        }
         boolean json = args.contains("--json");
         List<String> cleaned = args.stream().filter(arg -> !arg.equals("--json")).toList();
         if (!json) {

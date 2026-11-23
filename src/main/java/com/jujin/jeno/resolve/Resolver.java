@@ -1,5 +1,6 @@
 package com.jujin.jeno.resolve;
 
+import com.jujin.jeno.cli.LegacyNames;
 import com.jujin.jeno.pom.Pom;
 import com.jujin.jeno.pom.PomDependency;
 import com.jujin.jeno.pom.PomException;
@@ -13,7 +14,9 @@ import com.jujin.jeno.project.ProjectException;
 import com.jujin.jeno.project.Repository;
 import com.jujin.jeno.project.Requirement;
 import com.jujin.jeno.project.Species;
+import com.jujin.jeno.store.StoreException;
 
+import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -253,7 +256,7 @@ public final class Resolver {
                         String url = ArtifactLocations.releaseFile(
                                 ArtifactLocations.githubHost(), template.owner(),
                                 template.repo(), template.tag(), version, "jeno.toml");
-                        String text = descriptorSource.descriptor(url);
+                        String text = fetchDescriptor(url);
                         if (text == null || text.isBlank()) {
                             throw new ProjectException("no descriptor for "
                                     + template.owner() + "/" + template.repo() + "@" + version
@@ -273,7 +276,7 @@ public final class Resolver {
                                 : project.repos().get(template.repository()).declaration();
                         String url = ArtifactLocations.jenoFile(base, template.id(), version,
                                 "jeno.toml");
-                        String text = descriptorSource.descriptor(url);
+                        String text = fetchDescriptor(url);
                         if (text == null || text.isBlank()) {
                             throw new ProjectException("no descriptor at " + url);
                         }
@@ -291,6 +294,18 @@ public final class Resolver {
                 throw new ResolveException(e.getMessage(), e);
             } catch (RuntimeException e) {
                 throw new ResolveException("unable to read the metadata of " + id + "@" + version, e);
+            }
+        }
+
+        /** Descriptor fetch with the old-name hint when the expected file is absent. */
+        private String fetchDescriptor(String url) {
+            try {
+                return descriptorSource.descriptor(url);
+            } catch (StoreException e) {
+                Path sibling = LegacyNames.siblingDescriptor(url);
+                throw new ProjectException(sibling != null
+                        ? LegacyNames.localDescriptor(sibling)
+                        : LegacyNames.remoteDescriptor(url));
             }
         }
 

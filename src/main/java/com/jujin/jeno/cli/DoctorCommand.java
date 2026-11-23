@@ -18,7 +18,7 @@ import java.util.List;
  * {@code jeno doctor} — a local, read-only diagnosis of the project files.
  *
  * <p>It exists because the two file-format questions users hit first are not
- * build errors: "is this the old {@code mj.toml} or the current
+ * build errors: "is this an old project file or the current
  * {@code jeno.toml}?" and "why does build say lock missing?" The doctor names
  * both files, validates the manifest and lock shapes, checks every module in a
  * workspace, and reports whether the XDG roots can be created. It never
@@ -47,7 +47,7 @@ public final class DoctorCommand implements Command {
         return """
                local only: it does not resolve, build, write, or contact a repository.
                at a workspace root it checks every module; elsewhere it checks the
-               nearest project. Legacy mj.toml/mj.lock are reported, never read.""";
+               nearest project. Legacy project files are reported, never read.""";
     }
 
     @Override
@@ -102,6 +102,11 @@ public final class DoctorCommand implements Command {
         } catch (Workspaces.WorkspaceException e) {
             workspaceError = e.getMessage();
         }
+        if (workspace == null && workspaceError == null
+                && !Files.isRegularFile(root.resolve(Workspaces.FILE))
+                && Files.isRegularFile(root.resolve(LegacyNames.WORKSPACE))) {
+            workspaceError = LegacyNames.workspace(root);
+        }
 
         List<ModuleReport> modules = new ArrayList<>();
         if (workspace != null) {
@@ -110,6 +115,25 @@ public final class DoctorCommand implements Command {
             }
         } else if (workspaceError == null) {
             modules.add(checkModule(root, "."));
+        } else {
+            modules.add(new ModuleReport(".", root,
+                    new ArrayList<>(List.of(CheckResult.failed("workspace", workspaceError))),
+                    null));
+        }
+
+        if (!modules.isEmpty()) {
+            List<CheckResult> hints = new ArrayList<>();
+            Path legacyHome = LegacyNames.legacyHome();
+            if (Files.isDirectory(legacyHome)) {
+                hints.add(CheckResult.skipped("legacy-home",
+                        LegacyNames.homeHint(legacyHome)));
+            }
+            List<String> legacyEnv = LegacyNames.environment();
+            if (!legacyEnv.isEmpty()) {
+                hints.add(CheckResult.skipped("legacy-env",
+                        LegacyNames.environmentHint(legacyEnv)));
+            }
+            modules.getFirst().checks().addAll(hints);
         }
 
         List<PathReport> paths = List.of(
@@ -124,25 +148,19 @@ public final class DoctorCommand implements Command {
         List<CheckResult> checks = new ArrayList<>();
         JenoProject project = null;
 
-        Path legacyManifest = dir.resolve("mj.toml");
-        Path legacyLock = dir.resolve("mj.lock");
+        Path legacyManifest = dir.resolve(LegacyNames.MANIFEST);
+        Path legacyLock = dir.resolve(LegacyNames.LOCK);
         if (Files.isRegularFile(legacyManifest)) {
-            checks.add(CheckResult.failed("legacy-manifest",
-                    "legacy mj.toml found — jeno does not read it; rename it to jeno.toml "
-                    + "(or migrate it with jeno init --pom) and run jeno lock"));
+            checks.add(CheckResult.failed("legacy-manifest", LegacyNames.manifest(dir)));
         }
         if (Files.isRegularFile(legacyLock)) {
-            checks.add(CheckResult.failed("legacy-lock",
-                    "legacy mj.lock found — jeno does not read it; regenerate it as jeno.lock "
-                    + "with jeno lock"));
+            checks.add(CheckResult.failed("legacy-lock", LegacyNames.lock(dir)));
         }
 
-        Path manifest = dir.resolve("jeno.toml");
+        Path manifest = ProjectFiles.manifest(dir);
         if (!Files.isRegularFile(manifest)) {
             checks.add(CheckResult.failed("manifest-missing",
-                    "no jeno.toml" + (Files.isRegularFile(legacyManifest)
-                    ? " (the old mj.toml is present, but it is not a fallback)"
-                    : " — run jeno init")));
+                    "no jeno.toml — run jeno init"));
         } else {
             try {
                 project = ProjectReader.parse(Files.readString(manifest));
@@ -157,7 +175,7 @@ public final class DoctorCommand implements Command {
             }
         }
 
-        Path lock = dir.resolve("jeno.lock");
+        Path lock = ProjectFiles.lock(dir);
         if (!Files.isRegularFile(lock)) {
             checks.add(CheckResult.failed("lock-missing", "no jeno.lock — run jeno lock"));
         } else {

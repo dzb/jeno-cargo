@@ -1,5 +1,7 @@
 package com.jujin.jeno.project;
 
+import com.jujin.jeno.cli.LegacyNames;
+
 import java.nio.file.Path;
 
 /**
@@ -55,6 +57,9 @@ public record Repository(String name, Layout layout, Transport transport,
         if (declaration == null || declaration.isBlank()) {
             throw new IllegalArgumentException(twoShapes());
         }
+        if (declaration.startsWith(LegacyNames.REPOSITORY_PREFIX)) {
+            throw new IllegalArgumentException(LegacyNames.repositoryPrefix(declaration));
+        }
         boolean jeno = declaration.startsWith("jeno:");
         String rest = jeno ? declaration.substring("jeno:".length()) : declaration;
         Layout layout = jeno ? Layout.JENO : Layout.MAVEN;
@@ -98,6 +103,9 @@ public record Repository(String name, Layout layout, Transport transport,
      */
     public static Repository of(String name, String type, String url) {
         String kind = type == null || type.isBlank() ? "maven" : type.strip();
+        if (kind.equalsIgnoreCase(LegacyNames.REPOSITORY_TYPE)) {
+            throw new IllegalArgumentException(LegacyNames.repositoryType());
+        }
         Layout layout = switch (kind) {
             case "maven" -> Layout.MAVEN;
             case "jeno" -> Layout.JENO;

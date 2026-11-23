@@ -1,5 +1,6 @@
 package com.jujin.jeno.project;
 
+import com.jujin.jeno.cli.LegacyNames;
 import com.jujin.freeway.commons.toml.TomlUtils;
 
 import java.util.ArrayList;
@@ -455,6 +456,10 @@ public final class ProjectReader {
                     null, null, owner, repo, tag);
         }
 
+        if (raw.startsWith(LegacyNames.REPOSITORY_PREFIX)) {
+            throw new ProjectException("[" + where + "] '" + key + " = \"" + raw
+                    + "\"' — " + LegacyNames.repositoryPrefix(raw));
+        }
         if (raw.startsWith("https://")) {
             if (!raw.endsWith(".jar")) {
                 throw new ProjectException("[" + where + "] '" + key

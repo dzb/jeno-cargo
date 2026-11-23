@@ -54,6 +54,10 @@ public final class Workspaces {
             if (Files.isRegularFile(file)) {
                 return Optional.of(parse(dir, file));
             }
+            Path legacy = dir.resolve(LegacyNames.WORKSPACE);
+            if (Files.isRegularFile(legacy)) {
+                throw new WorkspaceException(LegacyNames.workspace(dir));
+            }
             dir = dir.getParent();
         }
         return Optional.empty();
@@ -178,6 +182,10 @@ public final class Workspaces {
     }
 
     private static JenoProject readProject(Path root, Path module) {
+        String legacy = ProjectFiles.legacyProblem(module);
+        if (legacy != null) {
+            throw new WorkspaceException(legacy);
+        }
         try {
             return ProjectReader.parse(Files.readString(module.resolve("jeno.toml")));
         } catch (IOException | RuntimeException e) {
@@ -262,6 +270,9 @@ public final class Workspaces {
                         + "module '" + modulePath + "' does not exist under " + root);
             }
             if (!Files.isRegularFile(module.resolve("jeno.toml"))) {
+                if (Files.isRegularFile(module.resolve(LegacyNames.MANIFEST))) {
+                    throw new WorkspaceException(LegacyNames.manifest(module));
+                }
                 throw new WorkspaceException(at(file, modulesSite)
                         + "module '" + modulePath + "' has no jeno.toml");
             }

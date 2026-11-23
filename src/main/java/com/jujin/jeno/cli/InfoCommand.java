@@ -91,6 +91,9 @@ public final class InfoCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        if (ProjectFiles.rejectLegacy(projectDir)) {
+            return 1;
+        }
         boolean json = args.contains("--json");
         if (json && Workspaces.rootAt(projectDir).isPresent() && !hasModuleOption(args)) {
             JsonResult.error("info", 2, "MODULE_REQUIRED",

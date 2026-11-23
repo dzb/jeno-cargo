@@ -88,6 +88,9 @@ public final class OutdatedCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
+        if (ProjectFiles.rejectLegacy(projectDir)) {
+            return 1;
+        }
         boolean json = args.contains("--json");
         if (json && Workspaces.rootAt(projectDir).isPresent() && !hasModuleOption(args)) {
             JsonResult.error("outdated", 2, "MODULE_REQUIRED",
