@@ -20,7 +20,10 @@ import java.util.stream.Stream;
  *   mjm cache prune   only what is provably dead: lock files whose project is
  *                     gone, interrupted {@code part-*.tmp} downloads, and index
  *                     entries whose artifact is missing
- *   mjm cache purge   remove store and sources outright (alias: clean)
+ *   mjm cache purge [--dry-run] [--yes]
+ *                     remove store and sources outright (alias: clean).
+ *                     Destructive: it refuses without --yes; --dry-run prints
+ *                     what would go and deletes nothing.
  * </pre>
  *
  * <p>Everything here is local: no command in this group touches the network,
@@ -39,7 +42,7 @@ public final class CacheCommand implements Command {
 
     @Override
     public String usage() {
-        return "dir | size | prune | purge";
+        return "dir | size | prune | purge [--dry-run] [--yes]";
     }
 
     @Override
@@ -49,17 +52,39 @@ public final class CacheCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
-        if (args.size() != 1) {
+        if (args.isEmpty()) {
             System.err.println("mjm: cache needs one subcommand — " + usage());
             return 2;
         }
-        return switch (args.getFirst()) {
+        String subcommand = args.getFirst();
+        List<String> rest = args.subList(1, args.size());
+        if (subcommand.equals("purge") || subcommand.equals("clean")) {
+            boolean dryRun = false;
+            boolean yes = false;
+            for (String flag : rest) {
+                switch (flag) {
+                    case "--dry-run" -> dryRun = true;
+                    case "--yes" -> yes = true;
+                    default -> {
+                        System.err.println("mjm: cache " + subcommand + " takes --dry-run and "
+                                + "--yes only — got '" + flag + "'");
+                        return 2;
+                    }
+                }
+            }
+            return purge(dryRun, yes);
+        }
+        if (!rest.isEmpty()) {
+            System.err.println("mjm: cache " + subcommand + " takes no arguments — got '"
+                    + rest.getFirst() + "'");
+            return 2;
+        }
+        return switch (subcommand) {
             case "dir" -> dir();
             case "size" -> size();
             case "prune" -> prune();
-            case "purge", "clean" -> purge();  // clean is the compatibility alias
             default -> {
-                System.err.println("mjm: unknown cache subcommand '" + args.getFirst()
+                System.err.println("mjm: unknown cache subcommand '" + subcommand
                         + "' — " + usage());
                 yield 2;
             }
@@ -154,10 +179,25 @@ public final class CacheCommand implements Command {
         }
     }
 
-    /** Deletes store and sources; locks, the project and mjm.lock stay. */
-    private int purge() {
+    /**
+     * Deletes store and sources; locks, the project and mjm.lock stay.
+     * Destructive, so it needs --yes; --dry-run only reports what would go.
+     */
+    private int purge(boolean dryRun, boolean yes) {
         long freed = 0;
         StringBuilder report = new StringBuilder();
+        if (dryRun || !yes) {
+            for (Path root : List.of(Paths.store(), Paths.sources())) {
+                long size = bytes(root);
+                System.out.println((dryRun ? "would purge " : "purge ") + root
+                        + (size > 0 ? " (" + human(size) + ")" : " (empty)"));
+            }
+            if (!dryRun) {
+                System.out.println("pass --yes to delete (or --dry-run to only look)");
+                return 2;
+            }
+            return 0;
+        }
         for (Path root : List.of(Paths.store(), Paths.sources())) {
             long size = bytes(root);
             try {

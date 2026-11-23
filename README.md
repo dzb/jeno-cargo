@@ -83,6 +83,7 @@ mjm lock                      # resolve, download into ${XDG_CACHE_HOME:-~/.cach
 mjm build                     # javac against declared deps only
 mjm test                      # forked JVM: @MjmTest + JUnit Jupiter
 mjm run com.example.App
+mjm cache purge --dry-run     # destructive: shows store/sources; --yes actually deletes
 ```
 
 ### Migrating from Maven
