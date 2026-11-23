@@ -160,22 +160,27 @@ public final class AddCommand implements Command {
                     + "version list — pass an explicit version, or drop --offline");
             return 2;
         }
-        if (key.contains(":")) {
-            List<String> versions = MetadataVersions.central(key);
-            if (versions.isEmpty()) {
-                System.err.println("mjm: no versions found for " + key
-                        + " — if it belongs to a named repository, declare it as \""
-                        + key + "\" = \"<repo>:<version>\" in mjm.toml");
-                return 1;
+        try {
+            if (key.contains(":")) {
+                List<String> versions = MetadataVersions.central(key);
+                if (versions.isEmpty()) {
+                    System.err.println("mjm: no versions found for " + key
+                            + " — if it belongs to a named repository, declare it as \""
+                            + key + "\" = \"<repo>:<version>\" in mjm.toml");
+                    return 1;
+                }
+                System.out.println("versions of " + key + " (newest last):");
+                for (String version : versions) {
+                    System.out.println("  " + version);
+                }
+                System.out.println("choose one: mjm add \"" + key + "\" <version>");
+                return 0;
             }
-            System.out.println("versions of " + key + " (newest last):");
-            for (String version : versions) {
-                System.out.println("  " + version);
-            }
-            System.out.println("choose one: mjm add \"" + key + "\" <version>");
+            return search(key);
+        } catch (RuntimeException e) {
+            System.err.println("mjm: " + e.getMessage());
             return 1;
         }
-        return search(key);
     }
 
     /** Central's index search: bare name in, group:artifact + latest version out. */
@@ -189,6 +194,10 @@ public final class AddCommand implements Command {
             System.err.println("mjm: unexpected search response from " + host);
             return 1;
         }
+        if (docs.isEmpty()) {
+            System.err.println("mjm: no artifacts found for '" + name + "' on " + host);
+            return 1;
+        }
         System.out.println("search '" + name + "' on " + host + ":");
         for (Object docObject : docs) {
             if (docObject instanceof Map<?, ?> doc) {
@@ -197,7 +206,7 @@ public final class AddCommand implements Command {
             }
         }
         System.out.println("add one: mjm add \"<group:artifact>\" <version>");
-        return 1;
+        return 0;
     }
 
     /**

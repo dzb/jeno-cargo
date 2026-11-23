@@ -288,8 +288,8 @@ Q5(JDK 只校验不管理,`mjm jdk` 取消)、Q6(daemon = M6)、Q7(token 环境�
 
 ### 待定
 
-暂无。已知行为缺口(如 `lock --refresh` no-op、`add` 无值查询退出码)记录在
-[SPEC.md](SPEC.md) §9,修复各自独立成单。
+暂无。已知行为缺口(如 `lock --refresh` no-op)记录在 [SPEC.md](SPEC.md) §9,
+修复各自独立成单。
 
 ---
 

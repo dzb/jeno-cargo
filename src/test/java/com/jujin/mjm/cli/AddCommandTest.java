@@ -58,6 +58,7 @@ class AddCommandTest {
         }
         System.clearProperty("mjm.central.base");
         System.clearProperty("mjm.github.host");
+        System.clearProperty("mjm.search.host");
         ProjectLock.useUserRoot();
         resetOffline();
     }
@@ -600,5 +601,86 @@ class AddCommandTest {
 
         assertTrue(updated.contains("[deps]"));
         assertTrue(updated.contains("\"com.example:lib-a\" = \"1.0.0\""));
+    }
+
+    @Test
+    void aSuccessfulVersionListAnswersZeroAndWritesNothing() throws Exception {
+        serveMetadata("""
+            <metadata>
+              <versioning>
+                <versions>
+                  <version>1.0.0</version>
+                  <version>1.1.0</version>
+                </versions>
+              </versioning>
+            </metadata>
+            """);
+        AddCommand add = add();
+        String before = Files.readString(dir.resolve("mjm.toml"));
+
+        int exit = add.execute(List.of("com.example:lib-a"));
+
+        assertEquals(0, exit, "a completed query is a success");
+        assertEquals(before, Files.readString(dir.resolve("mjm.toml")),
+                "a query never edits the manifest");
+    }
+
+    @Test
+    void anEmptyVersionListIsAFailure() throws Exception {
+        serveMetadata("<metadata><versioning><versions/></versioning></metadata>");
+
+        assertEquals(1, add().execute(List.of("com.example:absent")),
+                "nothing to suggest is not a successful query");
+    }
+
+    @Test
+    void aSuccessfulSearchAnswersZeroAndWritesNothing() throws Exception {
+        serveSearch("""
+            {"response":{"numFound":1,"docs":[{"id":"com.example:lib-a",
+             "latestVersion":"1.0.0"}]}}
+            """);
+        AddCommand add = add();
+        String before = Files.readString(dir.resolve("mjm.toml"));
+
+        int exit = add.execute(List.of("lib-a"));
+
+        assertEquals(0, exit, "a completed search is a success");
+        assertEquals(before, Files.readString(dir.resolve("mjm.toml")),
+                "search only prints candidates");
+    }
+
+    @Test
+    void anEmptySearchIsAFailure() throws Exception {
+        serveSearch("{\"response\":{\"numFound\":0,\"docs\":[]}}");
+
+        assertEquals(1, add().execute(List.of("nothing-here")));
+    }
+
+    private void serveMetadata(String xml) throws IOException {
+        byte[] body = xml.getBytes();
+        central = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        central.createContext("/", exchange -> {
+            exchange.sendResponseHeaders(200, body.length);
+            try (var out = exchange.getResponseBody()) {
+                out.write(body);
+            }
+        });
+        central.start();
+        System.setProperty("mjm.central.base",
+                "http://localhost:" + central.getAddress().getPort() + "/");
+    }
+
+    private void serveSearch(String json) throws IOException {
+        byte[] body = json.getBytes();
+        central = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        central.createContext("/", exchange -> {
+            exchange.sendResponseHeaders(200, body.length);
+            try (var out = exchange.getResponseBody()) {
+                out.write(body);
+            }
+        });
+        central.start();
+        System.setProperty("mjm.search.host",
+                "http://localhost:" + central.getAddress().getPort());
     }
 }

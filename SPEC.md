@@ -385,7 +385,7 @@ modules = ["libs/core", "apps/web"]
 | 命令 | 契约 |
 |---|---|
 | `mjm init [--pom] [--ws] [--force] [paths...]` | 写 `mjm.toml` 骨架;`--pom` 从 `pom.xml` 迁移并逐条报告不可表达的事实;`--ws` 写 `mjm.ws.toml`(§5),此时 `paths...` 可显式指定模块目录。**工作区根目录拒绝 `init`/`--pom`/`--force`**(exit 1),`--ws` 仍可用 |
-| `mjm add <key> [value]` | key: `group:artifact`(Central)、裸名(搜索)、`owner/repo@tag`(原生简写)。value: `1.2.3`、`<repo>:1.2.3`、`gh:owner/repo@tag`、裸 `https://...jar`。无 value 时:`group:artifact`/裸名只查询,不写 `mjm.toml`(成功当前 exit 1,known gap §9);`owner/repo@tag` 会写入 `[deps]` 并重锁 |
+| `mjm add <key> [value]` | key: `group:artifact`(Central)、裸名(搜索)、`owner/repo@tag`(原生简写)。value: `1.2.3`、`<repo>:1.2.3`、`gh:owner/repo@tag`、裸 `https://...jar`。无 value 时:`group:artifact`/裸名只查询,不写 `mjm.toml`(查询成功 exit 0);`owner/repo@tag` 会写入 `[deps]` 并重锁 |
 | `mjm remove <id>` | 删除一行声明并重锁 |
 | `mjm lock [--check]` | 解析并写出 `mjm.lock`;**总是重解**。`--check` 只在内存生成并与磁盘逐字节比较,不写文件。legacy `--refresh` 是 no-op,不在契约内 |
 | `mjm build` | javac 编译 `src/main/java`,严格可见性 classpath(只含 MAIN 声明);`--release` 取 `[java].version`;processor 走 `-processorpath`。**当前要求至少一个 Java 源**;resource-only 模块会失败(报没有 sources) |
@@ -524,10 +524,6 @@ target/dist/<name>-<version>.tar.gz
 **已记录的 known gap(行为修复各自独立成单)**:
 
 - `lock --refresh`:当前二进制仍接受并在 usage 中显示,但它是 **no-op**;契约只列 `--check`。移除是行为单。
-- `add` 无值查询(仅版本列表/搜索):`mjm add "group:artifact"` 与 `mjm add bare-name` 成功当前
-  exit 1,与 §6.3 的"成功 = 0"不一致;修复是行为单。
-  `mjm add owner/repo@tag` 无值是**添加**(写入并重锁),不属于这个 gap;`mjm add owner/repo`(无 tag)
-  是报错,也不是查询。
 
 **其他**:
 
