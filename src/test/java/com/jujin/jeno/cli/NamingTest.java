@@ -19,9 +19,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * one place the wrong recovery path ({@code ~/.mj/store}). This scan keeps the
  * sweep from growing back.
  *
- * <p>Two kinds of occurrence are legitimate and listed below: the term
- * {@code mj-native} (a fixed species name, not an abbreviation of the tool) and
- * two internal temp-name prefixes that are never shown to a user.
+ * <p>No exception list remains: the old short term has no legitimate use.
+ * The guard file itself is skipped by its own scan so it can keep the pattern
+ * and the explanatory text.
  *
  * <p>The second check is narrower and stricter: the system properties the tool
  * reads are {@code -Djeno.*}, and a document naming the short form (dash, D, the
@@ -29,12 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class NamingTest {
 
-    private static final List<String> ALLOWED = List.of(
-            "mj-native",    // the species name for gh: releases — a term, not the CLI
-            "mj-manifest-", // temp file prefix for the jar manifest
-            "----mj",       // multipart boundary prefix in the upload request
-            "mj.toml",      // the legacy file name; doctor/migration messages must name it
-            "mj.lock");     // the legacy lock name; never read by jeno
+    private static final List<String> ALLOWED = List.of();
 
     private static final Pattern BARE_MJ = Pattern.compile("\\bmj\\b");
 
@@ -52,7 +47,9 @@ class NamingTest {
         List<String> violations = new ArrayList<>();
         try (Stream<Path> files = Files.walk(root)) {
             for (Path file : files.filter(Files::isRegularFile)
-                    .filter(path -> path.toString().endsWith(".java")).toList()) {
+                    .filter(path -> path.toString().endsWith(".java"))
+                    .filter(path -> !path.getFileName().toString().equals("NamingTest.java"))
+                    .toList()) {
                 check(file, violations);
             }
         }
@@ -80,7 +77,9 @@ class NamingTest {
         List<String> violations = new ArrayList<>();
         try (Stream<Path> files = Files.walk(sourceRoot())) {
             for (Path file : files.filter(Files::isRegularFile)
-                    .filter(path -> path.toString().endsWith(".java")).toList()) {
+                    .filter(path -> path.toString().endsWith(".java"))
+                    .filter(path -> !path.getFileName().toString().equals("NamingTest.java"))
+                    .toList()) {
                 checkProperty(file, violations);
             }
         }

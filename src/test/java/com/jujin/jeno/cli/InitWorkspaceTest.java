@@ -90,7 +90,7 @@ class InitWorkspaceTest {
     @Test
     void aLegacyOldManifestIsNamedByTheScan() throws Exception {
         Path old = Files.createDirectories(dir.resolve("old-module"));
-        Files.writeString(old.resolve("mj.toml"), """
+        Files.writeString(old.resolve("mjm.toml"), """
                 [project]
                 name = "old"
                 version = "2.0.2"
@@ -100,15 +100,15 @@ class InitWorkspaceTest {
 
         assertEquals(1, result.exit());
         assertFalse(Files.exists(dir.resolve("jeno.ws.toml")));
-        assertTrue(result.err().contains("found legacy mj.toml in: old-module"),
+        assertTrue(result.err().contains("found legacy mjm.toml in: old-module"),
                 result.err());
-        assertTrue(result.err().contains("jeno does not read mj.toml"), result.err());
+        assertTrue(result.err().contains("jeno does not read mjm.toml"), result.err());
     }
 
     @Test
     void anExplicitLegacyModuleGetsTheMigrationHint() throws Exception {
         Path old = Files.createDirectories(dir.resolve("old-module"));
-        Files.writeString(old.resolve("mj.toml"), """
+        Files.writeString(old.resolve("mjm.toml"), """
                 [project]
                 name = "old"
                 version = "2.0.2"
@@ -117,7 +117,7 @@ class InitWorkspaceTest {
         Result result = runCaptured(dir, "--ws", "old-module");
 
         assertEquals(1, result.exit());
-        assertTrue(result.err().contains("has mj.toml, not jeno.toml"), result.err());
+        assertTrue(result.err().contains("has mjm.toml, not jeno.toml"), result.err());
         assertTrue(result.err().contains("jeno does not read the old name"), result.err());
     }
 

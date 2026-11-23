@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Reads a mj-native release descriptor ({@code {artifact}-{version}.jeno.toml})
+ * Reads a jeno-native release descriptor ({@code {artifact}-{version}.jeno.toml})
  * into {@link Descriptor} under SPEC.md §3's closed schema. The descriptor is
  * facts only: dependencies in the same value shapes as jeno.toml, an optional
  * java requirement, an optional {@code [retract]} table. Everything that is a

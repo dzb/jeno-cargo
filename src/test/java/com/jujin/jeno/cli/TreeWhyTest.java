@@ -19,8 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
- * The budget made visible: mj tree prints the graph with depths (and the
- * above-marker for repeated subtrees), mj why prints every introduction
+ * The budget made visible: jeno tree prints the graph with depths (and the
+ * above-marker for repeated subtrees), jeno why prints every introduction
  * path. Both re-resolve — offline here through a local: fixture repository.
  */
 class TreeWhyTest {

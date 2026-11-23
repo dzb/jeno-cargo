@@ -260,6 +260,7 @@ public final class InitCommand implements Command {
             return 1;
         }
 
+        String legacyName = LegacyNames.MANIFEST;
         List<Path> modules;
         if (given.isEmpty()) {
             modules = scan(projectDir);
@@ -268,9 +269,9 @@ public final class InitCommand implements Command {
                 System.err.println(Ui.errPrefix() + "no modules found under " + projectDir
                         + " (looked 3 levels deep)");
                 if (!legacy.isEmpty()) {
-                    System.err.println(Ui.errPrefix() + "found legacy mj.toml in: "
+                    System.err.println(Ui.errPrefix() + "found legacy " + legacyName + " in: "
                             + relativeList(projectDir, legacy));
-                    System.err.println("  jeno does not read mj.toml — create or migrate jeno.toml "
+                    System.err.println("  jeno does not read " + legacyName + " — create or migrate jeno.toml "
                             + "in each module (one way: jeno init --pom), then rerun jeno init --ws");
                 } else {
                     System.err.println("  pass the paths explicitly: "
@@ -279,9 +280,10 @@ public final class InitCommand implements Command {
                 return 1;
             }
             if (!legacy.isEmpty()) {
-                System.err.println(Ui.errPrefix() + "warning: ignored legacy mj.toml in: "
+                System.err.println(Ui.errPrefix() + "warning: ignored legacy " + legacyName + " in: "
                         + relativeList(projectDir, legacy));
-                System.err.println("  a workspace module is discovered by jeno.toml, never mj.toml");
+                System.err.println("  a workspace module is discovered by jeno.toml, never "
+                        + legacyName);
             }
         } else {
             List<Path> seen = new ArrayList<>();
@@ -292,8 +294,8 @@ public final class InitCommand implements Command {
                     return 1;
                 }
                 if (!Files.isRegularFile(module.resolve("jeno.toml"))) {
-                    if (Files.isRegularFile(module.resolve("mj.toml"))) {
-                        System.err.println(Ui.errPrefix() + "'" + text + "' has mj.toml, not jeno.toml — "
+                    if (Files.isRegularFile(module.resolve(legacyName))) {
+                        System.err.println(Ui.errPrefix() + "'" + text + "' has " + legacyName + ", not jeno.toml — "
                                 + "jeno does not read the old name; migrate it (jeno init --pom) "
                                 + "or rename the file, then run jeno lock");
                     } else {
@@ -351,9 +353,9 @@ public final class InitCommand implements Command {
         return scanNamed(root, "jeno.toml");
     }
 
-    /** Directories that still hold the old mj.toml and have no jeno.toml. */
+    /** Directories that still hold the old project manifest and have no jeno.toml. */
     static List<Path> scanLegacy(Path root) {
-        return scanNamed(root, "mj.toml").stream()
+        return scanNamed(root, LegacyNames.MANIFEST).stream()
                 .filter(path -> !Files.isRegularFile(path.resolve("jeno.toml")))
                 .toList();
     }

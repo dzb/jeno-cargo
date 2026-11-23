@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Contract tests for the resolver — the three-piece soul: semantic-aware
  * MVS, the depth budget over the longest path, and strict visibility's
  * declared/closure split. Every fixture is the shape a real Central or
- * mj-native dependency tree takes.
+ * jeno-native dependency tree takes.
  */
 class ResolverTest {
 
@@ -805,7 +805,7 @@ class ResolverTest {
     }
 
     // ------------------------------------------------------------------
-    // mj-native species
+    // jeno-native species
     // ------------------------------------------------------------------
 
     @Test

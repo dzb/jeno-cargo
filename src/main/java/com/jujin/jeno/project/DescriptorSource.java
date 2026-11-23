@@ -1,7 +1,7 @@
 package com.jujin.jeno.project;
 
 /**
- * Supplies the raw release descriptor of mj-native artifacts — the mj-native
+ * Supplies the raw release descriptor of jeno-native artifacts — the jeno-native
  * counterpart of {@link PomSource}. The descriptor travels next to the jar
  * under the same release URL, so the resolver hands over the URL it already
  * computed and the implementation fetches it (the store-backed one reads the

@@ -91,9 +91,7 @@ public final class InfoCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
-        if (ProjectFiles.rejectLegacy(projectDir)) {
-            return 1;
-        }
+        ProjectFiles.rejectLegacy(projectDir);
         boolean json = args.contains("--json");
         if (json && Workspaces.rootAt(projectDir).isPresent() && !hasModuleOption(args)) {
             JsonResult.error("info", 2, "MODULE_REQUIRED",
@@ -425,7 +423,7 @@ public final class InfoCommand implements Command {
     // descriptor facts
     // ------------------------------------------------------------------
 
-    /** The release descriptor, when this artifact is mj-native; null otherwise. */
+    /** The release descriptor, when this artifact is jeno-native; null otherwise. */
     private Descriptor descriptor(LockedArtifact artifact) {
         if (artifact.metaSha256() == null) {
             return null;

@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Contract tests for the mj-native release descriptor (SPEC.md §3): facts
+ * Contract tests for the jeno-native release descriptor (SPEC.md §3): facts
  * only, name/version consistency enforced, retraction never self-inflicted.
  */
 class DescriptorReaderTest {

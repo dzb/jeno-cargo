@@ -224,9 +224,7 @@ public final class BundleCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
-        if (ProjectFiles.rejectLegacy(projectDir)) {
-            return 1;
-        }
+        ProjectFiles.rejectLegacy(projectDir);
         boolean json = args.contains("--json");
         List<String> cleaned = args.stream().filter(arg -> !arg.equals("--json")).toList();
         if (json) {
@@ -531,7 +529,7 @@ public final class BundleCommand implements Command {
             }
             attributes.put(new java.util.jar.Attributes.Name("Built-By"), "jeno");
 
-            Path manifestFile = Files.createTempFile("mj-manifest-", ".mf");
+            Path manifestFile = Files.createTempFile("jeno-manifest-", ".mf");
             try (var out = Files.newOutputStream(manifestFile)) {
                 manifest.write(out);
             }

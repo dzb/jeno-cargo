@@ -75,7 +75,7 @@ class LockFileTest {
         assertEquals(2, lock.split("\\[\\[artifacts]]", -1).length - 1, "one row per artifact");
         assertTrue(lock.contains("depth = 2"), "each row carries its depth");
         assertTrue(lock.contains("meta-sha256 = "), "both digests are pinned");
-        // the lock must parse with mj's own TOML subset
+        // the lock must parse with jeno's own TOML subset
         com.jujin.freeway.commons.toml.TomlUtils.parse(lock);
     }
 

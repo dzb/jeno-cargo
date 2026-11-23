@@ -38,13 +38,11 @@ final class ProjectFiles {
         return null;
     }
 
-    /** Prints the migration error and returns true when an old project file is present. */
-    static boolean rejectLegacy(Path dir) {
+    /** Throws the one migration error when an old project file is present. */
+    static void rejectLegacy(Path dir) {
         String problem = legacyProblem(dir);
-        if (problem == null) {
-            return false;
+        if (problem != null) {
+            throw new LegacyNames.LegacyException(problem);
         }
-        System.err.println(Ui.errPrefix() + problem);
-        return true;
     }
 }

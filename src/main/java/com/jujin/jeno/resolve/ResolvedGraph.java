@@ -16,7 +16,7 @@ import java.util.Map;
  * what {@code jeno tree} / {@code jeno why} render.
  *
  * @param source      where the artifact comes from: {@code central}, an
- *                    mj-native origin ({@code gh:owner/repo}), or a named
+ *                    jeno-native origin ({@code gh:owner/repo}), or a named
  *                    repository's base URL — the lockfile's {@code source}
  * @param jarUrl      the artifact's download URL
  * @param metadataUrl the pom or descriptor URL (null for bare URL leaves)

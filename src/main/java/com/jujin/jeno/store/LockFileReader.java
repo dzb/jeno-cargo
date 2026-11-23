@@ -1,6 +1,7 @@
 package com.jujin.jeno.store;
 
 import com.jujin.freeway.commons.toml.TomlUtils;
+import com.jujin.jeno.cli.LegacyNames;
 import com.jujin.jeno.resolve.Scope;
 
 import java.util.ArrayList;
@@ -53,6 +54,10 @@ public final class LockFileReader {
                 }
             }
             String source = string(fields, "source");
+            if (source.startsWith(LegacyNames.REPOSITORY_PREFIX)) {
+                throw new LegacyNames.LegacyException(LegacyNames.lockSource(
+                        string(fields, "id"), source));
+            }
             if (source.startsWith("gitee:")) {
                 // every reader of a lock gets the same sentence: build, info, test,
                 // outdated — the species is gone, the row has to be re-declared

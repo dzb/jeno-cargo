@@ -26,6 +26,7 @@ final class JsonResult {
     private final JsonObject root = JsonUtils.object();
     private final JsonArray diagnostics = JsonUtils.array();
     private int exitCode = 0;
+    private String statusOverride;
 
     private JsonResult(String command) {
         root.put("schemaVersion", CommandCatalog.SCHEMA_VERSION);
@@ -83,6 +84,11 @@ final class JsonResult {
         return this;
     }
 
+    JsonResult status(String status) {
+        this.statusOverride = status;
+        return this;
+    }
+
     JsonResult dryRun(boolean dryRun) {
         root.put("dryRun", dryRun);
         return this;
@@ -117,7 +123,9 @@ final class JsonResult {
     JsonResult finish(int exitCode) {
         this.exitCode = exitCode;
         root.put("exitCode", exitCode);
-        root.put("status", exitCode == 0 ? "ok" : exitCode == 1 ? "failed" : "error");
+        root.put("status", statusOverride != null
+                ? statusOverride
+                : exitCode == 0 ? "ok" : exitCode == 1 ? "failed" : "error");
         return this;
     }
 

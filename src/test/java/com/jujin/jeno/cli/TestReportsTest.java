@@ -86,11 +86,11 @@ class TestReportsTest {
         assertEquals(1, exit, "the failing @JenoTest fails the command");
         Path reports = dir.resolve("target/test-results");
 
-        Document mj = parse(reports.resolve("TEST-demo.MjTests.xml"));
-        assertEquals("2", mj.getDocumentElement().getAttribute("tests"));
-        assertEquals("1", mj.getDocumentElement().getAttribute("failures"));
+        Document jeno = parse(reports.resolve("TEST-demo.MjTests.xml"));
+        assertEquals("2", jeno.getDocumentElement().getAttribute("tests"));
+        assertEquals("1", jeno.getDocumentElement().getAttribute("failures"));
 
-        Element failure = first(mj, "failure");
+        Element failure = first(jeno, "failure");
         assertTrue(failure.getAttribute("message").contains("expected-text"),
                 failure.getAttribute("message"));
         assertTrue(failure.getAttribute("type").contains("AssertionError"),

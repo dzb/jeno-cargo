@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The uber-jar's merge rules (DESIGN.md: 内置零依赖): services merge
- * line-by-line, signatures and module-info drop, the manifest is mj's own,
+ * line-by-line, signatures and module-info drop, the manifest is jeno's own,
  * and {@code java -jar} runs it.
  */
 class PackageTest {

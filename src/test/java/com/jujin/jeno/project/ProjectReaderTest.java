@@ -31,7 +31,7 @@ class ProjectReaderTest {
             "com.example:lib-a" = "1.0.0"
 
             [scripts]
-            dev = "mj run app.Main"
+            dev = "jeno run app.Main"
             """);
 
         assertEquals("demo", project.name());

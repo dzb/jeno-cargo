@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The built-in runner (node:test's shape): compile src/test/java against the
- * closure plus mj itself, run every @JenoTest, one line per failure, exit 1 on
+ * closure plus jeno itself, run every @JenoTest, one line per failure, exit 1 on
  * any failure.
  */
 class TestRunnerTest {

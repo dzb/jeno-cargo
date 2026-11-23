@@ -16,12 +16,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The dist layout contract: {@code lib/} holds ONE jar — mj merged with its
+ * The dist layout contract: {@code lib/} holds ONE jar — jeno merged with its
  * main runtime closure — and artifacts explicitly named in
  * {@code [toolchain].jars} ship apart under {@code lib/toolchain/}, loaded
  * only by the forked test JVM.
  *
- * <p>freeway is mj's skeleton, not a swappable dependency: a user never picks
+ * <p>freeway is jeno's skeleton, not a swappable dependency: a user never picks
  * a different freeway-ioc. Shipping nine jars for that is the opposite of
  * light.
  */

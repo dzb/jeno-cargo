@@ -96,9 +96,7 @@ public final class ReleaseCommand implements Command {
 
     @Override
     public int execute(List<String> args) {
-        if (ProjectFiles.rejectLegacy(projectDir)) {
-            return 1;
-        }
+        ProjectFiles.rejectLegacy(projectDir);
         boolean json = args.contains("--json");
         boolean dryRun = args.contains("--dry-run");
         List<String> cleaned = args.stream()

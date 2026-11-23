@@ -54,7 +54,7 @@ class BuildRunTest {
         assertTrue(Files.exists(dir.resolve("target/classes/demo/Main.class")),
                 "the compiled class lands in target/classes");
 
-        assertEquals(0, run.execute(java.util.List.of("demo.Main")), "mj run executes the main");
+        assertEquals(0, run.execute(java.util.List.of("demo.Main")), "jeno run executes the main");
     }
 
     @Test

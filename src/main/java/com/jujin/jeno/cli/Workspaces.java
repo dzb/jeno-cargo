@@ -56,7 +56,7 @@ public final class Workspaces {
             }
             Path legacy = dir.resolve(LegacyNames.WORKSPACE);
             if (Files.isRegularFile(legacy)) {
-                throw new WorkspaceException(LegacyNames.workspace(dir));
+                throw new LegacyNames.LegacyException(LegacyNames.workspace(dir));
             }
             dir = dir.getParent();
         }
@@ -184,7 +184,7 @@ public final class Workspaces {
     private static JenoProject readProject(Path root, Path module) {
         String legacy = ProjectFiles.legacyProblem(module);
         if (legacy != null) {
-            throw new WorkspaceException(legacy);
+            throw new LegacyNames.LegacyException(legacy);
         }
         try {
             return ProjectReader.parse(Files.readString(module.resolve("jeno.toml")));
@@ -271,7 +271,7 @@ public final class Workspaces {
             }
             if (!Files.isRegularFile(module.resolve("jeno.toml"))) {
                 if (Files.isRegularFile(module.resolve(LegacyNames.MANIFEST))) {
-                    throw new WorkspaceException(LegacyNames.manifest(module));
+                    throw new LegacyNames.LegacyException(LegacyNames.manifest(module));
                 }
                 throw new WorkspaceException(at(file, modulesSite)
                         + "module '" + modulePath + "' has no jeno.toml");

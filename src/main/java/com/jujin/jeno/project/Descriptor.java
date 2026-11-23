@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A mj-native release descriptor ({@code {artifact}-{version}.jeno.toml}) —
+ * A jeno-native release descriptor ({@code {artifact}-{version}.jeno.toml}) —
  * SPEC.md §3's closed schema as data. The descriptor travels next to the jar
  * and carries only facts: its own dependencies, its java requirement, which
  * of its earlier versions the author retracted, and the identity facts a

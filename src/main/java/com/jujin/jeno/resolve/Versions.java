@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  * on a fixed ladder ({@code alpha < beta < milestone < rc = cr < snapshot <
  * release < sp}, with {@code ga}/{@code final} equal to the release), unknown
  * strings sort between the pre-release qualifiers and the release, and absent
- * tokens pad as zero. mj-native versions are semver, enforced where they
+ * tokens pad as zero. jeno-native versions are semver, enforced where they
  * enter (tags, overrides).
  *
  * <p>{@code majorOf} is the best-effort half of the cross-major rule: a
@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
  */
 public final class Versions {
 
-    /** mj-native semver: {@code X.Y.Z} with an optional {@code -prerelease}. */
+    /** jeno-native semver: {@code X.Y.Z} with an optional {@code -prerelease}. */
     private static final Pattern NATIVE_SEMVER =
             Pattern.compile("\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.]+)?");
 
@@ -62,7 +62,7 @@ public final class Versions {
         }
     }
 
-    /** Whether a version is the semver shape mj-native releases must carry. */
+    /** Whether a version is the semver shape jeno-native releases must carry. */
     public static boolean isNativeSemver(String version) {
         return NATIVE_SEMVER.matcher(version).matches();
     }

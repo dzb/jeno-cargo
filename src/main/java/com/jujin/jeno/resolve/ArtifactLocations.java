@@ -8,7 +8,7 @@ import java.util.Map;
 
 /**
  * The one place that turns coordinates into URLs — Maven's repository layout
- * and mj-native release layout, over three base kinds: the Central default,
+ * and jeno-native release layout, over three base kinds: the Central default,
  * an https named repository, and a {@code local:} directory (a Maven-layout
  * folder on disk — the self-bootstrap channel of DESIGN.md Q9).
  *
@@ -136,7 +136,7 @@ public final class ArtifactLocations {
     }
 
     /**
-     * The mj-native release layout:
+     * The jeno-native release layout:
      * {@code host/owner/repo/releases/download/tag/repo-version.ext}.
      */
     public static String releaseFile(

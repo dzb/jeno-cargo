@@ -17,7 +17,7 @@ final class VendoredToolchain {
     private VendoredToolchain() {
     }
 
-    /** Starts the loopback and points {@code mj.central.base} at it. */
+    /** Starts the loopback and points {@code jeno.central.base} at it. */
     static AutoCloseable start() throws IOException {
         com.sun.net.httpserver.HttpServer central =
                 com.sun.net.httpserver.HttpServer.create(

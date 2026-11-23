@@ -35,8 +35,8 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * mj add: one line into [deps], an immediate re-lock against a loopback
- * Central (the {@code mj.central.base} override is the mirror/test channel),
+ * jeno add: one line into [deps], an immediate re-lock against a loopback
+ * Central (the {@code jeno.central.base} override is the mirror/test channel),
  * and the shape/rule errors surface before anything is written.
  */
 class AddCommandTest {
@@ -81,7 +81,7 @@ class AddCommandTest {
         }
     }
 
-    /** A loopback Central serving one pom; the property points mj at it. */
+    /** A loopback Central serving one pom; the property points jeno at it. */
     private void serveCentralPom(String pomXml) throws IOException {
         byte[] body = pomXml.getBytes();
         central = HttpServer.create(new InetSocketAddress("localhost", 0), 0);

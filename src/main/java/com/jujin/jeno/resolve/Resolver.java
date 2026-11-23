@@ -40,7 +40,7 @@ import java.util.TreeMap;
  *       subtree removed under one path still enters through another.</li>
  *   <li><b>Semantic-aware MVS</b> — per id, same major takes the max
  *       (Maven ordering); a cross-major demand is a hard conflict with both
- *       paths named. Overrides win first, and retracted mj-native versions
+ *       paths named. Overrides win first, and retracted jeno-native versions
  *       drop out unless the consumer pinned them directly.</li>
  *   <li><b>Depth budget over the longest path</b> — a node's depth is the
  *       longest chain that reaches it (the honest reading of "how deep is
@@ -372,7 +372,7 @@ public final class Resolver {
                         .distinct()
                         .toList();
 
-                // Retracted mj-native versions drop out — unless the consumer
+                // Retracted jeno-native versions drop out — unless the consumer
                 // pinned one directly (explicit choice beats author retraction).
                 Set<String> retracted = new HashSet<>();
                 Set<String> declaredVersions = new HashSet<>();
@@ -433,7 +433,7 @@ public final class Resolver {
             if ((species == Species.GH || species == Species.NAMED)
                     && !Versions.isNativeSemver(version)) {
                 throw new ResolveException("[overrides]." + id + " = \"" + version
-                        + "\" — an mj-native override must be semver (1.2.3, 1.2.3-rc1)");
+                        + "\" — an jeno-native override must be semver (1.2.3, 1.2.3-rc1)");
             }
             if (species == Species.CENTRAL
                     && (version.contains("${") || version.startsWith("[") || version.startsWith("(")

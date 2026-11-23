@@ -123,6 +123,11 @@ public final class DoctorCommand implements Command {
 
         if (!modules.isEmpty()) {
             List<CheckResult> hints = new ArrayList<>();
+            if (Files.isRegularFile(root.resolve(LegacyNames.WORKSPACE))
+                    && Files.isRegularFile(root.resolve(Workspaces.FILE))) {
+                hints.add(CheckResult.skipped("legacy-workspace",
+                        LegacyNames.workspaceIgnored(root)));
+            }
             Path legacyHome = LegacyNames.legacyHome();
             if (Files.isDirectory(legacyHome)) {
                 hints.add(CheckResult.skipped("legacy-home",
@@ -133,7 +138,11 @@ public final class DoctorCommand implements Command {
                 hints.add(CheckResult.skipped("legacy-env",
                         LegacyNames.environmentHint(legacyEnv)));
             }
-            modules.getFirst().checks().addAll(hints);
+            if (modules.isEmpty()) {
+                modules.add(new ModuleReport(".", root, new ArrayList<>(hints), null));
+            } else {
+                modules.getFirst().checks().addAll(hints);
+            }
         }
 
         List<PathReport> paths = List.of(

@@ -60,7 +60,7 @@ class LegacyNamesTest {
     void anOldWorkspaceFileNamesTheRename() throws Exception {
         Files.writeString(dir.resolve("mjm.ws.toml"), "[ws]\nmodules = []\n");
 
-        var thrown = assertThrows(Workspaces.WorkspaceException.class,
+        var thrown = assertThrows(LegacyNames.LegacyException.class,
                 () -> Workspaces.read(dir));
         assertTrue(thrown.getMessage().contains("mv mjm.ws.toml jeno.ws.toml"),
                 thrown.getMessage());
@@ -104,6 +104,131 @@ class LegacyNamesTest {
     }
 
     @Test
+    void jsonModeEmitsOneLegacyNameDocument() throws Exception {
+        Files.writeString(dir.resolve("mjm.toml"), """
+                [project]
+                name = "old"
+                version = "1.0.0"
+                """);
+        ArtifactStore store = new ArtifactStore(dir.resolve("store"));
+        CommandRunner runner = new CommandRunner(List.of(new BuildCommand(store, dir)));
+        PrintStream originalOut = System.out;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        int exit;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            exit = runner.run("--json", "build");
+        } finally {
+            System.setOut(originalOut);
+        }
+
+        assertEquals(1, exit);
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                out.toString(StandardCharsets.UTF_8).strip());
+        assertEquals("error", json.getString("status"));
+        assertEquals(1, json.getInt("exitCode"));
+        assertEquals("LEGACY_NAME",
+                json.getArray("diagnostics").getObject(0).getString("code"));
+        assertTrue(json.getArray("diagnostics").getObject(0).getString("message")
+                .contains("mv mjm.toml jeno.toml"));
+    }
+
+    @Test
+    void anOldLockSourceFailsBuildAndInfoWithTheSameSentence() throws Exception {
+        Files.writeString(dir.resolve("jeno.toml"), """
+                [project]
+                name = "old"
+                version = "1.0.0"
+                """);
+        Files.writeString(dir.resolve("jeno.lock"), """
+                [[artifacts]]
+                id = "com.example:lib"
+                version = "1.0.0"
+                source = "mjm:https://host/"
+                url = "https://host/lib-1.0.0.jar"
+                sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+                depth = 1
+                """);
+        ArtifactStore store = new ArtifactStore(dir.resolve("store"));
+        for (Command command : List.of(new BuildCommand(store, dir),
+                new InfoCommand(store, dir))) {
+            CommandRunner runner = new CommandRunner(List.of(command));
+            Result result = capture(() -> command instanceof InfoCommand
+                    ? runner.run("info", "com.example:lib")
+                    : runner.run("build"));
+            assertEquals(1, result.exit());
+            assertTrue(result.err().contains("com.example:lib"), result.err());
+            assertTrue(result.err().contains("jeno lock"), result.err());
+        }
+    }
+
+    private static Result capture(java.util.function.IntSupplier action) {
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        int exit;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
+            exit = action.getAsInt();
+        } finally {
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+        }
+        return new Result(exit, out.toString(StandardCharsets.UTF_8),
+                err.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void jsonLockAndTreeAlsoEmitLegacyName() throws Exception {
+        Files.writeString(dir.resolve("mjm.toml"), """
+                [project]
+                name = "old"
+                version = "1.0.0"
+                """);
+        ArtifactStore store = new ArtifactStore(dir.resolve("store"));
+        LockService lockService = new LockService(store, null, null);
+        assertLegacyJson(new LockCommand(lockService, dir));
+        assertLegacyJson(new TreeCommand(store, null, null, dir));
+    }
+
+    private void assertLegacyJson(Command command) {
+        CommandRunner runner = new CommandRunner(List.of(command));
+        PrintStream originalOut = System.out;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        int exit;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            exit = runner.run("--json", command.name());
+        } finally {
+            System.setOut(originalOut);
+        }
+        assertEquals(1, exit);
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                out.toString(StandardCharsets.UTF_8).strip());
+        assertEquals("LEGACY_NAME",
+                json.getArray("diagnostics").getObject(0).getString("code"));
+    }
+
+    @Test
+    void anOldLockSourceIsNotSilentlyAccepted() throws Exception {
+        var thrown = assertThrows(RuntimeException.class, () ->
+                com.jujin.jeno.store.LockFileReader.read("""
+                        [[artifacts]]
+                        id = "com.example:lib"
+                        version = "1.0.0"
+                        source = "mjm:https://host/"
+                        url = "https://host/lib-1.0.0.jar"
+                        sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+                        depth = 1
+                        """));
+        assertTrue(thrown.getMessage().contains("com.example:lib"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("jeno:"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("jeno lock"), thrown.getMessage());
+    }
+
+    @Test
     void onlyLegacyNamesMayContainTheOldSpelling() throws Exception {
         Path main = Path.of("src/main/java");
         try (var stream = Files.walk(main)) {
@@ -121,6 +246,7 @@ class LegacyNamesTest {
 
     private Result runBuild() {
         ArtifactStore store = new ArtifactStore(dir.resolve("store"));
+        CommandRunner runner = new CommandRunner(List.of(new BuildCommand(store, dir)));
         PrintStream originalOut = System.out;
         PrintStream originalErr = System.err;
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -129,7 +255,7 @@ class LegacyNamesTest {
         try {
             System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
             System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
-            exit = new BuildCommand(store, dir).execute(List.of());
+            exit = runner.run("build");
         } finally {
             System.setOut(originalOut);
             System.setErr(originalErr);

@@ -177,6 +177,14 @@ public final class CommandRunner {
         int exit;
         try {
             exit = command.execute(List.copyOf(rest), List.copyOf(passthrough));
+        } catch (LegacyNames.LegacyException e) {
+            if (json) {
+                JsonResult.error(command.name(), 1, "LEGACY_NAME", e.getMessage())
+                        .status("error").emit(1);
+            } else {
+                System.err.println(Ui.errPrefix() + e.getMessage());
+            }
+            return 1;
         } catch (RuntimeException e) {
             if (!json) {
                 throw e;

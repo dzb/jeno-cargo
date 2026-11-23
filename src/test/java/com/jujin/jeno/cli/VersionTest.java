@@ -80,7 +80,7 @@ class VersionTest {
                 }
             }
             """);
-        // a tiny probe class that reads the same resource mj reads
+        // a tiny probe class that reads the same resource jeno reads
         Files.writeString(dir.resolve("src/main/java/demo/VersionProbe.java"), """
             package demo;
 
@@ -146,7 +146,7 @@ class VersionTest {
     void aRunningMjAlwaysNamesItself() {
         // whatever layout started this JVM, the answer is never blank: either
         // the resource is present (a build wrote it) or it honestly says dev
-        assertFalse(Version.current().isBlank(), "a running mj always names itself");
+        assertFalse(Version.current().isBlank(), "a running jeno always names itself");
         assertTrue(Version.UNKNOWN.equals(Version.current())
                         || Version.current().matches("\\d+\\.\\d+\\.\\d+.*"),
                 "either a real version or the honest 'dev', got " + Version.current());

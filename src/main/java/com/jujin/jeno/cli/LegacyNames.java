@@ -26,6 +26,18 @@ public final class LegacyNames {
 
     private LegacyNames() {}
 
+    /** Dedicated failure so the CLI can emit one structured JSON error in JSON mode. */
+    public static final class LegacyException extends RuntimeException {
+        public LegacyException(String message) {
+            super(message);
+        }
+    }
+
+    public static String lockSource(String id, String source) {
+        return "jeno.lock row '" + id + "' uses the old " + source + " source — the "
+                + REPOSITORY_PREFIX + " family is now jeno:; update jeno.toml and run jeno lock";
+    }
+
     public static String manifest(Path dir) {
         return "found an mjm-era project file " + dir.resolve(MANIFEST)
                 + " — rename it and relock: mv " + MANIFEST + " jeno.toml && jeno lock";
@@ -39,6 +51,11 @@ public final class LegacyNames {
     public static String workspace(Path dir) {
         return "found an mjm-era workspace file " + dir.resolve(WORKSPACE)
                 + " — rename it: mv " + WORKSPACE + " jeno.ws.toml";
+    }
+
+    public static String workspaceIgnored(Path dir) {
+        return "old " + dir.resolve(WORKSPACE) + " exists but jeno.ws.toml wins in "
+                + dir + " — delete or rename the old file";
     }
 
     public static String repositoryType() {
