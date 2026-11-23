@@ -136,6 +136,13 @@ public final class ReleaseCommand implements Command {
             return 1;
         }
 
+        if (plan.repository != null && plan.repository.isPlainHttp()
+                && !plan.repository.isLoopbackNetwork()) {
+            System.err.println("warning: releasing over plain HTTP ("
+                    + plan.repository.declaration() + ") — the traffic and MJM_PUBLISH_TOKEN"
+                    + " are not encrypted");
+        }
+
         Path releaseDir = projectDir.resolve(RELEASE);
         List<Path> files;
         try {

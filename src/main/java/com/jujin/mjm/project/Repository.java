@@ -37,8 +37,8 @@ public record Repository(String name, Layout layout, Transport transport,
 
     /** Where the location lives. */
     public enum Transport {
-        /** {@code https://} (loopback {@code http://} is the test/dev exception). */
-        HTTPS,
+        /** A network location: {@code https://}, or plain {@code http://} on a private network. */
+        NETWORK,
         /** A directory on this machine. */
         LOCAL
     }
@@ -67,9 +67,15 @@ public record Repository(String name, Layout layout, Transport transport,
             }
             return new Repository(name, layout, Transport.LOCAL, declaration, path, null);
         }
-        if (rest.startsWith("https://") || loopback(rest)) {
-            return new Repository(name, layout, Transport.HTTPS, declaration, null,
+        if (rest.startsWith("https://") || isLocalNetworkHttp(rest)) {
+            return new Repository(name, layout, Transport.NETWORK, declaration, null,
                     rest.endsWith("/") ? rest : rest + "/");
+        }
+        if (rest.startsWith("http://")) {
+            throw new IllegalArgumentException("plain http is only allowed on a private network"
+                    + " (localhost/127/8, 10/8, 172.16-31, 192.168/16, 169.254/16, IPv6 ::1,"
+                    + " fc00::/7, fe80::/10) — an explicit IP address, not a hostname; use"
+                    + " https:// for public hosts — got '" + declaration + "'");
         }
         throw new IllegalArgumentException(twoShapes());
     }
@@ -102,10 +108,12 @@ public record Repository(String name, Layout layout, Transport transport,
             throw new IllegalArgumentException("a repository needs a url: https://… or a directory");
         }
         String location = url.strip();
-        boolean network = location.startsWith("https://") || loopback(location);
-        if (location.startsWith("http://") && !loopback(location)) {
+        boolean network = location.startsWith("https://") || isLocalNetworkHttp(location);
+        if (location.startsWith("http://") && !isLocalNetworkHttp(location)) {
             throw new IllegalArgumentException(
-                    "url must be https://… (loopback http is for tests only) or a directory");
+                    "url must be https://… , plain http on a private network"
+                    + " (localhost/10/172.16-31/192.168/169.254/IPv6 ULA or link-local),"
+                    + " or a directory");
         }
         if (location.startsWith("mjm:") || location.startsWith("local:")) {
             throw new IllegalArgumentException(
@@ -114,15 +122,102 @@ public record Repository(String name, Layout layout, Transport transport,
         }
         if (network) {
             String declaration = (layout == Layout.MJM ? "mjm:" : "") + location;
-            return new Repository(name, layout, Transport.HTTPS, declaration, null,
+            return new Repository(name, layout, Transport.NETWORK, declaration, null,
                     location.endsWith("/") ? location : location + "/");
         }
         String declaration = (layout == Layout.MJM ? "mjm:" : "") + "local:" + location;
         return new Repository(name, layout, Transport.LOCAL, declaration, location, null);
     }
 
-    private static boolean loopback(String url) {
-        return url.startsWith("http://localhost") || url.startsWith("http://127.0.0.1");
+    /**
+     * Plain {@code http://} is accepted only for literal private-network hosts:
+     * localhost, 127/8, 10/8, 172.16/12, 192.168/16, 169.254/16, IPv6 ::1,
+     * fc00::/7 and fe80::/10. No DNS: a hostname such as repo.example is
+     * refused, because resolving it would decide the security policy remotely.
+     */
+    public static boolean isLocalNetworkHttp(String url) {
+        if (url == null || !url.startsWith("http://")) {
+            return false;
+        }
+        String host;
+        try {
+            host = java.net.URI.create(url).getHost();
+        } catch (IllegalArgumentException notAUrl) {
+            return false;
+        }
+        if (host == null) {
+            return false;
+        }
+        if (host.startsWith("[") && host.endsWith("]")) {
+            host = host.substring(1, host.length() - 1);
+        }
+        if (host.equalsIgnoreCase("localhost")) {
+            return true;
+        }
+        if (host.contains(":")) {
+            return privateIpv6(host);
+        }
+        String[] parts = host.split("\\.");
+        if (parts.length != 4) {
+            return false;
+        }
+        int[] octets = new int[4];
+        for (int i = 0; i < 4; i++) {
+            try {
+                octets[i] = Integer.parseInt(parts[i]);
+            } catch (NumberFormatException e) {
+                return false;
+            }
+            if (octets[i] < 0 || octets[i] > 255) {
+                return false;
+            }
+        }
+        return octets[0] == 127
+                || octets[0] == 10
+                || (octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31)
+                || (octets[0] == 192 && octets[1] == 168)
+                || (octets[0] == 169 && octets[1] == 254);
+    }
+
+    /** Whether a plain-http URL is loopback (no encryption warning needed). */
+    public static boolean isLoopbackHttp(String url) {
+        if (url == null || !url.startsWith("http://")) {
+            return false;
+        }
+        String host;
+        try {
+            host = java.net.URI.create(url).getHost();
+        } catch (IllegalArgumentException notAUrl) {
+            return false;
+        }
+        if (host == null) {
+            return false;
+        }
+        if (host.startsWith("[") && host.endsWith("]")) {
+            host = host.substring(1, host.length() - 1);
+        }
+        return host.equalsIgnoreCase("localhost") || host.equals("::1") || host.startsWith("127.");
+    }
+
+    private static boolean privateIpv6(String host) {
+        String normalized = host.toLowerCase(java.util.Locale.ROOT);
+        if (normalized.equals("::1")) {
+            return true;
+        }
+        String first = normalized.startsWith("::") ? "" : normalized.split(":")[0];
+        if (first.length() >= 2) {
+            int byte0 = Integer.parseInt(first.substring(0, 2), 16);
+            int byte1 = first.length() >= 4
+                    ? Integer.parseInt(first.substring(2, 4), 16)
+                    : Integer.parseInt(first.substring(2), 16) << 4;
+            if ((byte0 & 0xfe) == 0xfc) {
+                return true;  // fc00::/7
+            }
+            if (byte0 == 0xfe && (byte1 & 0xc0) == 0x80) {
+                return true;  // fe80::/10
+            }
+        }
+        return false;
     }
 
     private static String twoShapes() {
@@ -134,6 +229,16 @@ public record Repository(String name, Layout layout, Transport transport,
 
     public boolean isLocal() {
         return transport == Transport.LOCAL;
+    }
+
+    /** Whether this is a plain-http network location (never true for https/local). */
+    public boolean isPlainHttp() {
+        return networkBase != null && networkBase.startsWith("http://");
+    }
+
+    /** Whether a plain-http location is loopback (no encryption warning needed). */
+    public boolean isLoopbackNetwork() {
+        return isPlainHttp() && isLoopbackHttp(networkBase);
     }
 
     public boolean isMjmLayout() {

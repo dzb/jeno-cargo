@@ -114,16 +114,16 @@ class PublishToHostTest {
     }
 
     @Test
-    void aNonLoopbackPlainHttpMjmRepositoryIsRejected() throws Exception {
+    void aPublicPlainHttpMjmRepositoryIsRejected() throws Exception {
         project();
         ArtifactStore store = new ArtifactStore(dir.resolve("store"));
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
         assertEquals(0, new PackageCommand(store, dir).execute(List.of()));
 
-        Result result = publish("mjm:http://192.168.1.1/");
+        Result result = publish("mjm:http://203.0.113.1/");
 
         assertEquals(1, result.exit());
-        assertTrue(result.err().contains("mjm:local:"), result.err());
+        assertTrue(result.err().contains("private network"), result.err());
     }
 
     // ------------------------------------------------------------------
