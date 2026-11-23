@@ -72,7 +72,7 @@ string-array  = "[" ws basic-string *( "," ws basic-string ) [","] ws "]"
 | 字段 | 类型 | 必填 | 规则 |
 |---|---|---|---|
 | `name` | 字符串 | 是 | `^[a-z][a-z0-9-]*$`(用作 mjm 原生发布的 artifact 名) |
-| `group` | 字符串 | 否 | 反向域名 id(`com.jujin8.mjm`)。发布到 Maven 布局主机的 **路径必需**(路径按 group 展开);写入描述符时它只是**标识事实**(`mjm info` 展示)。原生工件一律用工件名寻址,不存在 `group:artifact` 的形式 |
+| `group` | 字符串 | 否 | 反向域名 id(`com.jujin8.mjm`)。写入描述符时它只是**标识事实**(`mjm info` 展示);mjm 只发布 mjm 布局,**不写 Maven 布局**,所以它不参与任何发布路径。消费 Maven 仓库时坐标仍是 `group:artifact`(读取侧,不变)。原生工件一律用工件名寻址,不存在 `group:artifact` 的形式 |
 | `version` | 字符串 | 是 | mjm 原生发布时必须 semver(§2.4) |
 | `main` | 字符串 | 否 | 主类全名。`mjm run` 缺参时的入口;`mjm package` 写进 MANIFEST 的 `Main-Class`;`mjm bundle` 写进 launcher |
 | `summary` | 字符串 | 否 | 一句话说明。写入发布描述符,由 `mjm info` 展示 |

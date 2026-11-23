@@ -256,20 +256,18 @@ public final class PublishCommand implements Command {
     // ------------------------------------------------------------------
 
     /**
-     * Publishes the triple to an arbitrary http(s) host using Maven's
-     * repository layout: {@code base/group/path/artifact/version/artifact-version.ext}.
-     * The same layout {@code [repos]} reads, so a library published here is
-     * consumed with nothing more than a {@code [repos]} entry — no platform,
-     * no account, no registry.
+     * Publishes the triple to an mjm-layout repository over HTTP:
+     * {@code <base>/<name>/<version>/<name>-<version>.{jar,mjm.toml,sha256}}.
+     * The same two-level layout {@code [repos]} reads for an {@code mjm:}
+     * entry, so a library published here needs no platform, account or registry
+     * — and no {@code [project].group}.
      *
-     * <p>Upload is HTTP PUT (WebDAV semantics). It works against any server
-     * that accepts PUT — nginx with dav_module, Apache mod_dav, most object
-     * storage gateways. mjm speaks exactly one upload protocol on purpose: it
-     * cannot know every host's API, and inventing an adapter per backend is
-     * how a build tool becomes a deployment platform.
-     *
-     * <p>Requires {@code [project].group}: the layout is group-based, and
-     * without one there is no path to write to.
+     * <p>Upload is HTTP PUT (WebDAV semantics), one file per request. A host
+     * that accepts PUT is enough (nginx with dav_module, Apache mod_dav, most
+     * object-storage gateways); {@code MJM_PUBLISH_TOKEN}, when set, is sent as
+     * a bearer token. mjm speaks exactly one upload protocol on purpose — and
+     * it writes no POM, which is why a Maven-layout target is not accepted at
+     * all.
      */
     private int uploadToMjmRepository(Repository repository, MjProject project, Path dist,
                                       String jarName, String descriptorName, String shaName) {

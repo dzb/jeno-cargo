@@ -131,7 +131,7 @@ dev = "mjm run app.Main"
 - `gitee:` 物种已移除(2026-11-22):附件匿名下载需令牌;替代是裸 URL 叶子或自建主机的 `[repos]`
 - `[deps.{repo}]` 分区写法保留可读,但已是 legacy(`mjm add` 只产生值形态)
 - `mjm:` 仓库:`[repos] mine = "mjm:https://…"`,两层布局 `<base>/<name>/<version>/<name>-<version>.{jar,mjm.toml,sha256}`,
-  发布与消费都不需要 `[project].group`;元数据走描述符(与 gh: 同一条解析路径),只支持 https
+  发布与消费都不需要 `[project].group`;元数据走描述符(与 gh: 同一条解析路径);传输支持 `mjm:https://` 与 `mjm:local:`
 - 版本一律精确钉定,**不支持 version ranges**
 - V2 增强(GOPROXY 先例):`[repos]` 支持回退链与私库排除(排期见 §12"Go 吸收"行,语法届时补进 SPEC)
 
@@ -280,8 +280,9 @@ mylib-1.2.0.mjm.toml     ← 描述符:自己的 deps、java 版本要求(schema
 mylib-1.2.0.sha256
 ```
 
-发布目标:GitHub Releases(`gh:owner/repo`)、`mjm:` 仓库(`mjm:https://host/`,两层布局、无需 group)、
-Maven 布局主机(`https://host/`,legacy,需要 `[project].group`)。
+发布目标只有三种:GitHub Releases(`gh:owner/repo`)、`mjm:` 仓库(`mjm:https://host/`,两层布局、
+无需 group)、仓内目录(`mjm:local:<dir>`);无 target 时只准备 `target/dist/` 三件套。
+Maven 布局主机(`https://host/`)是**只读源**,不是发布目标——mjm 不写 POM,发出去两边都读不回来。
 
 有描述符 = 完整公民(可传递解析);无描述符的裸 jar = 叶子。
 描述符支持 `[retract]` 作者端撤回(SPEC §3.4)——与 `[overrides]`(消费端,Q2)凑成一对:坏版本死得快、死得可见。

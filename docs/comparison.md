@@ -147,8 +147,8 @@ uv 的 `.python-version` 本质是「工具链版本进仓库」;mjm 的 `[java]
 零成本做到同样隔离,并且多了一条 pnpm 没有的规则(深度预算)。
 
 **发布**——cargo 的 registry 选择(`registry` 属性)与依赖声明是两套;mjm 的
-`gh:owner/repo@tag` / `mine:1.2.3` / 裸 URL 与 `publish gh:` / `publish mjm:` / `publish https://`
-是**同一套语法**。横向对比里这也是独一份。
+`gh:owner/repo@tag` / `mine:1.2.3` / 裸 URL 与 `publish gh:` / `publish mjm:` / `publish mjm:local:`
+是**同一套语法**(Maven 布局可读但不可发布)。横向对比里这也是独一份。
 
 ---
 
