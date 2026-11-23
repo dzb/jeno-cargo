@@ -2,6 +2,7 @@ package com.jujin.mjm.cli;
 
 import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.mjm.pom.PomMigration;
+import com.jujin.mjm.pom.PomSource;
 import com.jujin.mjm.project.ProjectReader;
 
 import java.io.IOException;
@@ -27,10 +28,17 @@ import java.util.List;
 public final class InitCommand implements Command {
 
     private final Path projectDir;
+    private final PomSource pomSource;
+
+    /** Local-only init (tests and callers that have no store). */
+    public InitCommand(Path projectDir) {
+        this(projectDir, null);
+    }
 
     @Inject
-    public InitCommand(Path projectDir) {
+    public InitCommand(Path projectDir, PomSource pomSource) {
         this.projectDir = projectDir;
+        this.pomSource = pomSource;
     }
 
     @Override
@@ -108,7 +116,7 @@ public final class InitCommand implements Command {
             }
             PomMigration.Result result;
             try {
-                result = PomMigration.translate(pom);
+                result = PomMigration.translate(pom, pomSource);
             } catch (RuntimeException e) {
                 System.err.println("mjm: " + e.getMessage());
                 return 1;

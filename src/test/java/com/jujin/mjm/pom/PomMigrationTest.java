@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -373,5 +374,289 @@ class PomMigrationTest {
 
         assertTrue(result.mjToml().contains("\"com.example:sibling\" = \"2.0.0\""),
                 "parent-managed ${project.version} resolved for the child: " + result.mjToml());
+    }
+
+    // ------------------------------------------------------------------
+    // remote parents through a PomSource
+    // ------------------------------------------------------------------
+
+    private static PomSource source(Map<String, String> poms) {
+        return (group, artifact, version, base) -> poms.get(group + ":" + artifact + ":" + version);
+    }
+
+    private static Map<String, String> poms(Object... keyAndPom) {
+        Map<String, String> map = new java.util.LinkedHashMap<>();
+        for (int i = 0; i < keyAndPom.length; i += 2) {
+            map.put((String) keyAndPom[i], (String) keyAndPom[i + 1]);
+        }
+        return map;
+    }
+
+    private static Path child(Path root, String pom) throws java.io.IOException {
+        Path dir = Files.createDirectories(root.resolve("child"));
+        Files.writeString(dir.resolve("pom.xml"), pom);
+        return dir.resolve("pom.xml");
+    }
+
+    @Test
+    void aRemoteParentSuppliesPropertiesAndManagement(@org.junit.jupiter.api.io.TempDir Path root)
+            throws Exception {
+        Map<String, String> poms = poms("com.example:parent:1.0.0", """
+            <project>
+              <groupId>com.example</groupId>
+              <artifactId>parent</artifactId>
+              <version>1.0.0</version>
+              <packaging>pom</packaging>
+              <properties><lib.version>3.2.1</lib.version></properties>
+              <dependencyManagement>
+                <dependencies>
+                  <dependency>
+                    <groupId>com.example</groupId><artifactId>lib</artifactId>
+                    <version>${lib.version}</version>
+                  </dependency>
+                </dependencies>
+              </dependencyManagement>
+            </project>
+            """);
+        Path pom = child(root, """
+            <project>
+              <parent>
+                <groupId>com.example</groupId><artifactId>parent</artifactId>
+                <version>1.0.0</version><relativePath/>
+              </parent>
+              <artifactId>child</artifactId>
+              <dependencies>
+                <dependency><groupId>com.example</groupId><artifactId>lib</artifactId></dependency>
+              </dependencies>
+            </project>
+            """);
+
+        PomMigration.Result result = PomMigration.translate(pom, source(poms));
+
+        assertTrue(result.mjToml().contains("\"com.example:lib\" = \"3.2.1\""),
+                result.mjToml());
+        assertTrue(result.notes().stream().anyMatch(n -> n.contains("read from Central")),
+                result.notes().toString());
+    }
+
+    @Test
+    void aRemoteParentChainIsWalkedParentFirst(@org.junit.jupiter.api.io.TempDir Path root)
+            throws Exception {
+        Map<String, String> poms = poms(
+                "com.example:parent:1.0.0", """
+                    <project>
+                      <parent>
+                        <groupId>com.example</groupId><artifactId>grand</artifactId>
+                        <version>2.0.0</version>
+                      </parent>
+                      <groupId>com.example</groupId><artifactId>parent</artifactId>
+                      <version>1.0.0</version>
+                      <packaging>pom</packaging>
+                      <dependencies>
+                        <dependency>
+                          <groupId>com.example</groupId><artifactId>lib</artifactId>
+                        </dependency>
+                      </dependencies>
+                    </project>
+                    """,
+                "com.example:grand:2.0.0", """
+                    <project>
+                      <groupId>com.example</groupId><artifactId>grand</artifactId>
+                      <version>2.0.0</version>
+                      <packaging>pom</packaging>
+                      <dependencyManagement>
+                        <dependencies>
+                          <dependency>
+                            <groupId>com.example</groupId><artifactId>lib</artifactId>
+                            <version>9.9.9</version>
+                          </dependency>
+                        </dependencies>
+                      </dependencyManagement>
+                    </project>
+                    """);
+        Path pom = child(root, """
+            <project>
+              <parent>
+                <groupId>com.example</groupId><artifactId>parent</artifactId>
+                <version>1.0.0</version><relativePath/>
+              </parent>
+              <artifactId>child</artifactId>
+              <dependencies>
+                <dependency>
+                  <groupId>com.example</groupId><artifactId>lib</artifactId>
+                </dependency>
+              </dependencies>
+            </project>
+            """);
+
+        PomMigration.Result result = PomMigration.translate(pom, source(poms));
+
+        assertTrue(result.mjToml().contains("\"com.example:lib\" = \"9.9.9\""),
+                result.mjToml());
+    }
+
+    @Test
+    void aMissingRemoteParentIsANoteNotAFailure(@org.junit.jupiter.api.io.TempDir Path root)
+            throws Exception {
+        Path pom = child(root, """
+            <project>
+              <parent>
+                <groupId>com.example</groupId><artifactId>absent</artifactId>
+                <version>1.0.0</version><relativePath/>
+              </parent>
+              <artifactId>child</artifactId>
+            </project>
+            """);
+
+        PomMigration.Result result = PomMigration.translate(pom, source(Map.of()));
+
+        assertTrue(result.notes().stream().anyMatch(n -> n.contains("was not found on Central")),
+                result.notes().toString());
+        assertTrue(result.mjToml().contains("name = \"child\""), result.mjToml());
+    }
+
+    @Test
+    void aThrowingSourceIsANote(@org.junit.jupiter.api.io.TempDir Path root) throws Exception {
+        Path pom = child(root, """
+            <project>
+              <parent>
+                <groupId>com.example</groupId><artifactId>parent</artifactId>
+                <version>1.0.0</version><relativePath/>
+              </parent>
+              <artifactId>child</artifactId>
+            </project>
+            """);
+        PomSource offline = (group, artifact, version, base) -> {
+            throw new IllegalStateException("offline: not in the store");
+        };
+
+        PomMigration.Result result = PomMigration.translate(pom, offline);
+
+        assertTrue(result.notes().stream().anyMatch(n -> n.contains("offline: not in the store")),
+                result.notes().toString());
+    }
+
+    @Test
+    void aRemoteParentCycleStops(@org.junit.jupiter.api.io.TempDir Path root) throws Exception {
+        Map<String, String> poms = poms(
+                "com.example:a:1.0.0", """
+                    <project>
+                      <parent>
+                        <groupId>com.example</groupId><artifactId>b</artifactId>
+                        <version>1.0.0</version>
+                      </parent>
+                      <groupId>com.example</groupId><artifactId>a</artifactId>
+                      <version>1.0.0</version>
+                    </project>
+                    """,
+                "com.example:b:1.0.0", """
+                    <project>
+                      <parent>
+                        <groupId>com.example</groupId><artifactId>a</artifactId>
+                        <version>1.0.0</version>
+                      </parent>
+                      <groupId>com.example</groupId><artifactId>b</artifactId>
+                      <version>1.0.0</version>
+                    </project>
+                    """);
+        Path pom = child(root, """
+            <project>
+              <parent>
+                <groupId>com.example</groupId><artifactId>a</artifactId>
+                <version>1.0.0</version><relativePath/>
+              </parent>
+              <artifactId>child</artifactId>
+            </project>
+            """);
+
+        PomMigration.Result result = PomMigration.translate(pom, source(poms));
+
+        assertTrue(result.notes().stream().anyMatch(n -> n.contains("parent cycle")),
+                result.notes().toString());
+    }
+
+    @Test
+    void aSnapshotParentIsNotRequested(@org.junit.jupiter.api.io.TempDir Path root) throws Exception {
+        java.util.concurrent.atomic.AtomicBoolean called = new java.util.concurrent.atomic.AtomicBoolean();
+        PomSource source = (group, artifact, version, base) -> {
+            called.set(true);
+            return null;
+        };
+        Path pom = child(root, """
+            <project>
+              <parent>
+                <groupId>com.example</groupId><artifactId>parent</artifactId>
+                <version>1.0.0-SNAPSHOT</version><relativePath/>
+              </parent>
+              <artifactId>child</artifactId>
+            </project>
+            """);
+
+        PomMigration.Result result = PomMigration.translate(pom, source);
+
+        assertFalse(called.get(), "a snapshot parent is never fetched");
+        assertTrue(result.notes().stream().anyMatch(n -> n.contains("snapshot")),
+                result.notes().toString());
+    }
+
+    @Test
+    void anUnresolvedParentVersionIsNotRequested(@org.junit.jupiter.api.io.TempDir Path root)
+            throws Exception {
+        java.util.concurrent.atomic.AtomicBoolean called = new java.util.concurrent.atomic.AtomicBoolean();
+        PomSource source = (group, artifact, version, base) -> {
+            called.set(true);
+            return null;
+        };
+        Path pom = child(root, """
+            <project>
+              <parent>
+                <groupId>com.example</groupId><artifactId>parent</artifactId>
+                <version>${parent.version}</version><relativePath/>
+              </parent>
+              <artifactId>child</artifactId>
+            </project>
+            """);
+
+        PomMigration.Result result = PomMigration.translate(pom, source);
+
+        assertFalse(called.get(), "a ${...} parent version is never fetched");
+        assertTrue(result.notes().stream().anyMatch(n -> n.contains("unresolved version")),
+                result.notes().toString());
+    }
+
+    @Test
+    void aLocalParentWinsAndTheSourceIsNotCalled(@org.junit.jupiter.api.io.TempDir Path root)
+            throws Exception {
+        Files.writeString(root.resolve("pom.xml"), """
+            <project>
+              <groupId>com.example</groupId><artifactId>parent</artifactId>
+              <version>1.0.0</version>
+              <properties><lib.version>4.0.0</lib.version></properties>
+              <dependencyManagement><dependencies><dependency>
+                <groupId>com.example</groupId><artifactId>lib</artifactId>
+                <version>${lib.version}</version>
+              </dependency></dependencies></dependencyManagement>
+            </project>
+            """);
+        Path pom = child(root, """
+            <project>
+              <parent>
+                <groupId>com.example</groupId><artifactId>parent</artifactId>
+                <version>1.0.0</version>
+              </parent>
+              <artifactId>child</artifactId>
+              <dependencies>
+                <dependency><groupId>com.example</groupId><artifactId>lib</artifactId></dependency>
+              </dependencies>
+            </project>
+            """);
+        PomSource source = (group, artifact, version, base) -> {
+            throw new AssertionError("local parent was available; the source must not be used");
+        };
+
+        PomMigration.Result result = PomMigration.translate(pom, source);
+
+        assertTrue(result.mjToml().contains("\"com.example:lib\" = \"4.0.0\""),
+                result.mjToml());
     }
 }

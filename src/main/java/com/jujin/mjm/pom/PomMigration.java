@@ -1,5 +1,7 @@
 package com.jujin.mjm.pom;
 
+import com.jujin.mjm.resolve.ArtifactLocations;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -54,13 +56,26 @@ public final class PomMigration {
         }
     }
 
-    /** Translates one pom file, following its local parent chain on disk. */
+    /** Translates one pom file, following its local parent chain only. */
     public static Result translate(Path pomFile) {
+        return translate(pomFile, null);
+    }
+
+    /**
+     * Translates one pom file: a local parent is read from disk first; when it
+     * is not there, {@code pomSource} may fetch the declared parent from
+     * Central (through the store, so {@code --offline} and cache rules apply).
+     * A null source means "local only" — the migration still produces a file,
+     * with a note.
+     */
+    public static Result translate(Path pomFile, PomSource pomSource) {
         Map<String, String> properties = new LinkedHashMap<>();
         Map<String, String> managed = new LinkedHashMap<>();
         List<String> notes = new ArrayList<>();
         Set<Path> chain = new LinkedHashSet<>();
-        PomXml.Node project = read(pomFile, properties, managed, notes, chain);
+        Set<String> remoteChain = new LinkedHashSet<>();
+        PomXml.Node project = read(pomFile, pomSource, properties, managed, notes,
+                chain, remoteChain);
         return translate(project, properties, managed, notes);
     }
 
@@ -70,8 +85,9 @@ public final class PomMigration {
         Map<String, String> managed = new LinkedHashMap<>();
         List<String> notes = new ArrayList<>();
         PomXml.Node project = PomXml.parse(pomText);
-        noteParent(project, null, properties, managed, notes, new LinkedHashSet<>());
-        collect(project, properties, managed);
+        noteParent(project, null, null, properties, managed, notes,
+                new LinkedHashSet<>(), new LinkedHashSet<>());
+        collect(project, properties, managed, notes);
         return translate(project, properties, managed, notes);
     }
 
@@ -79,9 +95,10 @@ public final class PomMigration {
     // local parent chain
     // ------------------------------------------------------------------
 
-    private static PomXml.Node read(Path pomFile, Map<String, String> properties,
+    private static PomXml.Node read(Path pomFile, PomSource pomSource,
+                                    Map<String, String> properties,
                                     Map<String, String> managed, List<String> notes,
-                                    Set<Path> chain) {
+                                    Set<Path> chain, Set<String> remoteChain) {
         Path normalized;
         try {
             normalized = pomFile.toRealPath();
@@ -102,15 +119,17 @@ public final class PomMigration {
             throw new PomException("cannot read " + pomFile);
         }
 
-        noteParent(project, pomFile, properties, managed, notes, chain);
-        collect(project, properties, managed);
+        noteParent(project, pomFile, pomSource, properties, managed, notes, chain,
+                remoteChain);
+        collect(project, properties, managed, notes);
         return project;
     }
 
     /** Reads (or reports) the parent, then merges its maps before the child's. */
-    private static void noteParent(PomXml.Node project, Path pomFile,
+    private static void noteParent(PomXml.Node project, Path pomFile, PomSource pomSource,
                                    Map<String, String> properties, Map<String, String> managed,
-                                   List<String> notes, Set<Path> chain) {
+                                   List<String> notes, Set<Path> chain,
+                                   Set<String> remoteChain) {
         PomXml.Node parent = project.first("parent");
         if (parent == null) {
             return;
@@ -138,14 +157,96 @@ public final class PomMigration {
                         + " by hand");
                 return;
             }
-            read(candidate, properties, managed, notes, chain);
+            read(candidate, pomSource, properties, managed, notes, chain, remoteChain);
             addNote(notes, "parent " + declared + " read from " + candidate);
             return;
         }
-        addNote(notes, "parent " + declared + " is not local"
-                + (candidate == null ? "" : " (looked for " + candidate + ")")
-                + " — properties and dependencyManagement it contributed are not resolved;"
-                + " check versions by hand");
+        readRemote(parent, declared, pomSource, properties, managed, notes, remoteChain);
+    }
+
+    /**
+     * Fetches a declared parent from Central. Snapshots and unresolved versions
+     * are never requested; anything that fails stays a note, because migration
+     * must still produce a reviewable file.
+     */
+    private static void readRemote(PomXml.Node parent, String declared, PomSource pomSource,
+                                   Map<String, String> properties, Map<String, String> managed,
+                                   List<String> notes, Set<String> remoteChain) {
+        String group = parent.text("groupId");
+        String artifact = parent.text("artifactId");
+        String version = parent.text("version");
+        if (pomSource == null) {
+            addNote(notes, "parent " + declared + " is not local and no source is available"
+                    + " — properties and dependencyManagement it contributed are not resolved;"
+                    + " check versions by hand");
+            return;
+        }
+        if (group == null || artifact == null || version == null) {
+            addNote(notes, "parent " + declared + " has incomplete coordinates — not fetched");
+            return;
+        }
+        if (version.contains("${")) {
+            addNote(notes, "parent " + declared + " has an unresolved version — not fetched;"
+                    + " pin it by hand");
+            return;
+        }
+        if (version.endsWith("-SNAPSHOT")) {
+            addNote(notes, "parent " + declared + " is a snapshot — Central lookup is skipped;"
+                    + " use the released parent or copy the versions by hand");
+            return;
+        }
+        String key = group + ":" + artifact + ":" + version;
+        if (!remoteChain.add(key)) {
+            addNote(notes, "parent cycle at " + key + " — the chain stops here");
+            return;
+        }
+        String text;
+        try {
+            text = pomSource.pomXml(group, artifact, version, ArtifactLocations.CENTRAL_BASE);
+        } catch (RuntimeException e) {
+            addNote(notes, "parent " + declared + " could not be fetched (" + e.getMessage()
+                    + ") — its properties and dependencyManagement are not resolved;"
+                    + " check versions by hand");
+            return;
+        }
+        if (text == null || text.isBlank()) {
+            addNote(notes, "parent " + declared + " was not found on Central — its properties"
+                    + " and dependencyManagement are not resolved; check versions by hand");
+            return;
+        }
+        PomXml.Node remote;
+        try {
+            remote = PomXml.parse(text);
+        } catch (RuntimeException e) {
+            addNote(notes, "parent " + declared + " could not be parsed (" + e.getMessage()
+                    + ") — check versions by hand");
+            return;
+        }
+        if (!remoteCoordinatesMatch(remote, group, artifact, version)) {
+            addNote(notes, "Central returned different coordinates for parent " + declared
+                    + " — not merged; check versions by hand");
+            return;
+        }
+        addNote(notes, "parent " + declared + " read from Central");
+        // the remote parent may have its own parent: resolve that first
+        noteParent(remote, null, pomSource, properties, managed, notes,
+                new LinkedHashSet<>(), remoteChain);
+        collect(remote, properties, managed, notes);
+    }
+
+    private static boolean remoteCoordinatesMatch(PomXml.Node remote, String group,
+                                                  String artifact, String version) {
+        String remoteGroup = text(remote, "groupId");
+        String remoteVersion = text(remote, "version");
+        PomXml.Node grandparent = remote.first("parent");
+        if (remoteGroup == null && grandparent != null) {
+            remoteGroup = grandparent.text("groupId");
+        }
+        if (remoteVersion == null && grandparent != null) {
+            remoteVersion = grandparent.text("version");
+        }
+        return group.equals(remoteGroup) && artifact.equals(text(remote, "artifactId"))
+                && version.equals(remoteVersion);
     }
 
     /** Whether the file at {@code candidate} really is the declared parent. */
@@ -175,7 +276,7 @@ public final class PomMigration {
     }
 
     private static void collect(PomXml.Node project, Map<String, String> properties,
-                                Map<String, String> managed) {
+                                Map<String, String> managed, List<String> notes) {
         // ${project.version} inside dependencyManagement must resolve to this
         // module's version while its chain is being read, not to whatever a
         // previously-read module set.
@@ -210,6 +311,12 @@ public final class PomMigration {
                 String id = interpolate(dependency.text("groupId"), properties) + ":"
                         + interpolate(dependency.text("artifactId"), properties);
                 String version = interpolate(dependency.text("version"), properties);
+                if ("import".equals(dependency.text("scope"))) {
+                    addNote(notes, "BOM " + id + (version == null ? "" : ":" + version)
+                            + " is imported but not fetched — mjm does not recurse into BOMs;"
+                            + " the versions it pins are not applied, pin them by hand");
+                    continue;
+                }
                 if (version != null && !version.isBlank()) {
                     managed.put(id, version);
                 }
