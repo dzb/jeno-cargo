@@ -1,7 +1,5 @@
 package com.jujin.mjm.cli;
 
-import com.jujin.mjm.project.MjProject;
-import com.jujin.mjm.project.ProjectReader;
 import com.jujin.mjm.project.Repository;
 import com.jujin.mjm.resolve.ArtifactLocations;
 import com.jujin.mjm.resolve.Versions;
@@ -89,19 +87,18 @@ public final class OutdatedCommand implements Command {
                 }
             }
         }
-        MjProject project;
+        // The lock is the only input: it is what build/run/package consume, and
+        // it outlives any particular manifest wording.
         Path lock = projectDir.resolve("mjm.lock");
+        if (!Files.exists(lock)) {
+            System.err.println("mjm: no mjm.lock in " + projectDir + " — run mjm lock first");
+            return 1;
+        }
         List<LockedArtifact> locked;
         try {
-            project = ProjectReader.parse(Files.readString(projectDir.resolve("mjm.toml")));
-            if (!Files.exists(lock)) {
-                System.err.println("mjm: no mjm.lock in " + projectDir + " — run mjm lock first");
-                return 1;
-            }
             locked = LockFileReader.read(Files.readString(lock));
         } catch (IOException e) {
-            System.err.println("mjm: cannot read the project files in " + projectDir
-                    + " — run mjm init?");
+            System.err.println("mjm: cannot read mjm.lock in " + projectDir);
             return 1;
         } catch (RuntimeException e) {
             System.err.println("mjm: " + e.getMessage());
