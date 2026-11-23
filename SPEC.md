@@ -385,7 +385,7 @@ modules = ["libs/core", "apps/web"]
 | 命令 | 契约 |
 |---|---|
 | `mjm init [--pom] [--ws] [--force] [paths...]` | 写 `mjm.toml` 骨架;`--pom` 从 `pom.xml` 迁移并逐条报告不可表达的事实;`--ws` 写 `mjm.ws.toml`(§5),此时 `paths...` 可显式指定模块目录。**工作区根目录拒绝 `init`/`--pom`/`--force`**(exit 1),`--ws` 仍可用 |
-| `mjm add <dep> [ver]` | 写一行 `[deps]` 并立即重锁;值形态:精确版本、`<repo>:<version>`、`gh:owner/repo@tag`、简写 `owner/repo@tag`、裸 `https://...jar` 叶子。**无值只查询**(列版本或搜索),不修改 `mjm.toml`;查询成功当前仍 exit 1(known gap,§9) |
+| `mjm add <key> [value]` | key: `group:artifact`(Central)、裸名(搜索)、`owner/repo@tag`(原生简写)。value: `1.2.3`、`<repo>:1.2.3`、`gh:owner/repo@tag`、裸 `https://...jar`。无 value 时:`group:artifact`/裸名只查询,不写 `mjm.toml`(成功当前 exit 1,known gap §9);`owner/repo@tag` 会写入 `[deps]` 并重锁 |
 | `mjm remove <id>` | 删除一行声明并重锁 |
 | `mjm lock [--check]` | 解析并写出 `mjm.lock`;**总是重解**。`--check` 只在内存生成并与磁盘逐字节比较,不写文件。legacy `--refresh` 是 no-op,不在契约内 |
 | `mjm build` | javac 编译 `src/main/java`,严格可见性 classpath(只含 MAIN 声明);`--release` 取 `[java].version`;processor 走 `-processorpath`。**当前要求至少一个 Java 源**;resource-only 模块会失败(报没有 sources) |
@@ -394,7 +394,7 @@ modules = ["libs/core", "apps/web"]
 | `mjm tree [--json]` | 依赖树 + 深度;**以 `mjm.lock` 为准**:先读锁,再解析 manifest 只为补父子边;id/version/source/depth/scope 任一不一致 → exit 1、至多 10 行差异、不输出图 |
 | `mjm why <id>` | 每个引入路径与深度;同样以锁为准,漂移拒绝画图 |
 | `mjm info <id> [--source]` | 身份/来源/依赖/源码地址;`--source` 取源码树 |
-| `mjm classpath [--test] [--file <path>]` | IDE 用 classpath;默认编译可见性;`--test` 为测试闭包(MAIN + dev,**排除 processor**——与 `mjm test` 一致性的差异见 REMINDS §14);路径指向 store 内容寻址 jar,不拷贝 |
+| `mjm classpath [--test] [--file <path>]` | IDE 用 classpath;默认编译可见性;`--test` 为测试闭包(MAIN + dev,**排除 processor**——与 `mjm test` 的差异见 REMINDS §14);路径指向 store 内容寻址 jar,不拷贝 |
 | `mjm package [--uber] [--main <class>]` | `target/dist/<name>-<version>.jar`;`--uber` 合并闭包输出 `...-uber.jar`;`--main` 只影响本 jar 的 MANIFEST,不影响 `bundle`/`run` 的 `[project].main` |
 | `mjm bundle` | `target/dist/<name>-<version>/`(bin/lib/setup.sh/SHA256SUMS)+ `.tar.gz`。**当前是 mjm 专用安装器**:setup.sh 要求 JDK 25,launcher 是 mjm 品牌(`[project].main` 缺失时用 UsageStub 兜底),`lib/toolchain` 带 test 工具链;不是通用 app bundler |
 | `mjm clean [--target (default) \| --dist]` | 默认整棵删 `target/`;`--dist` 只删 `target/dist/` 保留 classes;永不触碰 store |
@@ -418,6 +418,9 @@ modules = ["libs/core", "apps/web"]
 | 0 | 成功;`outdated` 完成(有更新也是 0);`audit` 无漏洞;`tree`/`why` 一致 |
 | 1 | 失败;`audit` 有漏洞;`lock --check`/`tree`/`why` 漂移;查询失败 |
 | 2 | 用法错误 |
+
+本表描述 mjm 自身的退出码。`run` 会把程序/脚本的退出码原样返回;`test` 会把 fork 出的测试 JVM 的
+退出码原样返回。`why` 找不到 id 是 0(有效的否定答案);`info` 找不到 id 是 1。
 
 ### 6.4 工作区策略
 
@@ -521,7 +524,10 @@ target/dist/<name>-<version>.tar.gz
 **已记录的 known gap(行为修复各自独立成单)**:
 
 - `lock --refresh`:当前二进制仍接受并在 usage 中显示,但它是 **no-op**;契约只列 `--check`。移除是行为单。
-- `add` 无值查询:查询成功的退出码当前是 **1**,与 §6.3 的"成功/查询完成 = 0"不一致;修复是行为单。
+- `add` 无值查询(仅版本列表/搜索):`mjm add "group:artifact"` 与 `mjm add bare-name` 成功当前
+  exit 1,与 §6.3 的"成功 = 0"不一致;修复是行为单。
+  `mjm add owner/repo@tag` 无值是**添加**(写入并重锁),不属于这个 gap;`mjm add owner/repo`(无 tag)
+  是报错,也不是查询。
 
 **其他**:
 
