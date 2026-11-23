@@ -1,5 +1,8 @@
 # mjm — modern java manager
 
+> **DESIGN 是理由,不是契约。** 规范(文件格式、CLI、发行物布局、Maven 解码范围)见
+> [SPEC.md](SPEC.md);两者冲突时以 SPEC 为准。本文只回答"为什么这样定、放弃了什么"。
+
 > mjm:Freeway 生态的包管理器与构建工具。
 > 不是 Maven 的替代品,是 Freeway 系应用生态的包管理器,**恰好能从 Maven Central 进货**。
 > "替代 Maven"是效果,不是目标。
@@ -28,11 +31,12 @@ mjm-0.1.0/
 | 生命周期工具链 | junit 平台等 | 发行目录 lib/toolchain/ | 随发行携带(离线可测) |
 | 用户工程依赖 | mjm.toml 声明的任何东西 | `mjm/store`(XDG cache) | 按需下载,sha256 钉定 |
 
-`mjm selfpackage` 由 mjm 自己的 lockfile 组装发行目录(自举闭环:lock → build → selfpackage)。
+`mjm bundle` 由 mjm 自己的 lockfile 组装发行目录(自举闭环:lock → build → bundle;精确布局见
+[SPEC.md](SPEC.md) §7)。
 启动脚本 `bin/mjm` 展开 `lib/*` 与 `lib/toolchain/*/*/` 到 classpath,并要求 JDK 25(构建生命周期编译)。
 
 
-状态:设计定稿中 · 更新:2026-11-21
+状态:决策与理由(2026-11-23 复核) · 规范见 [SPEC.md](SPEC.md)
 
 ---
 
@@ -73,84 +77,25 @@ mjm 又用严格可见性约束用户项目的依赖边界——**这个工具�
 | D12 | 严格解码,拒绝式解析 | TOML 子集之外/pom 特性子集之外 → 带行号/路径的明确报错,不做猜测式解析 |
 | D13 | `[overrides]` 消费端版本否决权,进 V1 | MVS 自动取最大但不知道"有害"(回归/许可证/更高 JDK);retract 是作者端、overrides 是消费端,凑成一对;也是跨 major 硬冲突的合法出口 |
 | D14 | TOML 解析器落在 freeway-commons(新 `toml` 包),freeway 配置同步支持 `.toml` | 实测配置层:`ConfigFilePlan.Reader` 按扩展名分派,下游全是扁平 `Map<String,String>`(JSON 走 `Maps.flatten`);TOML 展平规则相同,一个分支接入。commons 已有 `json` 包,`toml` 并列;mjm 仅依赖 Freeway,解析器放 mjm 会倒挂;一次实现四处共用(mjm.toml / 描述符 / mjm.lock / application.toml) |
+| D15 | 发布只写 mjm 布局,Maven 布局只读 | mjm 不生成 POM;发一个自己读不回来的目标等于把"发布"变成"丢文件"。同一台静态主机可以装任一布局,协议由 `[repos]` 的 `type` 显式声明,发布侧只接受能回读的三种目标 |
+| D16 | `tree`/`why` 以 `mjm.lock` 为准 | 锁是 `build`/`run`/`package` 实际消费的东西;只解析 manifest 会画出没人构建的图。锁是平表,边由 manifest 补,但 id/version/source/depth/scope 必须逐项一致,否则拒绝出图 |
 
 ---
 
-## 3. mjm.toml 语法规范
+## 3. mjm.toml:为什么是 TOML,以及值形态
 
-> 正式文法、字段定义与校验规则见 [SPEC.md](SPEC.md)。
+manifest 需要注释与节结构,而 JDK 自带的 Properties 用 `:` 作分隔符(会炸掉 Maven 坐标),
+JSON 又不允许注释——TOML 是当前事实标准(Cargo/uv/Python)。**语法、封闭 schema、字段表与
+校验规则全部在 [SPEC.md](SPEC.md) §2**,本文不再复制。
 
-### 3.1 完整示例
-
-```toml
-[project]
-name = "myapp"
-version = "0.1.0"
-
-[java]
-version = 21                            # 目标 JDK major(整数,SPEC §2.1)
-
-[deps]                                  # 依赖:值的形态决定物种
-"com.example:foo" = "1.2.3"             # 形态A:纯版本 → Maven Central
-"mylib" = "gh:user/repo@v1.2.0"         # 形态B:gh: shorthand → GitHub release
-"legacy" = "https://cdn.example.com/legacy-0.9.jar"   # 形态C:URL → 裸 jar,叶子
-
-[repos]                                 # 附加 Maven 布局仓库(可选)
-corp = "https://nexus.corp.internal/repository/maven/"
-
-[deps.corp]                             # 指定仓库的库,单独一节
-"com.corp:internal-lib" = "2.1.0"
-
-[limits]
-max-depth = 2                           # 依赖链预算
-
-[overrides]                             # 版本否决权(可选):MVS 之上全图钉定
-"io.netty:netty-buffer" = "4.1.100"
-
-[scripts]
-dev = "mjm run app.Main"
-```
-
-### 3.2 值形态 → 依赖物种
-
-| 值形态 | 物种 | 元数据 | 传递依赖 |
-|---|---|---|---|
-| `"1.2.3"` | Central | pom.xml(线路格式) | 有 |
-| `"corp:1.2.3"` | 命名仓库(Maven 布局) | pom.xml(线路格式) | 有 |
-| `"mine:1.2.3"` | 命名仓库(`mjm:` 布局) | 同目录的 `.mjm.toml` 描述符 | 有(描述符里的裸名 = 同仓库兄弟) |
-| `"gh:owner/repo@tag"` | mjm 原生 | jar 旁的 `.mjm.toml` 描述符 | 有 |
-| `"https://.../x.jar"` | 裸 URL | 无 | 无(叶子) |
-
-- mjm 原生约定:artifact 名 = repo 名,版本 = tag;展开为
-  `https://github.com/{owner}/{repo}/releases/download/{tag}/{artifact}-{version}.jar`
-
-- `"corp:1.2.3"` 与 `[deps.corp]` 是同一种语义:只在 `corp` 查找、互不回退;值里的仓库名必须已在
-  `[repos]` 声明(否则报错并列出可用仓库名),冒号前不像仓库名的值仍是 central 版本
-- 前缀优先:`gh:` / `https://` 永远先匹配(保留前缀);`gh` 也就不能被 `[repos]` 占用(声明即报错)。
-  `local` / `http` / `https` / `file` 不是保留名
-- `gitee:` 物种已移除(2026-11-22):附件匿名下载需令牌;替代是裸 URL 叶子或自建主机的 `[repos]`
-- `[deps.{repo}]` 分区写法保留可读,但已是 legacy(`mjm add` 只产生值形态)
-- `mjm:` 仓库:`[repos] mine = "mjm:https://…"`,两层布局 `<base>/<name>/<version>/<name>-<version>.{jar,mjm.toml,sha256}`,
-  发布与消费都不需要 `[project].group`;元数据走描述符(与 gh: 同一条解析路径);传输支持 `mjm:https://` 与 `mjm:local:`
-- 版本一律精确钉定,**不支持 version ranges**
-- V2 增强(GOPROXY 先例):`[repos]` 支持回退链与私库排除(排期见 §12"Go 吸收"行,语法届时补进 SPEC)
-
-### 3.3 TOML 子集(自写解析器的实现范围)
-
-支持:
-
-- 节头 `[name]`、`[name.sub]`、表数组 `[[name]]`(lockfile 用)
-- 键:裸键或引号字符串(容纳 `group:artifact` 坐标中的冒号与点)
-- 值:基础字符串 `"..."`、整数、布尔、字符串数组
-- 注释 `#`
-- 文件级 UTF-8
-
-子集之外(多行字符串、内联表、点键语法、日期时间类型等)→ **解析错误,带行号**。
-一份解析器两处复用:`mjm.toml` 与 `mjm.lock`。
-
----
+设计上只有一条值得在这里留理由的规则:**值形态决定物种**。`1.2.3` 是 Central,
+`corp:1.2.3` 是命名仓库,`gh:owner/repo@tag` 是 release,裸 `https://…jar` 是叶子。
+没有第二种声明方式,也没有"默认中央 + 静默回退"——一个值就说明它是什么。
 
 ## 4. 解析语义
+
+精确规则(字段、校验、版本排序、深度预算)见 [SPEC.md](SPEC.md) §2.1、§2.3、§2.4;
+命令与构建的行为契约见 SPEC §6。这里保留流程与理由。
 
 ### 4.1 流程
 
@@ -201,29 +146,13 @@ mjm.lock 写出(每个 artifact:来源、resolved-url、sha256、depth)
 
 ---
 
-## 5. Maven Central 兼容层(线路格式解码)
+## 5. Maven Central 兼容层(为什么内部解码 pom)
 
-### 5.1 支持的 pom 特性(内部解码,用户不可见)
+Central 的元数据是 `pom.xml`;要拖库就绕不开它。mjm 把 XML 当作**线路格式**:解码后立刻归一化为
+内部模型,��户可见的世界里 XML 不存在。只追求"把库拖下来且传递依赖正确",不追求 Maven 语义保真;
+中央仓库不能通过 pom 指路第三方仓库(pom 里的 `<repositories>` 不跟随)。
 
-- parent POM 递归链解析(版本常藏在 parent 里,绕不开)
-- 属性插值(`${project.version}` 等)
-- `dependencyManagement` 与 BOM `<scope>import</scope>`(spring-boot-starter 传递 pom 全靠它)
-- `dependencies` 中 scope = compile / runtime 的条目
-- exclusions、classifiers(按需)、packaging: jar / pom / bundle(按 jar 处理)
-
-### 5.2 拒绝并报错
-
-- version ranges、snapshots(V1 不支持)
-- 非 jar/pom/bundle 的 packaging(先报错)
-- pom 中声明的 `<repositories>`:**不跟随**(安全决策——pom 不能指路第三方仓库,仓库只由 mjm.toml 的 `[repos]` 控制)
-
-### 5.3 范围声明
-
-只追求"把库拖下来且传递依赖正确",不追求 Maven 语义保真。
-scopes 只关心 compile/runtime;provided/test 大部分忽略。
-开工前精读 **Coursier**(sbt/scala-cli 的解析器),它已趟平"高速解析 Maven Central"的坑。
-
----
+支持与拒绝的精确清单在 [SPEC.md](SPEC.md) 附录 A。**为什么不做 POM 生成**见 D15。
 
 ## 6. 存储与 lockfile
 
@@ -239,30 +168,12 @@ scopes 只关心 compile/runtime;provided/test 大部分忽略。
 
 ### 6.2 mjm.lock(正式定义见 [SPEC.md](SPEC.md) §4)
 
-```toml
-# 生成产物,提交进版本库,勿手改
-[[artifacts]]
-id = "com.example:foo"
-version = "1.2.3"
-source = "central"
-url = "https://repo.maven.apache.org/maven2/com/example/foo/1.2.3/foo-1.2.3.jar"
-sha256 = "…"
-meta-sha256 = "…"
-depth = 1
-
-[[artifacts]]
-id = "mylib"
-version = "1.2.0"
-source = "gh:user/repo"
-url = "https://github.com/user/repo/releases/download/v1.2.0/mylib-1.2.0.jar"
-sha256 = "…"
-depth = 1
-```
+锁是生成物,不是手写配置;结构、字段与不变式只在 SPEC。这里的理由只有三条:
 
 - `local:` 来源的 `url` 写为**相对项目根的** `file:vendor/…` 形式(路径落在项目根之外时才写绝对 `file:///…`),读取时按项目根展开——锁不再绑定某个 checkout 的绝对路径,同一 fixture 在两个目录锁出的字节一致
 - sha256 + meta-sha256 双钉(artifact 与元数据),每次下载核对,任一不匹配即失败
 - Central artifact 优先用其自带 `.sha256`,缺失则现算并钉死
-- lock 存在且与 mjm.toml 一致 → 直接采用,不重新解析
+- lock 存在且与 mjm.toml 一致 → 直接采用,不重新解析;`mjm lock` 本身总是重解,`--check` 只比较——"锁是权威"和"锁总是可重建"必须同时成立
 
 ---
 
@@ -274,18 +185,12 @@ depth = 1
 
 ### 7.2 发布产物(固定三件套)
 
-```
-mylib-1.2.0.jar
-mylib-1.2.0.mjm.toml     ← 描述符:自己的 deps、java 版本要求(schema 见 Q4)
-mylib-1.2.0.sha256
-```
+发布 = 三个文件:`<name>-<version>.{jar,mjm.toml,sha256}`,布局见 [SPEC.md](SPEC.md) §7.1。
+理由:**有描述符 = 完整公民**(可传递解析),无描述符的裸 jar = 叶子。描述符带
+`[retract]`(作者端撤回,SPEC §3.4),与消费端的 `[overrides]` 凑成一对:坏版本死得快、死得可见。
 
-发布目标只有三种:GitHub Releases(`gh:owner/repo`)、`mjm:` 仓库(`mjm:https://host/`,两层布局、
-无需 group)、仓内目录(`mjm:local:<dir>`);无 target 时只准备 `target/dist/` 三件套。
-Maven 布局主机(`https://host/`)是**只读源**,不是发布目标——mjm 不写 POM,发出去两边都读不回来。
-
-有描述符 = 完整公民(可传递解析);无描述符的裸 jar = 叶子。
-描述符支持 `[retract]` 作者端撤回(SPEC §3.4)——与 `[overrides]`(消费端,Q2)凑成一对:坏版本死得快、死得可见。
+发布目标只有 mjm 能回读的三种(`gh:`、`mjm:https:`、`mjm:local:`);Maven 布局是只读源,
+不是发布目标——mjm 不写 POM(见 D15)。
 
 ### 7.3 GitHub 后端(以及为什么不再是 Gitee)
 
@@ -301,82 +206,29 @@ Maven 布局主机(`https://host/`)是**只读源**,不是发布目标——mjm 
 
 ### 7.4 安全底线
 
-- sha256 由 lockfile 钉死(§6.2),release asset 可变也不影响字节确定性
-- URL 依赖仅允许 https
+- sha256 双钉由锁持有,每次下载核对(SPEC §4.2);release asset 可变也不影响字节确定性
+- URL 依赖仅允许 https;本地自举走 `local:`/`mjm:local:` 的显式声明,不靠 HTTP 降级
+- 仓库的**读**与**发布**是两条不同的信任线:Maven 仓库可以读,发布只写 mjm 布局,避免生成一份
+  mjm 自己读不回来的产物
 
 ### 7.5 mjm 自身的发行管线(自举闭环)
 
-mjm 也是自己的狗粮:**代码在测的那棵树,就是构建发行物的那棵树**。**升级地址(唯一事实来源)**:
-`https://api.github.com/repos/dzb/mjm-cargo/releases/latest` —— `mjm update` 查询它,
-`setup.sh`(动态解析 latest,永不用改)与 CI 共用同一约定。
+mjm 也是自己的狗粮:**代码在测的那棵树,就是构建发行物的那棵树**。CI 不装上一个 release 来构建
+(新旧树同时改语法时会让改动晚一拍),而是 javac 引导 → 用刚编出的 mjm 跑 lock/build/test →
+打 tag 时做一致性门 → `mjm bundle` → 发布。版本号只在 `mjm.toml [project].version` 声明一处,
+`mjm build` 把它写进 `META-INF/mjm/version.properties`。
 
-**发行物**:GitHub Release `v{version}`,附件 `mjm-bin-{version}.tar.gz`(`mjm bundle` 产物,
-`-bin` 与库 jar 三件套命名区分)。**版本号只有一处声明**:`mjm.toml [project].version`;
-`mjm build` 把它写成 `META-INF/mjm/version.properties`,`--version` 与 `mjm update` 都读那份资源
-(目录、jar、安装后的 dist 三种布局都能读到)。`Mj.VERSION` 不是第二个声明,而是那份资源的读取方。
+**操作细节(步骤、红线、逃生舱)在 [RELEASE.md](RELEASE.md)**;这里只保留理由。
 
-**流水线**(`.github/workflows/ci.yml`;两种触发,两种职责):
+## 8. 构建与命令面(为什么是这些单步动词)
 
-```
-push master  →  只验证,不发版
-  1. javac 直接编 src/main/java → target/classes(不装上一个 release)
-  2. 用刚编出来的 mjm 跑 lock → build → test   ← 狗粮常磨
+命令的**契约**(19 个命令、参数、退出码、工作区策略、JSON 字段)在 [SPEC.md](SPEC.md) §6。
+这里只留架构理由:
 
-push tag v*  →  验证 + 发行
-  3. 一致性门:tag 名 == mjm.toml 版本 == 刚构建的二进制 --version
-  4. mjm bundle(用刚构建的 mjm,不是装着的那个)
-  5. gh release create v{n} 附件 mjm-bin-{version}.tar.gz
-```
-
-**为什么不装上一个 release 来构建**:上一个 release 与新树同时改的时候(改名、锁格式、命令面),
-用它构建会让这些改动晚一拍生效——v0.1.4 的发行物还带着旧的九 jar 布局就是这个原因。javac 引导把
-"代码在测的那棵"和"构建发行物的那棵"合成一棵。
-
-**版本模型:0.1.x** —— 版本号由人决定,写进 `mjm.toml` 一处;发版动作是打 tag,不是每次 push。
-账本是 git tags。
-
-**本地链条**:逐步执行 `mjm lock` → `mjm build` → `mjm test` → `mjm bundle`,再由 CI/人执行 `gh release create`。mjm 不提供 `release` 命令——那一步的编排属于项目自己的 CI,不属于构建工具的职责面。
-- 自举链断裂的逃生舱(旧 mjm 读不了新 mjm.toml 等):本机 Maven 引导
-  (`mvn -DskipTests package` → `java -cp target/classes:…` 跑 `Mjm`)→ `mjm bundle` → `gh release upload` 手工补发
-- 引导链有根:v0.1.0 由 Maven 本地引导(已完成),此后链条不断
-
----
-
-## 8. 构建与命令面(草案)
-
-命令面(以 `mjm` 的 usage 输出为准)。参数约定:未知参数是用法错误(exit 2),不静默忽略;`--` 结束 mjm 的选项,其后作为位置参数交给命令(`run` 交给程序);`--help` 只在 `--` 之前且为唯一剩余参数时生效。
-
-| 命令 | 状态 | 说明 |
-|---|---|---|
-| `mjm add <dep> [ver]` | ✅ | 写入 [deps] 并立即解析;精确版本 + maven-metadata.xml 列版本;裸名走 Central 索引搜索。值形态:精确版本(`1.2.3`)、命名仓库(`corp:1.2.3`)、原生 release(`gh:owner/repo@tag` 或简写 `owner/repo@tag`) |
-| `mjm lock [--check] [--refresh]` | ✅ | 解析并写出 mjm.lock;`--check` 只在内存里重新生成并与磁盘逐字节比对(Cargo `--locked` 语义,比 build 的"id 在锁里"更严格)、不写任何文件;**需要取元数据**;`--check` 与 `--refresh` 互斥 |
-| `mjm tree [--json]` | ✅ | 依赖树 + 深度标注(dev 工件标 `, dev`);`--json` 输出单个 JSON 文档(artifacts 按 id 排序、children 排序,不嵌套)。**以 `mjm.lock` 为准**:先读锁,再解析 manifest 只为补边;id/version/source/depth/scope 任一不一致 → exit 1、列出至多 10 行差异、不输出图 |
-| `mjm why <dep>` | ✅ | 谁引入的、占多少深度预算。同样以锁为准,漂移时拒绝画图(与 tree 共用同一个一致性 helper) |
-| `mjm build` | ✅ | javac 编译(严格可见性 classpath —— 只含 MAIN 声明);`--release N` 目标化字节码;`-processorpath` 注入处理器;`src/main/resources` 拷入产物 |
-| `mjm run [<main>]` / scripts | ✅ | runtime classpath 运行(排除 dev);不给参数时用 `[project].main`(`package` 写进 MANIFEST、`bundle` 写进 launcher 的同一个入口)。mjm 自己的旗标(`--module`/`--offline`)只在 target 之前生效,之后是程序参数;`--` 之后一律归程序;`[scripts]` 优先于同名主类 |
-| `mjm test` | ✅ | fork JVM runner:`@MjmTest` + JUnit Platform;classpath 含 MAIN + dev;`[test]` include/exclude 过滤源;每次开跑前清空 `target/test-results/`,跑完每个测试类一个 surefire 形状的 `TEST-<类名>.xml`(无 timestamp、可逐字节 diff) |
-| `mjm package` | ✅ | 纯 jar;`--uber` 合并闭包(排除 dev)并输出 `target/dist/<name>-<ver>-uber.jar`——与普通 jar 不同名,互不覆盖 |
-| `mjm bundle` | ✅ | 发行目录 + setup.sh + tar.gz,输出 `target/dist/`(应用自用;库不需要) |
-| `mjm publish` | ✅ | 三件套(`target/dist/`);`gh:` 原生上传;`mjm:https://…` 两层布局 PUT;`mjm:local:<dir>` 本地两层布局原子写入(不联网);无 target 只准备三件套。**Maven 布局目标拒绝**(mjm 不写 POM,发了也读不回来);`[repos] type = "maven"\|"mjm"` 的读取不变;描述符只含 MAIN 依赖 |
-| `mjm update` / `mjm upgrade` | ✅ | 自升级(alias 同一实现) |
-| ~~`mjm release`~~ | **已删除** | 生命周期属于项目自己的 CI;mjm 只提供单步机制 |
-| `mjm init [--pom] [--ws] [--force]` | ✅ | 骨架;`--pom` 从 pom.xml 迁移(逐条报告不可表达的事实);`--ws` 写 `mjm.ws.toml`(本地工作区,见 `docs/workspace-design.md`)。**工作区根目录拒绝 `init`/`--pom`**(即使 `--force`),否则会把根变成模块;`--ws` 仍可用 |
-| `mjm remove <id>` | ✅ | 删除一行声明并重锁 |
-| `mjm classpath [--test] [--file <path>]` | ✅ | 给 IDE 的 classpath:**默认严格可见性的编译 classpath**(target/classes + 直接声明的 jar,不含传递依赖,避免“IDE 能编过、mjm build 又拒绝”),`--test` 为测试 classpath(test-classes + classes + MAIN/DEV 闭包);jar 用 store 的内容寻址路径,不拷贝不链接;输出仅供本机 IDE,不应提交 |
-| `mjm info <id> [--source]` | ✅ | 身份/来源/依赖/源码地址;`--source` 取源码树 |
-| `mjm cache dir | size | prune` | ✅ | 只看不删:`dir` 三个根、`size` 各自占用 + 合计、`prune` 只删可证明无用的东西(项目已消失的锁文件、`part-*.tmp` 残留、悬空索引条目);锁文件带 `project=` 侧车 |
-| `mjm cache clean` | ✅ | 显式删除 store 与 sources 并报释放量;不动锁文件、不动项目、不改 `mjm.lock` |
-| `mjm clean [--target (default) \| --dist]` | ✅ | **默认整棵删 `target/`**(无参或 `--target`;Maven 惯例——交付物也在 `target/dist/`,所以一并清掉;里面只有可重建的 `classes`/`test-classes` 与可重发的 `target/dist`,依赖缓存在 XDG cache 的 `mjm/store` 不在此);`--dist` 只删 `target/dist/`(保留 classes,重发发行物不用重编译);两个都给就都清;**两个目标先全部探测,任一(含其内部嵌套)是挂载点则整次拒绝、一个字节不删**;**永不触碰 store**;旧的项目根 `dist/` 不再被读取(给一行迁移提示) |
-| `mjm outdated [--json]` | ✅ | 已钉版本 vs 仓库可用版本;只查 Central 与命名 https 仓库,`gh:`/`url`/`local:`/`mjm:` 列为"未检查";预发布默认不报(除非当前就是预发布);跨 major 单独一节;`--json` 输出 `upToDate`/`updates`/`notChecked`/`failures` |
-| `-o`, `--offline` | ✅ | 禁止一切网络访问;store 有则用,缺则报错。`update`/`publish`/`outdated`/`audit` 不适用 |
-| daemon 常驻 | **M6** | 已确认需要:常驻 JVM 热命令,mvnd 已验证可快 2–4 倍 |
-| workspaces/monorepo | ✅ | `mjm.ws.toml`(表名 `[ws]`,旗标 `init --ws`,本地文件不提交)列出同级模块;**替换发生在 classpath 装配**——锁行的 id 命中模块时用该模块的 `target/classes`,否则用 store;`build`/`test`/`run`/`classpath` 可见,`package --uber`/`bundle` 把本地 classes 嵌入产物并打 note;根目录 `lock`/`build`/`test`/`package`/`bundle`/`clean` 按依赖拓扑序逐模块执行(`--module` 只跑一个,环是错误)。详见 `docs/workspace-design.md` |
-| `mjm audit [--json] [--dev]` | ✅ | 依赖漏洞扫描(OSV.dev);只查 Central 坐标(gh:/url/local:/mjm:/命名仓库列为未检查并给原因,不当作干净);发现漏洞或查询失败 exit 1,全干净 exit 0;`--json` 输出 `vulnerabilities`/`notChecked`/`failures`;`--offline` 不适用(exit 2) |
-| ~~`mjm jdk`~~ | **不做** | toolchain 管理:2026-11-22 决定不做。现状已足够:JDK major 不符时报错并说明怎么办;新增它会引入下载通道、平台矩阵、外部二进制的校验信任、以及 build 里的第二个 JVM(子进程 javac),换来的只是省一次手工装 JDK |
-
-编译策略 V1:全量编译,正确优先;增量编译列为后续优化。
-
----
+- **单步机制,不做生命周期**:没有 `release`,没有自定义 phase;`lock → build → test → package →
+  publish` 各自可单独调用、可被任何 CI 编排。生命周期属于项目自己的 CI,不属于构建工具。
+- **严格参数**:未知参数是用法错误;`--` 是 mjm 选项的终点。脚本出错要立刻可见,而不是静默忽略。
+- **构建策略 V1 是全量编译**,正确优先;增量编译是后续优化(Gradle build cache 的形态)。
 
 ## 9. 架构(JDK + Freeway)
 
@@ -428,18 +280,11 @@ IoC 接缝(未来扩展点,不引入插件机制):
 
 ## 12. Open Questions
 
-### 已解决(2026-11-21)
+### 已解决(压缩;细节见 git 历史)
 
-| # | 决议 |
-|---|------|
-| Q1 | JSON 解析器用 **freeway-commons 自带**(免自写);`mjm add` 模糊搜索解禁,排期 M5 |
-| Q3 | 深度预算**无豁免机制**;出口只有结构性方案:替换库 / exclude / 调大 max-depth |
-| Q4 | 文件格式 Spec 独立成文 → [SPEC.md](SPEC.md)(mjm.toml / 描述符 / mjm.lock 的文法、字段、校验、错误规范) |
-| Q5 | ✅ 定为「只校验、不管理」的终态(2026-11-22 修订):JDK major 不符即报错并给出下一步,编译走 `--release`。原计划的 V2 `mjm jdk`(Temurin 下载)**放弃**,理由见 §8 命令表 |
-| Q6 | daemon 确认要做,列为 **M6** |
-| Q7 | token 环境变量定为 `MJM_GITHUB_TOKEN` / `MJM_GITEE_TOKEN` |
-| Go 吸收 | 1–3 定稿进 SPEC:跨 major 硬冲突(D4 升级)、mjm.lock 双钉、描述符 [retract];4–7 进排期:[repos] 回退链、mjm.ws.toml 模板、store 只读+文件锁、build-info 嵌入、mjm audit(`mjm jdk` 已于 2026-11-22 取消,见 §8)|
-| Q2 | `[overrides]` 进 V1:同 id 全图钉定(MVS 之上);URL 物种不适用;跨 major 硬冲突的合法出口;闭包无此 id → 告警;`mjm tree/why` 强制标注。SPEC §2.1 已定稿 |
+Q1(JSON 用 freeway-commons)、Q2(`[overrides]` 进 V1)、Q3(深度预算无豁免)、Q4(SPEC 独立成文)、
+Q5(JDK 只校验不管理,`mjm jdk` 取消)、Q6(daemon = M6)、Q7(token 环境变量)、Q8(Gitee 实测 403,
+物种移除)、Q9(`local:` + vendor 自举)。
 
 ### 待定
 
@@ -450,52 +295,13 @@ IoC 接缝(未来扩展点,不引入插件机制):
 
 ---
 
-## 13. 现代包管理器吸收清单(2026-11-21 对标探查)
+## 13. 现代包管理器吸收清单(原则)
 
-mjm 的主框架已闭环(自举构建/测试/打包/发布/升级全通)。对标 cargo / uv / npm / pnpm /
-Gradle 9 / Maven 4 后,尚未覆盖的场景按下表排期。
+详细的功能缺口表、P0/P1/P2 清单与逐项对标已移入
+[docs/comparison.md](docs/comparison.md)(历史快照,含证据来源)。这里只留吸收原则:
 
-> 下表按「缺什么功能」排;按「哪些设计能让 mjm 变少」的横向对比见
-> [docs/comparison.md](docs/comparison.md)(2026-11-22,含证据来源与可吸收清单 A1–A7)。
-> 两者的结论不冲突:下方是功能缺口,那边是结构简化。
-
-### P0 — 闭环缺口
-
-| # | 缺口 | 对标 | 状态 |
-|---|---|---|---|
-| 0 | **`mjm source <id>`**(替代 sources jar)+ `mjm publish` 交接指令 | Go tag-archive、pkg.go.dev 可寻址源码;npm 的 `npm pack` 分享 | ✅ 已完成(2026-11-21) |
-| 1 | **`[dev-deps]` 依赖分组** | Cargo dev-dependencies、uv PEP 735 dependency-groups | ✅ 已完成(2026-11-21):独立顶层节;解析进同一张锁图,`scope = "dev"`;不进编译可见性/run/package/dist/发布描述符,只进 `mjm test`;MAIN 优先 |
-| 2 | `mjm init --pom` / `mjm remove` / `mjm clean` | mvn clean、npm init/uninstall、Maven 迁移 | ✅ 全部完成:init(含 `--pom` 迁移)、remove、clean(2026-11-22,`[--target] [--dist]`,永不碰 store) |
-| 3 | ~~发布三件套补 `-sources` jar~~ → **`mjm info <id> [--source]`** | Go/Cargo 从不分离源码与产物;sources jar 是 Java 二进制分发的补丁,不是能力 | ✅ 已完成(2026-11-21):源码**随 tag 走**——gh: 取 tag archive,Central 回退读发布者的 sources jar,URL 叶子明确拒绝。发布侧不产出 sources jar |
-| 4 | JUnit XML 测试报告 | mvn surefire 默认产物 | ✅ 已完成(2026-11-22):`target/test-results/TEST-<类名>.xml`,两个 runner 都覆盖(`@MjmTest` 反射路径 + Jupiter 的 `TestExecutionListener`);无 `timestamp`、固定 `time`,同一套测试两次跑字节相同 |
-| 5 | `mjm outdated` | mvn versions:display-dependency-updates、npm outdated | ✅ 已完成(2026-11-22):`maven-metadata.xml` 列版本;预发布按 qualifier token 判定(不靠 `-` 子串);local:/gh:/url 明确列为未检查 |
-| 5b | `mjm audit` | cargo audit / npm audit、govulncheck | ✅ 已完成(2026-11-22):OSV.dev `querybatch` + `vulns/{id}`;只查 Maven 坐标,其余列 `notChecked` 并给原因;severity 取 `database_specific.severity` 再退 CVSS type;`fixed` 取所有 fix 事件中大于当前的最近者;查询失败具名且 exit 1 |
-
-### P1 — 现代实践
-
-| # | 缺口 | 对标 |
-|---|---|---|
-| 6 | 发版前 API 兼容检查 | cargo-semver-checks、japicmp、Revapi(新 jar vs 上一版 jar,release flow 图加一个 verify 节点) |
-| 7 | workspace 依赖继承 | Cargo `[workspace.dependencies]`、Gradle version catalogs(freeway 7 模块版本重复声明的现场教训) |
-| 8 | `mjm publish --dry-run` | cargo publish --dry-run、npm pack |
-| 9 | `--offline` | cargo --offline、pnpm --offline(store 内容寻址,成本近零) |
-| 10 | 可复现发行物 | Maven reproducible builds(SOURCE_DATE_EPOCH;dist tar.gz 时间戳归一化) | ✅ 已完成(2026-11-23):jar 条目统一 `1980-02-01T00:00:00Z`(creation/access time 也置同一值,否则 extra field 会带入墙钟),条目按相对路径字典序写入;plain 与 uber 都适用,同源码两次 package 逐字节相同(clean 重编译亦然) |
-
-### P2 — 记录缓行
-
-- 增量编译/构建缓存(Gradle build cache、cargo incremental)——javac 无增量;M6 daemon 后再议
-- 测试并行(Gradle maxParallelForks)——fork JVM 目前串行
-- `git:` 任意仓库物种——gh: 与自建主机 `[repos]` 已覆盖主场景
-- 注解处理器——`[build].parameters` 传 `-processorpath` 即可,文档化即可
-- JPMS module-path——小众,记录不动
-
-### 明确不吸收(品味红线)
-
-- **Maven profiles** —— 配置面泛滥的根源;mjm 用环境外置 + `[scripts]`
-- **插件生态** —— 零插件哲学是 mjm 的身份;`[scripts]` 兜底
-- **npm 式语义版本范围**(`^1.2.3`)—— 精确钉定 + lockfile 双钉是供应链优势
-
-### 已在既有排期(本次探查确认方向一致)
-
-`mjm.ws.toml`(= workspaces)、M6 daemon、`[repos]` 回退链。
-(`mjm audit` 与 workspace 本地覆盖已分别于 2026-11-22 落地,见 §8。)
+- **只吸收能让 mjm 变少的东西**:更少的命令、更少的配置面、更少的隐式行为。
+- **明确不吸收**:Maven profiles(配置面泛滥)、插件生态(零插件是身份)、npm 式版本范围
+  (精确钉定 + 锁双钉是供应链优势)。
+- **排期按"缺口"而不是"别人有"**:workspace、audit、可复现发行物都已完成;剩余的
+  API 兼容检查、workspace 依赖继承、publish --dry-run 各自是独立行为单。

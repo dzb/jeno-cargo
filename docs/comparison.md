@@ -1,9 +1,11 @@
 # mjm 横向对比:命令语义与目录布局
 
-状态:**分析,未改代码**。这份文档只回答两个问题——别的工具在同样的位置上做了什么选择,
-以及哪些选择能让 mjm **变少而不是变多**。功能清单式的对比不在范围内。
+状态:**历史快照(基于 2026-11-22 的实测与文档调研)**。这份文档记录当时别的工具在同样位置上
+做了什么选择,以及哪些选择能让 mjm **变少而不是变多**;它是证据与原则的来源,不是当前能力的清单。
+**当前结论**见 [DESIGN.md](../DESIGN.md)(决策与理由)与 [README.md](../README.md)(入口);
+功能缺口与排期表(原 DESIGN §13)作为附录保留在这里。
 
-更新:2026-11-22
+更新:2026-11-22(历史快照);2026-11-23 标注状态并吸收 DESIGN §13 的详细表
 
 ---
 
@@ -279,3 +281,45 @@ uv 的 `.python-version` 本质是「工具链版本进仓库」;mjm 的 `[java]
 - 「M6 daemon 不必做」的结论基于**本仓库**的构建耗时(66 个源文件);上千文件的项目未测。
   真要决策,应先在一个大项目上量一次 `mjm build` 的墙钟时间。
 - uv 的缓存子目录版本号只在 0.5.x 观察到,官方是否把它当稳定约定未确认。
+
+---
+
+## 附录:功能缺口与吸收清单(自 DESIGN §13 移入,历史快照)
+
+> 下表描述 2026-11-23 时的状态;当前能力以 [SPEC.md](../SPEC.md) §6 与 `mjm --help` 为准。
+
+### P0 — 闭环缺口
+
+| # | 缺口 | 对标 | 状态 |
+|---|---|---|---|
+| 0 | `mjm source <id>`(替代 sources jar)+ `mjm publish` 交接指令 | Go tag-archive、pkg.go.dev 可寻址源码;npm 的 `npm pack` 分享 | ✅ 已完成(2026-11-21) |
+| 1 | `[dev-deps]` 依赖分组 | Cargo dev-dependencies、uv PEP 735 dependency-groups | ✅ 已完成:独立顶层节,进同一张锁图,`scope = "dev"`;只进 `mjm test`,MAIN 优先 |
+| 2 | `mjm init --pom` / `mjm remove` / `mjm clean` | mvn clean、npm init/uninstall、Maven 迁移 | ✅ 全部完成(clean 含 `[--target] [--dist]`,永不碰 store) |
+| 3 | `mjm info <id> [--source]` | Go/Cargo 源码随 tag 走 | ✅ 已完成:gh: 取 tag archive,Central 回退 sources jar,URL 叶子拒绝 |
+| 4 | JUnit XML 测试报告 | mvn surefire | ✅ 已完成:`target/test-results/TEST-<类名>.xml`,无 timestamp、同一套测试两次跑字节相同 |
+| 5 | `mjm outdated` | mvn versions、npm outdated | ✅ 已完成:`maven-metadata.xml` 列版本,预发布按 qualifier token,未检查项具名 |
+| 5b | `mjm audit` | cargo audit / npm audit | ✅ 已完成:OSV `querybatch` + `vulns/{id}`,未检查项给原因,失败具名 |
+| 10 | 可复现发行物 | Maven reproducible builds | ✅ 已完成(2026-11-23):固定 DOS 时间与 creation/access time,条目字典序,两次 package 逐字节相同 |
+
+### P1 — 现代实践(未做)
+
+| # | 缺口 | 对标 |
+|---|---|---|
+| 6 | 发版前 API 兼容检查 | cargo-semver-checks、japicmp、Revapi |
+| 7 | workspace 依赖继承 | Cargo `[workspace.dependencies]`、Gradle version catalogs |
+| 8 | `mjm publish --dry-run` | cargo publish --dry-run、npm pack |
+| 9 | `--offline` | cargo --offline、pnpm --offline |
+
+### P2 — 记录缓行
+
+- 增量编译/构建缓存(Gradle build cache、cargo incremental)
+- 测试并行(Gradle maxParallelForks)
+- `git:` 任意仓库物种
+- 注解处理器(`[build].parameters` 传 `-processorpath` 即可)
+- JPMS module-path
+
+### 明确不吸收(品味红线)
+
+- **Maven profiles**:配置面泛滥的根源;mjm 用环境外置 + `[scripts]`
+- **插件生态**:零插件哲学是 mjm 的身份
+- **npm 式语义版本范围**(`^1.2.3`):精确钉定 + lockfile 双钉是供应链优势

@@ -20,6 +20,11 @@
                                                                 3. mjm update / curl|bash
 ```
 
+**升级地址(唯一事实来源)**:`https://api.github.com/repos/dzb/mjm-cargo/releases/latest` ——
+`mjm update` 查询它,`setup.sh`(动态解析 latest,永不写死版本)与 CI 共用同一约定。
+发行物附件命名 `mjm-bin-{version}.tar.gz`(`mjm bundle` 产物,与库 jar 三件套区分),
+版本号只在 `mjm.toml [project].version` 声明一处。
+
 **CI 不装上一个 release 来构建**:上一版与新树同时改语法时(如 0.2.0 的
 `<仓库名>:<版本>` 值形态),用它构建会让改动晚一拍生效。javac 引导把"代码在测的
 那棵树"和"构建发行物的那棵树"合成一棵。

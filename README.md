@@ -143,6 +143,8 @@ mylib-1.2.0.mjm.toml     ← the descriptor: its own deps, java requirement, ide
 mylib-1.2.0.sha256
 ```
 
+The layout is [SPEC.md](SPEC.md) §7; a Maven-layout target is refused because mjm writes no POM.
+
 | Where | Consumed as | How it is published |
 |---|---|---|
 | GitHub Releases | `gh:owner/repo@v1.2.3` | `mjm publish gh:owner/repo` |
@@ -281,8 +283,8 @@ that act on one project — `add`, `remove`, `run`, `info`, `tree`, `why`,
 
 The substitution happens where the classpath is assembled, so it is visible to
 `mjm build`, `mjm test`, `mjm run` and `mjm classpath`; the lockfile itself is
-unchanged. The design record, including why `publish` is unaffected, is in
-[docs/workspace-design.md](docs/workspace-design.md).
+unchanged. The file format is [SPEC.md](SPEC.md) §5; the design record, including
+why `publish` is unaffected, is in [docs/workspace-design.md](docs/workspace-design.md).
 
 ## Where the truth lives
 
