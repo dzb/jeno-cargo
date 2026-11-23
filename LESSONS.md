@@ -113,3 +113,22 @@ HTTP/2 在 GitHub 附件重定向上 EOF(loopback 服务器只讲 HTTP/1.1,协�
 `package` 和 `bundle` 都读了,只有 `run` 漏。读文档读不出来,只有真跑才发现。
 
 **以后**:把 SPEC 的每条承诺当成一条**待验证的断言**,而不是事实。承诺越多,越要抽几条真跑。
+
+---
+
+## 11. 破坏性命令的验证,必须隔离整个 HOME
+
+**事故**:验证 `mjm cache purge` 时只设了 `XDG_CACHE_HOME=/tmp/...`,但 `Paths` 在旧
+`~/.mjm/store` 存在时优先使用旧路径——结果命令删除了本机真实的 `~/.mjm/store` 与
+`~/.mjm/sources`(约 22.8 MiB)。mjm-cargo 已重新 `lock`、freeway 已从 vendor 回填;
+项目、`mjm.lock` 与发布物未受损,但其他项目曾缓存的工件需要各自重新下载。
+
+**错在**:把 XDG 环境变量当成了隔离;没有先 `mjm cache dir` 确认真实 roots;而且当时的
+`cache purge` 没有 `--yes`/`--dry-run`,一个单词就能删光缓存。
+
+**以后**:
+- 破坏性 CLI 的验证用隔离的 `HOME=/tmp/...`(整个 HOME,不只是 XDG),或在测试里用
+  `Paths.useForTesting`;先跑 `cache dir` 确认这次到底会删哪里。
+- 破坏性命令必须有 `--yes`,`--dry-run` 先展示目标与大小;`cache purge` 现在就是这样:
+  无 `--yes` 时打印两个 roots 并 exit 2,`--dry-run` 只展示不删除。
+- 测试永不碰真实 HOME;涉及删除的演示一律先 dry-run。
