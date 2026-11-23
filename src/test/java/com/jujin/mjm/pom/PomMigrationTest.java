@@ -2,6 +2,8 @@ package com.jujin.mjm.pom;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -167,5 +169,209 @@ class PomMigrationTest {
                 "a snapshot never reaches the generated file");
         assertFalse(result.mjToml().contains("com.example:native"),
                 "an artifact with a classifier is reported, not mis-declared");
+    }
+
+    @Test
+    void aLocalParentSuppliesPropertiesAndManagement(@org.junit.jupiter.api.io.TempDir Path root)
+            throws Exception {
+        Files.writeString(root.resolve("pom.xml"), """
+            <project>
+              <groupId>com.example</groupId>
+              <artifactId>parent</artifactId>
+              <version>9.0.0</version>
+              <packaging>pom</packaging>
+              <properties>
+                <slf4j.version>2.0.18</slf4j.version>
+              </properties>
+              <dependencyManagement>
+                <dependencies>
+                  <dependency>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-api</artifactId>
+                    <version>${slf4j.version}</version>
+                  </dependency>
+                </dependencies>
+              </dependencyManagement>
+            </project>
+            """);
+        Path child = Files.createDirectories(root.resolve("child"));
+        Files.writeString(child.resolve("pom.xml"), """
+            <project>
+              <parent>
+                <groupId>com.example</groupId>
+                <artifactId>parent</artifactId>
+                <version>9.0.0</version>
+                <relativePath>../pom.xml</relativePath>
+              </parent>
+              <artifactId>child</artifactId>
+              <dependencies>
+                <dependency>
+                  <groupId>org.slf4j</groupId>
+                  <artifactId>slf4j-api</artifactId>
+                </dependency>
+              </dependencies>
+            </project>
+            """);
+
+        PomMigration.Result result = PomMigration.translate(child.resolve("pom.xml"));
+
+        assertTrue(result.mjToml().contains("\"org.slf4j:slf4j-api\" = \"2.0.18\""),
+                "parent property + dependencyManagement reached the child: " + result.mjToml());
+        assertTrue(result.notes().stream().anyMatch(n -> n.contains("read from")),
+                result.notes().toString());
+    }
+
+    @Test
+    void aMissingLocalParentIsReportedNotFatal(@org.junit.jupiter.api.io.TempDir Path root)
+            throws Exception {
+        Path child = Files.createDirectories(root.resolve("child"));
+        Files.writeString(child.resolve("pom.xml"), """
+            <project>
+              <parent>
+                <groupId>com.example</groupId>
+                <artifactId>gone</artifactId>
+                <version>1.0.0</version>
+                <relativePath>../missing/pom.xml</relativePath>
+              </parent>
+              <artifactId>child</artifactId>
+            </project>
+            """);
+
+        PomMigration.Result result = PomMigration.translate(child.resolve("pom.xml"));
+
+        assertTrue(result.notes().stream().anyMatch(n -> n.contains("is not local")),
+                result.notes().toString());
+        assertTrue(result.mjToml().contains("version = \"1.0.0\""), result.mjToml());
+    }
+
+    @Test
+    void aParentCycleStopsWithANote(@org.junit.jupiter.api.io.TempDir Path root) throws Exception {
+        Files.writeString(root.resolve("pom.xml"), """
+            <project>
+              <parent>
+                <groupId>com.example</groupId>
+                <artifactId>b</artifactId>
+                <version>1.0.0</version>
+                <relativePath>b/pom.xml</relativePath>
+              </parent>
+              <artifactId>a</artifactId>
+            </project>
+            """);
+        Files.createDirectories(root.resolve("b"));
+        Files.writeString(root.resolve("b/pom.xml"), """
+            <project>
+              <parent>
+                <groupId>com.example</groupId>
+                <artifactId>a</artifactId>
+                <version>1.0.0</version>
+                <relativePath>../pom.xml</relativePath>
+              </parent>
+              <artifactId>b</artifactId>
+            </project>
+            """);
+
+        PomMigration.Result result = PomMigration.translate(root.resolve("pom.xml"));
+
+        assertTrue(result.notes().stream().anyMatch(n -> n.contains("parent cycle")),
+                result.notes().toString());
+    }
+
+    @Test
+    void aPomPackagingRootReportsItsModules() {
+        PomMigration.Result result = PomMigration.translate("""
+            <project>
+              <groupId>com.example</groupId>
+              <artifactId>root</artifactId>
+              <version>1.0.0</version>
+              <packaging>pom</packaging>
+              <modules>
+                <module>app</module>
+                <module>lib</module>
+              </modules>
+            </project>
+            """);
+
+        assertTrue(result.multiModuleRoot(), "a root with modules is not a single project");
+        assertEquals(List.of("app", "lib"), result.modules());
+    }
+
+    @Test
+    void pluginsRepositoriesProfilesAndExclusionsAreReported() {
+        PomMigration.Result result = PomMigration.translate("""
+            <project>
+              <groupId>com.example</groupId>
+              <artifactId>demo</artifactId>
+              <version>1.0.0</version>
+              <repositories>
+                <repository><id>corp</id><url>https://nexus.corp/repo/</url></repository>
+              </repositories>
+              <profiles><profile><id>dev</id></profile></profiles>
+              <dependencies>
+                <dependency>
+                  <groupId>org.example</groupId>
+                  <artifactId>lib</artifactId>
+                  <version>1.0.0</version>
+                  <exclusions>
+                    <exclusion><groupId>x</groupId><artifactId>y</artifactId></exclusion>
+                  </exclusions>
+                </dependency>
+              </dependencies>
+              <build>
+                <plugins>
+                  <plugin><artifactId>solon-maven-plugin</artifactId></plugin>
+                </plugins>
+              </build>
+            </project>
+            """);
+
+        String notes = String.join("\n", result.notes());
+        assertTrue(notes.contains("build plugins"), notes);
+        assertTrue(notes.contains("repositories are not copied"), notes);
+        assertTrue(notes.contains("profiles are not migrated"), notes);
+        assertTrue(notes.contains("exclusions"), notes);
+    }
+
+    @Test
+    void projectVersionInParentManagementResolvesToTheChildsVersion(
+            @org.junit.jupiter.api.io.TempDir Path root) throws Exception {
+        Files.writeString(root.resolve("pom.xml"), """
+            <project>
+              <groupId>com.example</groupId>
+              <artifactId>parent</artifactId>
+              <version>2.0.0</version>
+              <packaging>pom</packaging>
+              <dependencyManagement>
+                <dependencies>
+                  <dependency>
+                    <groupId>com.example</groupId>
+                    <artifactId>sibling</artifactId>
+                    <version>${project.version}</version>
+                  </dependency>
+                </dependencies>
+              </dependencyManagement>
+            </project>
+            """);
+        Path child = Files.createDirectories(root.resolve("child"));
+        Files.writeString(child.resolve("pom.xml"), """
+            <project>
+              <parent>
+                <groupId>com.example</groupId>
+                <artifactId>parent</artifactId>
+                <version>2.0.0</version>
+              </parent>
+              <artifactId>child</artifactId>
+              <dependencies>
+                <dependency>
+                  <groupId>com.example</groupId>
+                  <artifactId>sibling</artifactId>
+                </dependency>
+              </dependencies>
+            </project>
+            """);
+
+        PomMigration.Result result = PomMigration.translate(child.resolve("pom.xml"));
+
+        assertTrue(result.mjToml().contains("\"com.example:sibling\" = \"2.0.0\""),
+                "parent-managed ${project.version} resolved for the child: " + result.mjToml());
     }
 }

@@ -108,16 +108,20 @@ public final class InitCommand implements Command {
             }
             PomMigration.Result result;
             try {
-                result = PomMigration.translate(Files.readString(pom));
-            } catch (IOException e) {
-                System.err.println("mjm: cannot read " + pom);
-                return 1;
+                result = PomMigration.translate(pom);
             } catch (RuntimeException e) {
                 System.err.println("mjm: " + e.getMessage());
                 return 1;
             }
             for (String note : result.notes()) {
                 System.out.println("  note: " + note);
+            }
+            if (result.multiModuleRoot()) {
+                System.err.println("mjm: " + projectDir + " is a multi-module pom root"
+                        + " (packaging pom, modules: " + String.join(", ", result.modules())
+                        + ") — mjm does not recurse; run mjm init --ws here, then"
+                        + " mjm init --pom inside each module (no mjm.toml was written)");
+                return 1;
             }
             toml = result.mjToml();
         } else {
