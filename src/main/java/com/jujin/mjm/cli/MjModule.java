@@ -36,6 +36,8 @@ public final class MjModule implements ModuleEx {
                 c -> new BuildCommand(c.get(ArtifactStore.class), projectDir));
         binder.contribute(Command.class).addDeferred("run",
                 c -> new RunCommand(c.get(ArtifactStore.class), projectDir));
+        binder.contribute(Command.class).addDeferred("release",
+                c -> new ReleaseCommand(projectDir));
         binder.contribute(Command.class).addDeferred("publish",
                 c -> new PublishCommand(projectDir));
         binder.contribute(Command.class).addDeferred("package",

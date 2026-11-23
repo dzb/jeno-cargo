@@ -262,6 +262,12 @@ mjm bundle
 mjm classpath --test
 mjm audit
 mjm publish gh:owner/repo
+
+# applications: installer + bootstrap
+mjm bundle
+mjm release --dry-run                  # show the URLs it would upload
+mjm release mjm:local:../releases      # or gh:owner/repo / mjm:https://host/
+curl -fsSL https://host/app/setup.sh | bash
 ```
 
 Unknown arguments are usage errors (exit 2), never silently ignored. `--` ends

@@ -20,7 +20,7 @@
 
 | 工具 | 版本/位置 | 跑过什么 | 得到的结论 |
 |---|---|---|---|
-| mjm | `~/.mjm/bin/mjm` 0.2.4(当时快照) | `mjm`(usage 列表)、`ls target dist`、`du -sh ~/.mjm/*` | 当时:16 个动词;项目内 `target/` + `dist/` 两棵树;全局三处 `~/.mjm/{store,sources,locks}`。**现在**:19 个动词;交付物只在 `target/dist/`;store/sources 在 `${XDG_CACHE_HOME:-~/.cache}/mjm`,锁在 `${XDG_STATE_HOME:-~/.local/state}/mjm`(旧 `~/.mjm` 存在则仍优先) |
+| mjm | `~/.mjm/bin/mjm` 0.2.4(当时快照) | `mjm`(usage 列表)、`ls target dist`、`du -sh ~/.mjm/*` | 当时:16 个动词;项目内 `target/` + `dist/` 两棵树;全局三处 `~/.mjm/{store,sources,locks}`。**现在**:20 个动词;交付物只在 `target/dist/`;store/sources 在 `${XDG_CACHE_HOME:-~/.cache}/mjm`,锁在 `${XDG_STATE_HOME:-~/.local/state}/mjm`(旧 `~/.mjm` 存在则仍优先) |
 | uv | `~/.local/bin/uv` | `uv --help`、`uv cache --help`、`uv python --help`、`uv sync --help`、`uv init` + `uv lock` + `uv sync`(空项目)、`uv cache dir` | 24 个动词;`uv init` 产出 `pyproject.toml`/`uv.lock`/`.python-version`/`src/`/`README`/`.git`;`uv sync` 之后才出现 `.venv`;`uv.lock` 首行 `version = 1` / `revision = 5`;缓存 `~/.cache/uv/{archive-v0,builds-v0,interpreter-v5,sdists-v10,CACHEDIR.TAG}`;`sync` 有 `--locked` / `--frozen` / `--offline` 三个与锁相关的旗标 |
 | go | `/usr/bin/go` | `go help`、`go help mod`、`go env GOMODCACHE GOCACHE` | 20 个动词;`mod` 子命令含 `download/vendor/verify/why`;`GOMODCACHE=~/go/pkg/mod`、`GOCACHE=~/.cache/go-build` |
 | npm | `/usr/bin/npm` | `npm config get cache` | 缓存 `~/.npm`(非 XDG) |
@@ -53,7 +53,7 @@ mjm 自身的数据(命令面、目录语义)直接读代码与 `mjm` 的 usage 
 | cargo | ~40 | 文档 |
 | npm | ~70 | 文档 |
 
-mjm 现有 19 个:`add audit build bundle cache classpath clean info init lock outdated package publish remove run test tree why upgrade`(另有别名 `update`、`dist`)。
+mjm 现有 20 个:`add audit build bundle cache classpath clean info init lock outdated package publish release remove run test tree why upgrade`(另有别名 `update`、`dist`)。
 
 **结论:在「动词数量」这条轴上,mjm 不需要再学谁。** 值得记的是 mjm 已经比同级工具更干净的
 三处,以及唯一真正缺的那个动词(见 §5 A2)。

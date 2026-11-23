@@ -380,7 +380,7 @@ modules = ["libs/core", "apps/web"]
 
 ### 6.1 命令
 
-19 个命令,以本表为准(`mjm --help` 只打印同一份清单的摘要)。
+20 个命令,以本表为准(`mjm --help` 只打印同一份清单的摘要)。
 
 | 命令 | 契约 |
 |---|---|
@@ -403,6 +403,7 @@ modules = ["libs/core", "apps/web"]
 | `mjm audit [--json] [--dev]` | OSV 漏洞查询;默认只查 MAIN,`--dev` 才含 dev/processor;只查 Central 坐标,其余列 `notChecked` 并给原因;漏洞或查询失败 exit 1 |
 | `mjm publish [target]` | 写三件套;目标只接受 `gh:`、`mjm:https:`、`mjm:local:`(§6.6) |
 | `mjm upgrade` / `mjm update`(alias) | 自升级(同一实现) |
+| `mjm release [target] [--dry-run]` | 发布 `mjm bundle` 产生的安装包:`gh:<owner>/<repo>`、`mjm:https://host/`(loopback `http://` 仅供测试)、`mjm:local:<dir>`;无 target 只准备 `target/dist/release/` 并打印上传清单。**不隐式 build/test/bundle**;发布后回读并校验 tar 的 sha256(§7.3) |
 
 ### 6.2 参数约定
 
@@ -472,6 +473,12 @@ modules = ["libs/core", "apps/web"]
 | `mjm-repository` | `mjm:` 布局仓库(含 `mjm:local:`;无版本索引/OSV 坐标) |
 | `local-repository` | 本地 Maven 布局目录(无版本索引) |
 | `named-repository` | 命名 HTTPS Maven 仓库;无法解析的 source 也归到这里 |
+
+### 6.6 publish 与 release
+
+`publish` 发布**库**的三件套(jar/描述符/sha256,§7.1),目标只接受 `gh:`、`mjm:https://`、`mjm:local:`。
+`release` 发布**应用安装包**(`bundle` 的 tar.gz + bootstrap setup),目标是同一组三种;两者都不接受
+Maven 布局。区别在于产物:库给依赖解析用,安装包给最终用户 `curl | bash`。
 
 ### 6.6 publish 目标
 
@@ -564,3 +571,29 @@ mjm 只把 pom 当作 Central 的**线路格式**读取,不追求 Maven 语义�
 - pom 中声明的 `<repositories>`:不跟随(仓库只能由 `mjm.toml` 的 `[repos]` 指定)
 
 **范围**:只保证"把库拖下来且传递依赖正确";scopes 只关心 compile/runtime。
+
+### 7.3 release 布局与 bootstrap
+
+`mjm release` 的输入是 `target/dist/<name>-<version>.tar.gz`(已由 `mjm bundle` 产生),产物在
+`target/dist/release/`:`setup.sh`(bootstrap)、`<tar>.sha256`、`release.json`。
+
+`release.json` 至少:`name`、`version`、`artifact`、`sha256`、`jdk`、`mjm`、`platform`(当前 `any`)。
+
+**目标布局**(三种目标同构):
+
+```
+gh:<owner>/<repo>      https://github.com/<owner>/<repo>/releases/download/<tag>/
+                         <name>-<version>.tar.gz | setup.sh | <tar>.sha256 | release.json
+                       稳定入口: .../releases/latest/download/setup.sh
+mjm:https://host/      <base>/<name>/<version>/release/
+                         <name>-<version>.tar.gz | setup.sh | <tar>.sha256 | release.json
+                       <base>/<name>/<version>/setup.sh      (本版本)
+                       <base>/<name>/setup.sh                 (稳定,每次 release 覆盖)
+mjm:local:<dir>        同一目录结构,file: 写入,无网络
+```
+
+bootstrap `setup.sh` 下载 tar(curl,缺则 wget)→ 校验 sha256(`sha256sum` 或 `shasum -a 256`)→
+解压到临时目录 → 执行包内 `setup.sh`;失败即退出并清理临时目录。URL 写入 bootstrap 时必须是最终可用地址。
+
+**回读校验**:发布后必须从目标读回 tar(`local:` 读文件;`mjm:` GET;`gh:` GET asset,允许短暂重试),
+sha256 与 manifest 一致才算成功;失败 exit 1 并报告具体 URL/文件。
