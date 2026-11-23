@@ -5,31 +5,31 @@
 
 ---
 
-## F1 — `local:` 仓库让 mjm.lock 绑定 checkout 的绝对路径（**已实施**，方案 ①）
+## F1 — `local:` 仓库让 jeno.lock 绑定 checkout 的绝对路径（**已实施**，方案 ①）
 
 ### 现状（复现已修正）
 
 - `[repos] vendor = "local:vendor"` 在解析时被 `ArtifactLocations.asFileUrl` 变成**绝对**
-  `file://` URL：相对路径按当前工作目录解析（`MjModule` 把 cwd 固定成项目根），`~` 展开成
+  `file://` URL：相对路径按当前工作目录解析（`JenoModule` 把 cwd 固定成项目根），`~` 展开成
   家目录。锁文件里每一行的 `url` 因此长这样：
-  `file:///home/dzb/Projects/mjm-cargo/vendor/com/jujin8/freeway/…/x.jar`。
-- 仓库里 committed 的那份 `mjm.lock` 指向**另一份 checkout**
+  `file:///home/dzb/Projects/jeno-cargo/vendor/com/jujin8/freeway/…/x.jar`。
+- 仓库里 committed 的那份 `jeno.lock` 指向**另一份 checkout**
   `/home/dzb/Projects/mj/vendor/…`。那个目录存在，`vendor/` 也被 git 跟踪——不是"文件丢了"，
   而是"锁文件记的是另一个目录的绝对位置"。
-- 同一台机器 `git clone` 到 `/tmp/x` 后 `mjm lock` 是**成功**的：`local:vendor` 按新的工作目录
+- 同一台机器 `git clone` 到 `/tmp/x` 后 `jeno lock` 是**成功**的：`local:vendor` 按新的工作目录
   解析，9 个工件都在新 checkout 里。真正的破坏是下面四条，都只在"换目录/换机器"时出现：
-  1. **冷 store + committed lock**：`mjm build` 只走 `verifiedJars`（纯 store 查询），缺件就报
-     `run mjm lock`；按锁里的 URL 取字节的是 `mjm lock` 自己。committed lock 指向另一份 checkout，
+  1. **冷 store + committed lock**：`jeno build` 只走 `verifiedJars`（纯 store 查询），缺件就报
+     `run jeno lock`；按锁里的 URL 取字节的是 `jeno lock` 自己。committed lock 指向另一份 checkout，
      所以冷 store 的新 clone 在 build 这一步就停住，重锁又会把 9 行 URL 改写成当前目录。
      实测新 clone + 空 store（`-Duser.home=/tmp/empty`）→
-     `mjm: com.jujin8.freeway:freeway-commons@2.0.2 is not in the store — run mjm lock`。
+     `jeno: com.jujin8.freeway:freeway-commons@2.0.2 is not in the store — run jeno lock`。
      换到一台没有 `/home/dzb/Projects/mj` 的机器，锁里的 URL 直接无处可取。
-  2. **重锁漂移**：在任何别的目录跑 `mjm lock`，9 行 `url` 全部改写 → 工作区变脏，
+  2. **重锁漂移**：在任何别的目录跑 `jeno lock`，9 行 `url` 全部改写 → 工作区变脏，
      "锁文件字节稳定"不成立（同一目录内重锁才幂等）。
   3. **`--offline` 在搬迁后的检出上失败**：store 的 URL→digest 索引（`store/index/<sha256(url)>.url`，
      `UrlIndex`）是按**绝对 URL** 做 key 的。换目录后索引全部未命中，`--offline` 又禁止重新取，
      于是即便每个字节都已经在 store 里也报缺（实测 `lock --offline` exit 1）。
-  4. `mjm info` / 错误消息里展示的 URL 也是绝对路径，无法在同事的机器上使用。
+  4. `jeno info` / 错误消息里展示的 URL 也是绝对路径，无法在同事的机器上使用。
 - 不受影响的：sha256 双钉本身正确——漂移的只是"去哪儿取"这一列，字节校验仍然有效。
 
 ### 方案 ①：`local:` 在锁文件里用相对项目根的表示（推荐）
@@ -39,14 +39,14 @@
 - 改动面：`ArtifactLocations`（`asFileUrl` 拆成"写锁用相对 / 读取用展开"两个方向，
   并让 `local:` 相对**项目根**而不是 cwd）、`LockedArtifact`/`LockFile`（URL 列的表示）、
   `ArtifactStore.ensure` 的入参（需要项目根上下文，或在调用前已展开成绝对 URL）、
-  `UrlIndex` 的 key（改用相对 URL，才能跨目录命中）、`MjModule`（把 `projectDir` 传给展开点）。
+  `UrlIndex` 的 key（改用相对 URL，才能跨目录命中）、`JenoModule`（把 `projectDir` 传给展开点）。
 - lock 兼容性：**旧 lock 仍可读**。按前缀分支：`file://` 绝对形式走旧语义（能用，但仍不可移植）；
   相对形式按项目根展开。写出统一用新形式，不需要版本字段。
 - 代价：URL 的语义从"全局位置"变成"项目内位置"，`info`/错误消息/`lock` 打印 URL 的地方要统一
   按同一规则显示；`local:/abs/path` 要么拒绝，要么保留并明确标注不可移植。
 - 回归断言：
-  1. 同一 fixture clone 到两个不同目录，各自 `mjm lock`，两份 `mjm.lock` **字节相同**；
-  2. 在第二个目录用**空 store** 的 `--offline` 跑 `mjm lock`（store 先由第一个目录预热）
+  1. 同一 fixture clone 到两个不同目录，各自 `jeno lock`，两份 `jeno.lock` **字节相同**；
+  2. 在第二个目录用**空 store** 的 `--offline` 跑 `jeno lock`（store 先由第一个目录预热）
      不再因索引未命中而失败；
   3. 不重锁、直接 `build` 也能用（URL 相对化后指向本 checkout）。
 
@@ -83,26 +83,26 @@
 ### F6a：prepare-then-commit（推荐主方案）
 
 **现状**：`AddCommand` 与 `RemoveCommand` 的次序都是
-"读 mjm.toml → 算出新文本 → 内存里 parse 校验 → **写 mjm.toml** → `lockService.refresh`"。
-`refresh` 才是取元数据、解析、写 mjm.lock 的一步。它在写盘之后失败（坐标只在 `[repos]` 里、
+"读 jeno.toml → 算出新文本 → 内存里 parse 校验 → **写 jeno.toml** → `lockService.refresh`"。
+`refresh` 才是取元数据、解析、写 jeno.lock 的一步。它在写盘之后失败（坐标只在 `[repos]` 里、
 网络不可用、坐标拼错但在 Central 上不存在…）时：
 
-- `mjm.toml` 已被改动，多了一条解析不了的声明；
-- `mjm.lock` 没更新，于是 `mjm build` 报 `mjm.lock is stale — '…' is declared … but not locked`，
-  而 `mjm lock` 又会因为同一条声明再次失败；
-- 用户只能手改 mjm.toml（复现见测试报告 F6）。
+- `jeno.toml` 已被改动，多了一条解析不了的声明；
+- `jeno.lock` 没更新，于是 `jeno build` 报 `jeno.lock is stale — '…' is declared … but not locked`，
+  而 `jeno lock` 又会因为同一条声明再次失败；
+- 用户只能手改 jeno.toml（复现见测试报告 F6）。
 
 **方案**：把"准备"与"提交"分开，两个写盘点放在解析与下载都成功之后：
 
-1. 读 mjm.toml，算出新文本，`ProjectReader.parse(updated)` 校验（纯内存，不写盘）；
-2. 用 `ProjectReader.parse(updated)` 的结果做一次**完整 resolve**（纯内存，不写 mjm.lock）；
+1. 读 jeno.toml，算出新文本，`ProjectReader.parse(updated)` 校验（纯内存，不写盘）；
+2. 用 `ProjectReader.parse(updated)` 的结果做一次**完整 resolve**（纯内存，不写 jeno.lock）；
 3. 按 resolve 结果 `store.ensure` 每一个工件（下载/校验字节；失败则中止，磁盘无改动）；
-4. 提交：写 mjm.toml，再写 mjm.lock（同一个提交点，顺序固定）；
-5. 失败处理：第 1–3 步任一步失败 —— 磁盘无改动，直接退出；第 4 步若 mjm.toml 已写而 mjm.lock
-   写失败 —— 立即写回旧 mjm.toml（第 2 步已把它的字节留在内存里），再退出。
+4. 提交：写 jeno.toml，再写 jeno.lock（同一个提交点，顺序固定）；
+5. 失败处理：第 1–3 步任一步失败 —— 磁盘无改动，直接退出；第 4 步若 jeno.toml 已写而 jeno.lock
+   写失败 —— 立即写回旧 jeno.toml（第 2 步已把它的字节留在内存里），再退出。
 
 **改动面**：`LockService` 拆成 `prepare(projectDir, text)`（返回图 + 字节都已就位）与
-`commit(projectDir, text, graph)`（写 mjm.toml + lock）；`AddCommand`/`RemoveCommand` 改调两者；
+`commit(projectDir, text, graph)`（写 jeno.toml + lock）；`AddCommand`/`RemoveCommand` 改调两者；
 两个命令的"写盘"合并成一个提交方法。
 
 **为什么不是只做原子 rename**：rename 只能保证"文件是完整的"，不能保证"语义是成功的"——
@@ -110,9 +110,9 @@
 
 **回归断言**：
 - 在一个只有 `[repos] vendor` 的 fixture 项目里 `add` 一个不存在的坐标 → exit 1，
-  且 `mjm.toml`、`mjm.lock` 与调用前**逐字节相同**（不是"语义相同"：比对文件内容）；
+  且 `jeno.toml`、`jeno.lock` 与调用前**逐字节相同**（不是"语义相同"：比对文件内容）；
 - 同样的断言对 `remove` 一条会导致 refresh 失败的声明成立（例如锁里已有工件、store 被清空）；
-- 成功后：mjm.toml 与 mjm.lock 都体现新图，且此时目录里没有 `*.tmp` 残留。
+- 成功后：jeno.toml 与 jeno.lock 都体现新图，且此时目录里没有 `*.tmp` 残留。
 
 ### F6b：`add` 支持 native / repo-bound 物种
 
@@ -121,7 +121,7 @@
 
 - 声明属于 `[repos]` 的依赖只能是 `group:artifact` + **Central** 物种，写进 `[deps]` 后
   解析会去 Central 取，取不到（实测：`add "com.jujin8.freeway:freeway-commons" 2.0.2`
-  → `unable to fetch the pom`，且此时 mjm.toml 已被写坏）；
+  → `unable to fetch the pom`，且此时 jeno.toml 已被写坏）；
 - 没有任何方式让 `add` 写进 `[deps.{repo}]`，也没有 native 版本的发现（`versions()` 只查
   Central 的 `maven-metadata.xml`，`search()` 只查 Central 索引）。
 
@@ -135,5 +135,5 @@
    （今天的值形态校验已支持，缺的是从 tag 推导 group/artifact 的规则与版本列表来源）。
 
 **回归断言**：`add --repo vendor "com.jujin8.freeway:freeway-commons" 2.0.2` 成功，
-`mjm.toml` 里出现在 `[deps.vendor]` 而不是 `[deps]`；`add` 同一坐标不带 `--repo` 时
+`jeno.toml` 里出现在 `[deps.vendor]` 而不是 `[deps]`；`add` 同一坐标不带 `--repo` 时
 （若选方案 2）exit 1 且文件逐字节不变。

@@ -1,29 +1,29 @@
-## mjm — modern java manager
+## jeno — modern java manager
 
-[![Latest release](https://img.shields.io/github/v/release/dzb/mjm-cargo?label=release)](https://github.com/dzb/mjm-cargo/releases/latest) [![JDK](https://img.shields.io/badge/JDK-25%2B-orange)](https://jdk.java.net/25/) ![runtime deps](https://img.shields.io/badge/runtime%20deps-0-brightgreen)
+[![Latest release](https://img.shields.io/github/v/release/dzb/jeno-cargo?label=release)](https://github.com/dzb/jeno-cargo/releases/latest) [![JDK](https://img.shields.io/badge/JDK-25%2B-orange)](https://jdk.java.net/25/) ![runtime deps](https://img.shields.io/badge/runtime%20deps-0-brightgreen)
 
 A package manager and build tool for Java, built to replace Maven for the
 Freeway ecosystem — and then to outgrow that role.
 
-mjm is **self-hosting**: the previous release builds the next one. Every
+jeno is **self-hosting**: the previous release builds the next one. Every
 release you download was compiled, tested, packaged and published by the
-release before it. That is not a slogan; it is the only way mjm is ever built.
+release before it. That is not a slogan; it is the only way jeno is ever built.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dzb/mjm-cargo/master/setup.sh | bash
-mjm --version          # mjm <version> — modern java manager
+curl -fsSL https://raw.githubusercontent.com/dzb/jeno-cargo/master/setup.sh | bash
+jeno --version          # jeno <version> — modern java manager
 ```
 
-**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D22, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
+**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D23, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
 
 ---
 
 ## Why not Maven
 
 Maven solved dependency management for a generation, and its model has three
-costs mjm refuses to inherit:
+costs jeno refuses to inherit:
 
-| Maven | mjm |
+| Maven | jeno |
 |---|---|
 | XML descriptors, mutable and inheritance-heavy | TOML, closed schema, no property interpolation |
 | Central is *the* registry | any URL that serves bytes is a registry |
@@ -31,7 +31,7 @@ costs mjm refuses to inherit:
 | version ranges and silent conflict resolution | exact versions; conflicts are errors with paths |
 | transitive dependencies quietly on the compile path | **strict visibility**: only declared deps compile |
 
-The last one is the core.**mjm compiles against exactly what you declared.**
+The last one is the core.**jeno compiles against exactly what you declared.**
 Anything transitive is runtime-only. If you import a class you did not
 declare, the build fails — by construction, not by convention. That one rule
 eliminates the entire class of `NoSuchMethodError` archaeology.
@@ -41,14 +41,14 @@ eliminates the entire class of `NoSuchMethodError` archaeology.
 ### 1. Semantic-aware MVS, not version ranges
 
 Every dependency is pinned to an exact version. When two paths demand the same
-artifact, mjm resolves per id:
+artifact, jeno resolves per id:
 
 - **same major** → take the max (Maven's ordering)
 - **different majors** → **hard conflict**, with both introduction paths named
 - non-semver versions (calendar versions, `30.0-jre`) → plain max-wins
 
 The reasoning: silently taking the max across a major version boundary is
-exactly how a program compiles cleanly and dies at runtime. mjm refuses to be
+exactly how a program compiles cleanly and dies at runtime. jeno refuses to be
 an accomplice. The exits are named: align the versions, or pin one in
 `[overrides]`.
 
@@ -60,45 +60,45 @@ entanglement. The budget is a hard error — no exemption mechanism, because
 exemptions are how budgets die.
 
 The intended answer to a breach is structural: swap the library for a smaller
-one, exclude a subtree, or consciously raise the budget. `mjm tree` renders the
-depths; `mjm why <id>` shows every path that introduces an artifact.
+one, exclude a subtree, or consciously raise the budget. `jeno tree` renders the
+depths; `jeno why <id>` shows every path that introduces an artifact.
 
 ### 3. Two scopes, one graph
 
 `[dev-deps]` is the test-only group (Cargo's `dev-dependencies`, uv's
-dependency groups). It resolves into the same `mjm.lock`, but never reaches the
-compile classpath, `mjm run`, `mjm package`, `mjm bundle`, or a **published
+dependency groups). It resolves into the same `jeno.lock`, but never reaches the
+compile classpath, `jeno run`, `jeno package`, `jeno bundle`, or a **published
 descriptor**. Production use wins: an artifact reachable from both scopes is
 main.
 
-In mjm's own manifest JUnit is a main dependency because `MjmTestFork` (part of
+In jeno's own manifest JUnit is a main dependency because `JenoTestFork` (part of
 the production CLI surface) compiles against the JUnit Platform API. Packaging
 metadata in `[toolchain]` marks those same artifacts as test machinery, so
-`mjm bundle --toolchain` ships them under `lib/toolchain/` instead of merging
+`jeno bundle --toolchain` ships them under `lib/toolchain/` instead of merging
 them into the launcher jar.
 
 ## Quick start
 
 ```bash
-mjm init                      # skeleton mjm.toml
-mjm add "org.slf4j:slf4j-api" 2.0.18
-mjm lock                      # resolve, download into ${XDG_CACHE_HOME:-~/.cache}/mjm/store, pin sha256
-mjm build                     # javac against declared deps only (resources-only modules copy too)
-mjm test                      # forked JVM: @MjmTest + JUnit Jupiter
-mjm run com.example.App
-mjm cache purge --dry-run     # destructive: shows store/sources; --yes actually deletes
+jeno init                      # skeleton jeno.toml
+jeno add "org.slf4j:slf4j-api" 2.0.18
+jeno lock                      # resolve, download into ${XDG_CACHE_HOME:-~/.cache}/jeno/store, pin sha256
+jeno build                     # javac against declared deps only (resources-only modules copy too)
+jeno test                      # forked JVM: @JenoTest + JUnit Jupiter
+jeno run com.example.App
+jeno cache purge --dry-run     # destructive: shows store/sources; --yes actually deletes
 ```
 
 ### Migrating from Maven
 
 ```bash
 cd your-maven-project
-mjm init --pom                # translate pom.xml; local/Central parents and BOMs; [java] from Maven properties
+jeno init --pom                # translate pom.xml; local/Central parents and BOMs; [java] from Maven properties
 ```
 
 The translation is a **reviewed migration, not an import**: properties are
 resolved into literal versions, `<scope>test</scope>` lands in `[dev-deps]`,
-`dependencyManagement` supplies missing versions, and anything mjm cannot
+`dependencyManagement` supplies missing versions, and anything jeno cannot
 express — snapshots, classifiers, `system`/`import` scopes, unresolved
 properties — is **printed as a note instead of silently dropped**. The
 generated file is validated before it is written.
@@ -106,16 +106,16 @@ generated file is validated before it is written.
 ### Sharing a library
 
 ```bash
-mjm publish gh:acme/widget
+jeno publish gh:acme/widget
 # → released acme/widget@v1.2.0 (3 assets)
 #   share it with:
-#     mjm add "widget" gh:acme/widget@v1.2.0
+#     jeno add "widget" gh:acme/widget@v1.2.0
 ```
 
 Consumers get the facts, not a README:
 
 ```bash
-$ mjm info "acme:widget"
+$ jeno info "acme:widget"
 acme:widget@1.2.0
   A tiny reactive widget toolkit
   homepage: https://github.com/acme/widget
@@ -125,10 +125,10 @@ acme:widget@1.2.0
   origin:   gh:acme/widget
   source:   https://github.com/acme/widget/tree/v1.2.0
 
-fetch the tree: mjm info "acme:widget" --source
+fetch the tree: jeno info "acme:widget" --source
 ```
 
-`--source` unpacks the source tree at the **exact tag the lockfile pins**. mjm
+`--source` unpacks the source tree at the **exact tag the lockfile pins**. jeno
 never publishes a `-sources.jar`: Go and Cargo never split source from
 artifact, and a sources jar is a patch for Java's binary-first distribution,
 not a capability. What matters is that source is *addressable* — and the
@@ -137,53 +137,53 @@ binary-first ecosystem, still fall back to the publisher's own sources jar.)
 
 ## Publishing: no registry
 
-There is no mjm registry, and no center it knows about. **A repository is a URL.**
+There is no jeno registry, and no center it knows about. **A repository is a URL.**
 
 Publishing is uploading three files where a URL can reach them:
 
 ```
 mylib-1.2.0.jar
-mylib-1.2.0.mjm.toml     ← the descriptor: its own deps, java requirement, identity
+mylib-1.2.0.jeno.toml     ← the descriptor: its own deps, java requirement, identity
 mylib-1.2.0.sha256
 ```
 
-The layout is [SPEC.md](SPEC.md) §7; a Maven-layout target is refused because mjm writes no POM.
+The layout is [SPEC.md](SPEC.md) §7; a Maven-layout target is refused because jeno writes no POM.
 
 | Where | Consumed as | How it is published |
 |---|---|---|
-| GitHub Releases | `gh:owner/repo@v1.2.3` | `mjm publish gh:owner/repo` |
+| GitHub Releases | `gh:owner/repo@v1.2.3` | `jeno publish gh:owner/repo` |
 | ~~Gitee Releases~~ | 已移除:附件匿名下载需令牌,违反零配置;用裸 URL 或自建主机 | — |
-| **your own host** — mjm layout | `[repos.mine]` `type = "mjm"`, `url = "https://my.host/"` (or a literal private-network `http://192.168.x.x/`, with a warning) + `"lib" = "mine:1.2.3"` | `mjm publish mjm:https://my.host/` — two levels, no `group` needed |
-| **your own host** — Maven layout (the default type) | `[repos.corp]` `url = "https://nexus.corp/"` + `"com.corp:lib" = "corp:1.2.3"` | readable by mjm, but **not a publish target**: mjm writes no POM. Publish the layout with your own tooling, or use the mjm layout |
-| a local directory | `[repos.vend]` `type = "mjm"`, `url = "vendor"` (or the legacy `local:/path` string) | `mjm publish mjm:local:vendor` (writes the triple in place) |
+| **your own host** — jeno layout | `[repos.mine]` `type = "jeno"`, `url = "https://my.host/"` (or a literal private-network `http://192.168.x.x/`, with a warning) + `"lib" = "mine:1.2.3"` | `jeno publish jeno:https://my.host/` — two levels, no `group` needed |
+| **your own host** — Maven layout (the default type) | `[repos.corp]` `url = "https://nexus.corp/"` + `"com.corp:lib" = "corp:1.2.3"` | readable by jeno, but **not a publish target**: jeno writes no POM. Publish the layout with your own tooling, or use the jeno layout |
+| a local directory | `[repos.vend]` `type = "jeno"`, `url = "vendor"` (or the legacy `local:/path` string) | `jeno publish jeno:local:vendor` (writes the triple in place) |
 | any static server | a bare `https://…/x.jar` leaf | upload the jar your way (a leaf carries no descriptor, so it is not a `publish` target) |
 
-The `mjm:` layout is the shortest one: `mjm publish mjm:https://my.host/` (or a
-literal private-address `mjm:http://192.168.x.x:port/` on a LAN) writes
-`<name>/<version>/<name>-<version>.{jar,mjm.toml,sha256}` and needs no `[project].group`
-on either side. A Maven-layout target is **refused**: mjm generates no POM, so
-neither mjm nor Maven could read the triple back. Maven repositories remain
+The `jeno:` layout is the shortest one: `jeno publish jeno:https://my.host/` (or a
+literal private-address `jeno:http://192.168.x.x:port/` on a LAN) writes
+`<name>/<version>/<name>-<version>.{jar,jeno.toml,sha256}` and needs no `[project].group`
+on either side. A Maven-layout target is **refused**: jeno generates no POM, so
+neither jeno nor Maven could read the triple back. Maven repositories remain
 readable (`[repos] type = "maven"`); publishing into one needs a POM generator,
-which mjm does not have. A dependency names its repository in the value
+which jeno does not have. A dependency names its repository in the value
 (`corp:1.2.3`); the older `[deps.corp]` table form is legacy but still read.
 `gh` is a reserved name — the `gh:` prefix wins, so a repository cannot take it.
-`MJM_PUBLISH_TOKEN` adds a bearer token when the mjm-layout host wants one.
+`JENO_PUBLISH_TOKEN` adds a bearer token when the jeno-layout host wants one.
 
 Before publishing, run the local preflight:
 
 ```bash
-mjm verify
+jeno verify
 ```
 
-It checks that every direct declaration still matches `mjm.lock`, that the
+It checks that every direct declaration still matches `jeno.lock`, that the
 lock's jar and metadata bytes are still present and hash-correct in the store,
 and that a complete `target/dist` publish triple or bundle `SHA256SUMS` is
 internally consistent (a package-only jar is skipped as not prepared; a partial
 triple or a bundle directory without `SHA256SUMS` still fails). It never
 resolves, downloads or modifies project files.
 
-Publishing accepts only targets mjm can read back — a GitHub release, an mjm
-layout over HTTPS, or an mjm layout on disk. GitHub gets native upload because
+Publishing accepts only targets jeno can read back — a GitHub release, an jeno
+layout over HTTPS, or an jeno layout on disk. GitHub gets native upload because
 its release API is stable and public; everything else is the three files over a
 plain PUT followed by a GET read-back of every file.
 
@@ -205,14 +205,14 @@ Because a repository is just a URL, moving a library — from GitHub to your own
 server, from a company registry to a mirror — changes one line in `[repos]`. No
 account migration, no re-publishing under a new namespace.
 
-Determinism does not depend on the host. `mjm.lock` pins **two** digests per
+Determinism does not depend on the host. `jeno.lock` pins **two** digests per
 artifact — the bytes and the metadata. A release asset can be deleted,
 replaced, or served from a different CDN; the lockfile still defines what is
 correct, and a mismatch is a hard failure.
 
 ## Self-hosting
 
-mjm builds mjm, and freeway (the framework mjm is built on) is built by mjm too.
+jeno builds jeno, and freeway (the framework jeno is built on) is built by jeno too.
 
 ```
         ┌──────────────────────────────────────────────┐
@@ -220,117 +220,117 @@ mjm builds mjm, and freeway (the framework mjm is built on) is built by mjm too.
         └──────────────────────────────────────────────┘
 ```
 
-The lifecycle is explicit steps, and that is deliberate: **mjm has no release
-lifecycle command.** `mjm release` exists, but it only uploads an installer that
-`mjm bundle` already produced — it never builds, tests or bundles implicitly.
+The lifecycle is explicit steps, and that is deliberate: **jeno has no release
+lifecycle command.** `jeno release` exists, but it only uploads an installer that
+`jeno bundle` already produced — it never builds, tests or bundles implicitly.
 Deciding when to run those steps, what to name the release, and where to upload
 it remains a project's CI job.
 
 ```bash
-mjm lock && mjm build && mjm test   # verify the code under test
-mjm bundle --toolchain              # assemble mjm's installable distribution
+jeno lock && jeno build && jeno test   # verify the code under test
+jeno bundle --toolchain              # assemble jeno's installable distribution
 gh release create vX.Y.Z ...        # the CI decides to publish
 ```
 
 **Bootstrap discipline** (the part that actually matters). CI compiles the tree
 with `javac` against `vendor/`, then every later step — lock, build, test,
-bundle — runs that freshly compiled `mjm`, not a previously installed one. The
+bundle — runs that freshly compiled `jeno`, not a previously installed one. The
 artifact must reflect the code under test: a change to the build itself
 (generating the version resource, a new javac flag) cannot be executed by a
 tool that predates it, and running the old tool silently makes every such
 change land one release late. (Recorded in [REMINDS.md](REMINDS.md) §2.)
 
 The one compatibility question a previous release *could* answer — "does the
-shipped `mjm` still read this `mjm.toml`?" — is answered by the release
+shipped `jeno` still read this `jeno.toml`?" — is answered by the release
 checklist rather than by CI: the format is a closed schema and the reader is
 versioned with it.
 
-Version numbers are declared **once**, in `mjm.toml`. The build derives them into
-`META-INF/mjm/version.properties` and the jar manifest; the running binary reads
+Version numbers are declared **once**, in `jeno.toml`. The build derives them into
+`META-INF/jeno/version.properties` and the jar manifest; the running binary reads
 the resource. No version string is hand-maintained in source.
 
 ## The distribution
 
 ```
-mjm-<version>/
-├── bin/mjm                       launcher
+jeno-<version>/
+├── bin/jeno                       launcher
 ├── lib/
-│   ├── mjm-<version>.jar         mjm + freeway + slf4j, one uber-jar
+│   ├── jeno-<version>.jar         jeno + freeway + slf4j, one uber-jar
 │   └── toolchain/               junit — loaded only by the forked test JVM
 ├── setup.sh
 └── SHA256SUMS
 ```
 
-One jar. freeway is mjm's skeleton, not a dependency a user could swap — so it
+One jar. freeway is jeno's skeleton, not a dependency a user could swap — so it
 is merged in, not shipped beside. The test toolchain is separate because a
 production run never loads a single byte of it.
 
-`mjm bundle` assembles that directory and a `tar.gz` for `curl | bash`; it needs
+`jeno bundle` assembles that directory and a `tar.gz` for `curl | bash`; it needs
 `[project].main` and targets the JDK from `[java].version` (or the build JDK).
 `setup.sh` verifies `SHA256SUMS`, swaps `lib/` and `bin/` through a staging
-directory, and leaves `${XDG_CACHE_HOME:-~/.cache}/mjm/store` (your entire
+directory, and leaves `${XDG_CACHE_HOME:-~/.cache}/jeno/store` (your entire
 dependency cache) untouched; `uninstall.sh` removes the install. Artifacts named
 in `[toolchain].jars` ship only with `bundle --toolchain`, under
-`lib/toolchain/`. `mjm upgrade` (alias `mjm update`) upgrades in place and
+`lib/toolchain/`. `jeno upgrade` (alias `jeno update`) upgrades in place and
 takes effect on the next invocation.
 
-mjm's own release tarball is signed: each release carries
-`mjm-bin-{version}.tar.gz.minisig` and `minisign.pub`. Verify manually before
+jeno's own release tarball is signed: each release carries
+`jeno-bin-{version}.tar.gz.minisig` and `minisign.pub`. Verify manually before
 installing:
 
 ```bash
 minisign -V -P "$(tail -1 minisign.pub)" \
-  -m mjm-bin-{version}.tar.gz -x mjm-bin-{version}.tar.gz.minisig
+  -m jeno-bin-{version}.tar.gz -x jeno-bin-{version}.tar.gz.minisig
 ```
 
 The key id is documented in [RELEASE.md](RELEASE.md); compare the fingerprint
-out of band. `mjm update` currently checks download integrity only — it does
+out of band. `jeno update` currently checks download integrity only — it does
 not verify the minisign signature yet.
 
 ## Commands
 
-A few everyday shapes; `mjm --help` prints the command list, and
+A few everyday shapes; `jeno --help` prints the command list, and
 [SPEC.md](SPEC.md) §6 is the contract (arguments, exit codes, workspace
 strategy, JSON fields).
 
 ```sh
-mjm init
-mjm add "org.apache.logging.log4j:log4j-api" 2.25.4
-mjm lock
-mjm build && mjm test
-mjm run                          # [project].main, or: mjm run app.Main -- args…
-mjm package --uber
-mjm bundle
-mjm classpath --test
-mjm audit
-mjm doctor
-mjm verify
-mjm publish gh:owner/repo
+jeno init
+jeno add "org.apache.logging.log4j:log4j-api" 2.25.4
+jeno lock
+jeno build && jeno test
+jeno run                          # [project].main, or: jeno run app.Main -- args…
+jeno package --uber
+jeno bundle
+jeno classpath --test
+jeno audit
+jeno doctor
+jeno verify
+jeno publish gh:owner/repo
 
 # applications: installer + bootstrap
-mjm bundle
-mjm release --dry-run                  # show the URLs it would upload
-mjm release mjm:local:../releases      # or gh:owner/repo / mjm:https://host/
-mjm release mjm:http://192.168.1.39:8080/upload/  # literal private IP only
+jeno bundle
+jeno release --dry-run                  # show the URLs it would upload
+jeno release jeno:local:../releases      # or gh:owner/repo / jeno:https://host/
+jeno release jeno:http://192.168.1.39:8080/upload/  # literal private IP only
 curl -fsSL https://host/app/setup.sh | bash
 ```
 
 ### Signing a release
 
-`mjm release` signs the installer with [minisign](https://jedisct1.github.io/minisign/)
+`jeno release` signs the installer with [minisign](https://jedisct1.github.io/minisign/)
 unless you explicitly opt out:
 
 ```bash
 minisign -G                         # interactive: encrypted key + .pub
 minisign -G -W                      # CI/automation: unencrypted key (treat it as a secret)
-export MJM_MINISIGN_KEY=~/.minisign/minisign.key
-export MJM_MINISIGN_PUBKEY=~/.minisign/minisign.pub   # optional; derived if omitted
-mjm bundle
-mjm release mjm:https://my.host/
-# LAN: mjm release mjm:http://192.168.1.39:8080/upload/   (plain http, private IP only)
+export JENO_MINISIGN_KEY=~/.minisign/minisign.key
+export JENO_MINISIGN_PUBKEY=~/.minisign/minisign.pub   # optional; derived if omitted
+jeno bundle
+jeno release jeno:https://my.host/
+# LAN: jeno release jeno:http://192.168.1.39:8080/upload/   (plain http, private IP only)
 ```
 
-`MJM_MINISIGN` points at the binary (default `minisign`). Every release carries
+`JENO_MINISIGN` points at the binary (default `minisign`). Every release carries
 `<tar>.minisig`, `setup.sh.minisig`, `release.json.minisig` and `minisign.pub`;
 the bootstrap embeds the public key, verifies the tar's signature after the
 sha256 check, and refuses to install if minisign is missing or the signature is
@@ -340,8 +340,8 @@ check the key fingerprint from this README or the release tag out of band — a
 signature proves the artifact came from that key, not that the host is honest.
 
 Unknown arguments are usage errors (exit 2), never silently ignored. `--` ends
-mjm's own options: after it, arguments belong to the command — for `run`, to the
-program (`mjm run app.Main -- --offline` passes `--offline` through).
+jeno's own options: after it, arguments belong to the command — for `run`, to the
+program (`jeno run app.Main -- --offline` passes `--offline` through).
 
 ### Output and colour
 
@@ -351,13 +351,13 @@ is piped, so scripts do not need to parse ANSI escapes. `--json` has the
 long-form alias `--format=json`; `--format=text` switches back.
 
 ```bash
-MJM_COLOR=always mjm --help   # force colour
-MJM_COLOR=never  mjm build    # force plain text
-NO_COLOR=1       mjm doctor   # the conventional opt-out
+JENO_COLOR=always jeno --help   # force colour
+JENO_COLOR=never  jeno build    # force plain text
+NO_COLOR=1       jeno doctor   # the conventional opt-out
 ```
 
-`MJM_COLOR` accepts `always`, `never`, or the default `auto`. `mjm doctor`,
-`mjm tree`, lifecycle status lines and errors use the same palette; completion
+`JENO_COLOR` accepts `always`, `never`, or the default `auto`. `jeno doctor`,
+`jeno tree`, lifecycle status lines and errors use the same palette; completion
 lines also include elapsed time on a terminal. Commands that support `--json`
 keep stdout as one pure JSON document regardless of the colour setting;
 diagnostics still go to stderr.
@@ -367,9 +367,9 @@ diagnostics still go to stderr.
 Machine-discovery starts with one document:
 
 ```bash
-mjm --json --help
-mjm --json verify --help    # one command descriptor
-mjm --json --version
+jeno --json --help
+jeno --json verify --help    # one command descriptor
+jeno --json --version
 ```
 
 The catalog is generated from each command's declared capabilities, not a
@@ -380,7 +380,7 @@ through to a program:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "kind": "commandCatalog",
   "commandCount": 22,
   "commands": [
@@ -397,11 +397,11 @@ through to a program:
 ```
 
 `run` is the one deliberate `supportsJson: false` command: its stdout, stderr,
-and exit code belong to the child program. `mjm --json run ...` returns a
-structured `JSON_UNSUPPORTED` error; `mjm run app --json` passes `--json` to the
+and exit code belong to the child program. `jeno --json run ...` returns a
+structured `JSON_UNSUPPORTED` error; `jeno run app --json` passes `--json` to the
 program because everything after the target is the program's.
 
-`mjm info --json` is the consumer-facing artifact export:
+`jeno info --json` is the consumer-facing artifact export:
 
 ```json
 {
@@ -476,8 +476,8 @@ Mutation commands report the actual project change:
   "command": "add",
   "mode": "mutate",
   "dependency": {"id": "com.example:lib", "value": "1.0.0"},
-  "manifest": "/abs/project/mjm.toml",
-  "lock": "/abs/project/mjm.lock",
+  "manifest": "/abs/project/jeno.toml",
+  "lock": "/abs/project/jeno.lock",
   "artifactCount": 1,
   "lockUpdated": true
 }
@@ -523,8 +523,8 @@ discovery and golden-path recipes.
 Publishing and releasing have side-effect-free dry-run plans:
 
 ```bash
-mjm --json publish --dry-run mjm:local:../repo
-mjm --json release --dry-run --allow-unsigned mjm:local:../releases
+jeno --json publish --dry-run jeno:local:../repo
+jeno --json release --dry-run --allow-unsigned jeno:local:../releases
 ```
 
 `publish --dry-run` reports the existing jar plus the descriptor/checksum it
@@ -534,7 +534,7 @@ installer, generated files, signing mode, and would-upload URLs. Neither writes
 request.
 
 `--offline` is target-aware for the publish path: no target and
-`mjm:local:` targets are allowed; `gh:` and remote mjm targets return structured
+`jeno:local:` targets are allowed; `gh:` and remote jeno targets return structured
 `OFFLINE_FORBIDDEN` before upload. Remote release targets follow the same rule.
 
 The current JSON commands are `tree`, `outdated`, `audit`, `doctor`, `verify`,
@@ -545,7 +545,7 @@ Their root objects all carry:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "kind": "commandResult",
   "command": "verify",
   "status": "ok",
@@ -562,39 +562,38 @@ results are one document with a `modules[]` array and a summary, never several
 concatenated JSON documents.
 
 Deliverables moved: `dist/` is now `target/dist/` (it is build output, and
-`mjm clean` removes the whole `target/` tree). Scripts that read `dist/` need
+`jeno clean` removes the whole `target/` tree). Scripts that read `dist/` need
 one edit; an existing `dist/` is no longer read and `publish` tells you so.
 
 
-### Migrating from the old `mj` names
+### Migrating from old project names
 
-Current mjm only reads `mjm.toml`, `mjm.lock`, and `mjm.ws.toml`. It does **not**
-fall back to the older `mj.toml` / `mj.lock` names. Diagnose a checkout with:
+Current jeno only reads `jeno.toml`, `jeno.lock`, and `jeno.ws.toml`. It does **not**
+fall back to files from the previous name. Diagnose a checkout with:
 
 ```bash
-mjm doctor
+jeno doctor
 ```
 
 At a workspace root it checks every module; elsewhere it checks the current
 project. It reports legacy names, missing manifests/locks, malformed files and
 unwritable XDG roots without resolving dependencies or touching the network.
-`mjm init --ws` also names legacy `mj.toml` directories and points at the
-migration path instead of silently omitting them.
+Migration errors name the `mv` command to run, then `jeno lock`.
 
 ### Local workspaces
 
-`mjm.ws.toml` is a local file — do not commit it. `mjm init --ws` writes it from
+`jeno.ws.toml` is a local file — do not commit it. `jeno init --ws` writes it from
 the module directories it finds (or from explicit paths); `[ws] modules = [...]`
 lists them. Inside a workspace, a lock row whose id is one of those modules
 resolves to that module's `target/classes` instead of the store jar, and a root
 directory runs `lock` / `build` / `test` / `package` / `bundle` / `clean` once
 per module in dependency order (`--module <path>` narrows it to one). A root
-refuses `mjm init` / `init --pom` (it must not become a project), and commands
+refuses `jeno init` / `init --pom` (it must not become a project), and commands
 that act on one project — `add`, `remove`, `run`, `info`, `tree`, `why`,
 `classpath`, `publish`, `audit`, `outdated` — require `--module` there.
 
 The substitution happens where the classpath is assembled, so it is visible to
-`mjm build`, `mjm test`, `mjm run` and `mjm classpath`; the lockfile itself is
+`jeno build`, `jeno test`, `jeno run` and `jeno classpath`; the lockfile itself is
 unchanged. The file format is [SPEC.md](SPEC.md) §5; the design record, including
 why `publish` is unaffected, is in [docs/workspace-design.md](docs/workspace-design.md).
 
@@ -604,26 +603,26 @@ why `publish` is unaffected, is in [docs/workspace-design.md](docs/workspace-des
 |---|---|
 | [SPEC.md](SPEC.md) | the contract: file formats, CLI, artifact layout; wins on conflict |
 | [DESIGN.md](DESIGN.md) | the reasons: decisions, alternatives, architecture, budget |
-| [RELEASE.md](RELEASE.md) | how mjm itself is released (pipeline details) |
+| [RELEASE.md](RELEASE.md) | how jeno itself is released (pipeline details) |
 | [REMINDS.md](REMINDS.md) | deliberate tradeoffs, with cost and re-decision trigger |
 | [docs/comparison.md](docs/comparison.md) | historical survey of other package managers |
 | [docs/history-0.2.md](docs/history-0.2.md) | release-by-release history |
 
 ## Design notes
 
-mjm is built on four rules, visible throughout
+jeno is built on four rules, visible throughout
 [DESIGN.md](DESIGN.md):
 
 - **Zero runtime dependencies** beyond the Freeway framework it is built on —
   which itself has none. No plugin system, no bytecode weaving, no scanning.
-- **Closed schemas.** `mjm.toml`, the descriptor and `mjm.lock` each accept
+- **Closed schemas.** `jeno.toml`, the descriptor and `jeno.lock` each accept
   exactly one shape. A misspelled `[dep]` is an error, never a silently empty
   table. Unknown keys fail.
-- **Every fact has one owner.** The lockfile owns bytes; `mjm.toml` owns rules;
+- **Every fact has one owner.** The lockfile owns bytes; `jeno.toml` owns rules;
   the descriptor owns published facts. Nothing is duplicated and nothing is
   guessed — including the version, which exists in source exactly zero times.
 - **Next-action errors.** Resolver, decoder and store speak in what to do next
-  ("run mjm lock", "align the versions, or pin one in [overrides]"), not in
+  ("run jeno lock", "align the versions, or pin one in [overrides]"), not in
   stack traces.
 
 [SPEC.md](SPEC.md) is the formal contract: file grammars, CLI behaviour, artifact
@@ -633,7 +632,7 @@ make someone re-decide.
 
 ## Status
 
-**Self-hosting end to end.** mjm builds, tests, packages, publishes and
+**Self-hosting end to end.** jeno builds, tests, packages, publishes and
 upgrades itself, and builds every freeway module in CI. The test suite is green
 on every push that touches code — the badge above tracks the release. JUnit XML
 reports and local multi-module workspaces are implemented; the remaining known

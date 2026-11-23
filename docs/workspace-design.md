@@ -1,7 +1,7 @@
 # 多模块设计草案（workspaces）
 
 状态:**已实现的设计记录(v4)**。四个阶段均已落地:第 1 阶段(抽出唯一的
-`ClasspathAssembler`,四个调用点收口)在 0.2.9;`mjm.ws.toml` 与 `init --ws`、
+`ClasspathAssembler`,四个调用点收口)在 0.2.9;`jeno.ws.toml` 与 `init --ws`、
 替换生效、根目录编排在 0.2.10。
 更新:2026-11-22(v4);实现状态补记于同一日期
 
@@ -33,7 +33,7 @@ v1 的前提错(以为 classpath 只有一处装配);v2 补了 seam 与命令表
 1. 同目录树里的模块能被另一个模块**替换**,不需要发布。
 2. 根目录能一次跑 `lock` / `build` / `test` / `package` / `bundle` / `clean`,
    按依赖顺序;也能只跑一个。
-3. **不改变任何现有文件格式**:`mjm.toml`、`mjm.lock`、描述符、`[repos]` 不动。
+3. **不改变任何现有文件格式**:`jeno.toml`、`jeno.lock`、描述符、`[repos]` 不动。
 4. 模块单独拿出去仍完全可用。
 5. 不设工作区时,一切与今天逐字节一致。
 
@@ -73,7 +73,7 @@ v1 的前提错(以为 classpath 只有一处装配);v2 补了 seam 与命令表
 |---|---|
 | `build` / `test` / `run` | 用替换后的 classpath(这就是工作区的意义) |
 | `classpath` | 导出替换后的路径(IDE 因此能看到兄弟模块) |
-| `[scripts]` 的 `MJM_CLASSPATH` | 同上;脚本拿到的是本地真实可用的 classpath |
+| `[scripts]` 的 `JENO_CLASSPATH` | 同上;脚本拿到的是本地真实可用的 classpath |
 | `package`(普通与 `--uber`) | 用替换后的字节打包。`--uber` 会把本地 classes 嵌进去——这是用户要的,不是错误 |
 | `bundle` | 同上:发行目录里带本地 classes,由用户自己决定拿去做什么 |
 | `publish` | 上传的始终是普通 `package` 的 jar(只含本项目 classes);描述符写的是**声明里的版本**。工作区的本地 classes 只出现在 `--uber` / `bundle` 的产物里,publish 不会读取它们,因此也不打 note |
@@ -92,20 +92,20 @@ note: libs/core (1.2.1) is a local checkout — this artifact contains unpublish
 ## 5. 文件
 
 ```toml
-# mjm.ws.toml —— 工作区根目录
+# jeno.ws.toml —— 工作区根目录
 [ws]
 modules = ["libs/core", "libs/util", "apps/web", "tools/cli"]
 ```
 
-- 路径相对工作区根;必须是目录且含 `mjm.toml`。
+- 路径相对工作区根;必须是目录且含 `jeno.toml`。
 - 查法:从当前目录向上找,取最近的一层;没有就是单模块(今天的行为)。
-- 工作区根目录不能同时是模块(既有 `mjm.toml` 又有 `mjm.ws.toml` → 报错)。
+- 工作区根目录不能同时是模块(既有 `jeno.toml` 又有 `jeno.ws.toml` → 报错)。
 - **只有 `modules`,没有任何策略字段。** 需要"放宽"的东西一律不该存在(§6.2)。
-- **本地文件,不提交。** git 归用户管,mjm 不写 `.gitignore`、不检查它是否被跟踪。
-- **生成方式**:`mjm init --ws [--force]`
+- **本地文件,不提交。** git 归用户管,jeno 不写 `.gitignore`、不检查它是否被跟踪。
+- **生成方式**:`jeno init --ws [--force]`
   - 无参数时,从当前目录向下扫(深度上限 3,跳过 `target`/`.git`/`node_modules`),
-    凡是含 `mjm.toml` 的目录都列进去;
-  - 也可以显式给路径:`mjm init --ws libs/core apps/web`;
+    凡是含 `jeno.toml` 的目录都列进去;
+  - 也可以显式给路径:`jeno init --ws libs/core apps/web`;
   - 已存在时需 `--force` 才覆盖;
   - 生成的顺序按路径字典序,不尝试推断拓扑序(那是运行期的事)。
 
@@ -118,10 +118,10 @@ modules = ["libs/core", "libs/util", "apps/web", "tools/cli"]
 
 | 检查 | 不通过 |
 |---|---|
-| `target/classes` 存在 | 报错 `run mjm build in <path> first` |
-| `target/classes/META-INF/mjm/version.properties` 里的版本 == 该模块 `mjm.toml` 的版本 | 报错:classes 是旧版本构建的,提示重新 build |
+| `target/classes` 存在 | 报错 `run jeno build in <path> first` |
+| `target/classes/META-INF/jeno/version.properties` 里的版本 == 该模块 `jeno.toml` 的版本 | 报错:classes 是旧版本构建的,提示重新 build |
 
-第二条不需要新文件:`mjm build` 本来就会写这个资源。它比 mtime 可靠(git checkout
+第二条不需要新文件:`jeno build` 本来就会写这个资源。它比 mtime 可靠(git checkout
 会刷新 mtime)。
 
 **前提一:模块的 id 必须等于它被引用时的坐标。** 替换按 `id` 匹配,而 `id` 是
@@ -132,12 +132,12 @@ modules = ["libs/core", "libs/util", "apps/web", "tools/cli"]
 替换与排序同时恢复正常。
 
 **前提二:兄弟模块的坐标仍必须可解析。** 替换发生在装配阶段,解析照旧——所以兄弟模块的
-`id + version` 必须能被 `[repos]` 里某个仓库解析出来(`mjm.lock` 里要有那一行)。一个
+`id + version` 必须能被 `[repos]` 里某个仓库解析出来(`jeno.lock` 里要有那一行)。一个
 从未发布过的新模块,第一次被当作依赖引用时会卡在 `unable to fetch the pom`,而不是
 "工作区里明明有它"。
 
 这是设计的必然结果(锁记录事实,工作区只改字节来源),不是缺陷。绕法:**先把它发布一次到
-你自己的仓库**(任何静态 http 主机或 `local:` 布局都行),加进 `mjm.ws.toml`,此后迭代
+你自己的仓库**(任何静态 http 主机或 `local:` 布局都行),加进 `jeno.ws.toml`,此后迭代
 就不再需要发布。
 
 ### 6.2 版本:不要求相等
@@ -159,14 +159,14 @@ modules = ["libs/core", "libs/util", "apps/web", "tools/cli"]
 ### 6.3 根目录的编排
 
 ```
-mjm lock / build / package / bundle    逐模块(拓扑序);遇错即停
-mjm test                               逐模块;遇错继续,末尾汇总
-mjm clean                              逐模块;遇错继续,汇总
+jeno lock / build / package / bundle    逐模块(拓扑序);遇错即停
+jeno test                               逐模块;遇错继续,末尾汇总
+jeno clean                              逐模块;遇错继续,汇总
 ```
 
 - 拓扑序由模块间依赖推出;环 = 错误并列出环。
 - `--module <path>` 只处理一个(相对工作区根)。可与其他命令组合,例如
-  `mjm bundle --module apps/web`。
+  `jeno bundle --module apps/web`。
 - 非事务:`build` 中途失败时已成功的模块保留产物,重跑会复用;末尾报
   `built: X, failed: Y`。
 - 单模块目录里执行时,一切照旧(不编排,只处理当前模块)。
@@ -178,23 +178,23 @@ mjm clean                              逐模块;遇错继续,汇总
 
 ### 6.5 模块目录里
 
-一切照旧,唯一区别是替换生效。`mjm add` 不感知工作区:按仓库解析;若兄弟模块从未
+一切照旧,唯一区别是替换生效。`jeno add` 不感知工作区:按仓库解析;若兄弟模块从未
 发布,解析会失败并给出正常的依赖错误。
 
 ## 7. 错误与边界
 
 | 情形 | 行为 |
 |---|---|
-| `modules` 里路径不存在 / 没有 `mjm.toml` | 报错并列出 |
+| `modules` 里路径不存在 / 没有 `jeno.toml` | 报错并列出 |
 | 两个模块产出同一个 id | 报错(不能让顺序决定胜负) |
 | 两个模块 realpath 相同(符号链接绕一圈) | 报错 |
-| 根目录同时有 `mjm.toml` 与 `mjm.ws.toml` | 报错 |
+| 根目录同时有 `jeno.toml` 与 `jeno.ws.toml` | 报错 |
 | 模块间成环 | 报错并给出环 |
-| 被替换模块未构建 | 报错 + `run mjm build in <path> first` |
-| classes 的版本戳与模块 `mjm.toml` 不一致 | 报错:旧版本构建产物 |
+| 被替换模块未构建 | 报错 + `run jeno build in <path> first` |
+| classes 的版本戳与模块 `jeno.toml` 不一致 | 报错:旧版本构建产物 |
 | 本地版本与锁不同 | **正常**:一行信息,不阻断 |
-| 嵌套 `mjm.ws.toml` | 取最近的一层,忽略外层 |
-| 运行中 `mjm.ws.toml` 变了 | 不缓存,每次运行重新读取 |
+| 嵌套 `jeno.ws.toml` | 取最近的一层,忽略外层 |
+| 运行中 `jeno.ws.toml` 变了 | 不缓存,每次运行重新读取 |
 | 模块被移出 `modules` | 立即回到仓库版本;不改 lock;不警告 |
 | 兄弟 `target/classes` 比源码旧 | 不检查 mtime;版本戳是唯一依据 |
 
@@ -202,20 +202,20 @@ mjm clean                              逐模块;遇错继续,汇总
 
 | 机制 | 影响 |
 |---|---|
-| `mjm.lock` | 不变,每模块一份,照旧提交 |
-| 项目锁 `~/.mjm/locks/<sha(realpath)>` | 不变;编排时逐模块取锁 |
+| `jeno.lock` | 不变,每模块一份,照旧提交 |
+| 项目锁 `~/.jeno/locks/<sha(realpath)>` | 不变;编排时逐模块取锁 |
 | 严格可见性 | 不变(替换只改字节来源) |
 | `--offline` | 语义不变;兄弟模块少一次网络需求 |
-| `mjm cache` | 不变;工作区不产生新的全局目录 |
+| `jeno cache` | 不变;工作区不产生新的全局目录 |
 | 深度预算 | 不变;看锁里的图,与字节来源无关 |
-| `[scripts]` 的 `MJM_CLASSPATH` | 跟随替换 |
+| `[scripts]` 的 `JENO_CLASSPATH` | 跟随替换 |
 
 ## 9. 为什么不是另外两种做法
 
 **Cargo 式:工作区共享一个锁** —— 语义更好(全工作区单版本),但锁的粒度从"每项目"
 变成"每工作区",模块独立可用性下降。留作以后的可能性。
 
-**把 `path = "../core"` 写进 `mjm.toml`** —— 拒绝:`mjm.toml` 是提交进仓库的,
+**把 `path = "../core"` 写进 `jeno.toml`** —— 拒绝:`jeno.toml` 是提交进仓库的,
 路径会变成机器相关,正是 F1 刚修掉的病。
 
 ## 10. 已决问题(维护者 2026-11-22)
@@ -224,19 +224,19 @@ mjm clean                              逐模块;遇错继续,汇总
 |---|---|
 | Q1 版本是否必须相等 | **不要求**。不同模块各自迭代;相同或不同都允许,只在不同时给一行信息 |
 | Q2 根目录是否编排打包 | **允许**,也允许 `--module` 只打包一个。打包与发布正交,不做强制 |
-| Q3 work 文件是否提交 | **不提交**(本地文件)。git 由用户管;mjm 提供 `mjm init --ws` 生成它 |
+| Q3 work 文件是否提交 | **不提交**(本地文件)。git 由用户管;jeno 提供 `jeno init --ws` 生成它 |
 | Q4 版本目录 | **不做**。概念越多越难用 |
 
 ## 11. 验收标准(实现时照此写测试)
 
-1. A→B 声明;B 构建后,A 的 `mjm classpath` 含 `B/target/classes`,不含 store 里的 B jar。
-2. B 未构建 → A 的 `build` 报 `run mjm build in <path> first`,exit 1。
-3. B 的 classes 版本戳与 `mjm.toml` 不一致 → 报错(旧产物)。
+1. A→B 声明;B 构建后,A 的 `jeno classpath` 含 `B/target/classes`,不含 store 里的 B jar。
+2. B 未构建 → A 的 `build` 报 `run jeno build in <path> first`,exit 1。
+3. B 的 classes 版本戳与 `jeno.toml` 不一致 → 报错(旧产物)。
 4. 本地版本与锁不同 → 构建成功,输出含一行 `core: local 1.2.1, locked 1.2.0`。
 5. 根目录 `build` 按拓扑序;成环 → 报错并列出环。
 6. 根目录 `package` / `bundle` 一次处理全部模块;`--module apps/web` 只处理一个。
 7. `publish` 上传普通 `package` 的 jar(只含本项目 classes),不受替换影响,也不打 note。
 8. `tree` / `info` 对命中的行显示 `(local: <path>)`。
 9. 根目录 `add` / `run` 无 `--module` → 报错要求给一个(而不是"禁止")。
-10. 无 `mjm.ws.toml` 时,所有命令的输出与今天逐字节一致。
-11. `mjm init --ws` 能扫描出子目录里的模块并写出文件;已存在时需 `--force`。
+10. 无 `jeno.ws.toml` 时,所有命令的输出与今天逐字节一致。
+11. `jeno init --ws` 能扫描出子目录里的模块并写出文件;已存在时需 `--force`。

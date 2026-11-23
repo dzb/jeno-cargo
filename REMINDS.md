@@ -7,7 +7,7 @@
 
 ## 1. toolchain 不再靠包名猜(已解决)
 
-**当前位置**:`BundleCommand` 读取 `mjm.toml [toolchain].jars`
+**当前位置**:`BundleCommand` 读取 `jeno.toml [toolchain].jars`
 
 **旧问题**:dist 曾把闭包按 `org.junit.*` / `org.opentest4j:` / `org.apiguardian:`
 包名前缀分成 toolchain 和骨架。任何非 JUnit 测试库都可能被误合进生产 jar,而恰好
@@ -16,11 +16,11 @@
 **现行规则**:`[toolchain].jars` 显式列出 artifact id。它们是 packaging metadata,
 不参与解析、可见性或锁作用域;`bundle` 永不把它们合并进 launcher jar,
 `bundle --toolchain` 才把它们复制到 `lib/toolchain/`。id 不在锁图中时 `bundle` 直接报错。
-mjm 自己的 manifest 用这份清单标记 JUnit 工件;JUnit 仍是 MAIN 依赖,因为
-`MjmTestFork` 属于生产 CLI 的编译面。
+jeno 自己的 manifest 用这份清单标记 JUnit 工件;JUnit 仍是 MAIN 依赖,因为
+`JenoTestFork` 属于生产 CLI 的编译面。
 
 **代价**:清单需要包含 toolchain 闭包中的所有 id,漏写会让该 jar 被当成运行依赖或
-从发行版中缺失。mjm 自己已经列出 JUnit/Platform/OpenTest4J/APIGuardian 全部 7 件。
+从发行版中缺失。jeno 自己已经列出 JUnit/Platform/OpenTest4J/APIGuardian 全部 7 件。
 
 ---
 
@@ -28,19 +28,19 @@ mjm 自己的 manifest 用这份清单标记 JUnit 工件;JUnit 仍是 MAIN 依�
 
 **曾经的症状**:改了 `dist` 的布局,v0.1.4 发布出来的附件**仍是旧布局**。
 
-**原因**:CI 装的是**上一个 release** 的 mjm,然后用它跑 `mjm bundle`。所以任何对 dist
+**原因**:CI 装的是**上一个 release** 的 jeno,然后用它跑 `jeno bundle`。所以任何对 dist
 本身的修改,要等两个版本才生效——v0.1.4 的附件由 v0.1.3 打包,v0.1.3 不懂新布局。
 
 **现在的做法**(`.github/workflows/ci.yml`):
 
 ```yaml
-- name: bundle (with the freshly built mjm)
+- name: bundle (with the freshly built jeno)
   run: |
     CP="target/classes:$(find vendor -name '*.jar' | tr '\n' ':')"
-    java -cp "$CP" com.jujin.mjm.cli.Mjm bundle --toolchain
+    java -cp "$CP" com.jujin.jeno.cli.Jeno bundle --toolchain
 ```
 
-**原则**:已安装的旧 mjm 只负责 `lock` 和 `test`(那里上一版确实是正确的工具——
+**原则**:已安装的旧 jeno 只负责 `lock` 和 `test`(那里上一版确实是正确的工具——
 它验证新代码能不能被旧代码消费);**打包必须用刚编译出的代码**,否则发布的产物
 永远落后一版,而你自己在本地看不到这个问题(本地一直用新代码)。
 
@@ -54,11 +54,11 @@ manifest 结构),都要检查 CI 里那步用的是不是新代码。`--version`
 
 **位置**:`Version.java` / `BuildCommand.writeVersionResource`
 
-**现状**:`mjm.toml [project].version` 是唯一人工声明。构建时写入
-`META-INF/mjm/version.properties` + jar manifest,v运行时读资源。
+**现状**:`jeno.toml [project].version` 是唯一人工声明。构建时写入
+`META-INF/jeno/version.properties` + jar manifest,v运行时读资源。
 
 **已知边界**:
-- 从**未经 mjm build 的源码树**直接跑 `java -cp src...` → 读不到资源 → 报告 `dev`
+- 从**未经 jeno build 的源码树**直接跑 `java -cp src...` → 读不到资源 → 报告 `dev`
 - 这是刻意的:错的版本号比诚实的 `dev` 更糟
 
 **为什么不再有回退常量**:v0.1.2 曾有一个 `BOOTSTRAP_FALLBACK` 作过渡脚手架
@@ -67,14 +67,14 @@ manifest 结构),都要检查 CI 里那步用的是不是新代码。`--version`
 
 ---
 
-## 4. `mjm test` 会清空 `target/test-classes`
+## 4. `jeno test` 会清空 `target/test-classes`
 
 **位置**:`TestCommand.compile`
 
 **原因**:不清的话,删掉的测试类会留在磁盘上,fork JVM 扫描时抛
 `NoClassDefFoundError`——而且只有删过测试类的人会踩到,本地很可能复现不了。
 
-**代价**:每次 `mjm test` 全量重编测试类,没有增量。当前规模下是秒级,
+**代价**:每次 `jeno test` 全量重编测试类,没有增量。当前规模下是秒级,
 不值得做增量。如果哪天测试编译变成瓶颈,再考虑。
 
 ---
@@ -85,8 +85,8 @@ manifest 结构),都要检查 CI 里那步用的是不是新代码。`--version`
 
 | 当时的待办 | 现在 |
 |---|---|
-| `mjm clean` | 已实现:`clean --target`(默认)与 `--dist`,永不触碰 store |
-| `mjm outdated` | 已实现:只读锁文件,支持 `--json` / `--dev` |
+| `jeno clean` | 已实现:`clean --target`(默认)与 `--dist`,永不触碰 store |
+| `jeno outdated` | 已实现:只读锁文件,支持 `--json` / `--dev` |
 | JUnit XML 测试报告 | 已实现:`target/test-results/TEST-*.xml`,64 个 suite 由测试覆盖 |
 
 教训仍是:文档没有可执行测试,就必须在功能落地时同步改掉旧表述。
@@ -97,12 +97,12 @@ manifest 结构),都要检查 CI 里那步用的是不是新代码。`--version`
 
 **当前位置**:`PublishCommand` / `ReleaseCommand`
 
-两个词在 mjm 里有明确不同的产物:
+两个词在 jeno 里有明确不同的产物:
 
 | 命令 | 做什么 | 产出去哪 |
 |---|---|---|
-| `mjm publish [target]` | 发**库**的三件套:jar + `.mjm.toml` + `.sha256`;不上传自己构建的 jar | `target/dist/`;给定目标时上传并回读校验 |
-| `mjm release [target]` | 发**应用安装包**:`bundle` 产生的 tar.gz + bootstrap setup;默认 minisign 签名 | `target/dist/release/`;给定目标时上传并回读校验 |
+| `jeno publish [target]` | 发**库**的三件套:jar + `.jeno.toml` + `.sha256`;不上传自己构建的 jar | `target/dist/`;给定目标时上传并回读校验 |
+| `jeno release [target]` | 发**应用安装包**:`bundle` 产生的 tar.gz + bootstrap setup;默认 minisign 签名 | `target/dist/release/`;给定目标时上传并回读校验 |
 
 历史歧义来自旧的 `release --publish` 全流程命令:它同时做构建、测试、bundle 和上传,
 名字却只说了发布。v0.2.17 之后这个生命周期命令已删除;现行 `release` 是单步上传器,
@@ -118,7 +118,7 @@ manifest 结构),都要检查 CI 里那步用的是不是新代码。`--version`
 
 ## 7. 命令面按"产物"收敛(2026-11-21 历史决策)
 
-> **历史记录**:本节的“删除 `mjm release`”在 v0.2.17 被更新。现行契约见 SPEC §6:
+> **历史记录**:本节的“删除 `jeno release`”在 v0.2.17 被更新。现行契约见 SPEC §6:
 > `publish` 发库三件套,`release` 只上传已 bundle 的安装包;两者都是单步命令,
 > 都不编排完整生命周期。下面的旧决策保留用于解释当时的取舍。
 
@@ -133,13 +133,13 @@ manifest 结构),都要检查 CI 里那步用的是不是新代码。`--version`
 | 有 release/dist 命令吗 | ❌ | ❌ | ❌ | ❌ |
 | 构建与发布分离 | N/A | ✅ | ⚠️ | ✅(publish 默认读 `dist/*`) |
 
-**四家里没有一家有 `release` 或 `dist` 命令。** `release` 是 mjm 自造的概念。
-`uv` 的 `publish` 默认值就是 `dist/*`——和 mjm 的 `dist/` 布局一致。
+**四家里没有一家有 `release` 或 `dist` 命令。** `release` 是 jeno 自造的概念。
+`uv` 的 `publish` 默认值就是 `dist/*`——和 jeno 的 `dist/` 布局一致。
 
 **决定**:
-1. **删除旧的 `mjm release` 生命周期命令** —— 生命周期编排是项目 CI 的职责,不是构建工具的。
+1. **删除旧的 `jeno release` 生命周期命令** —— 生命周期编排是项目 CI 的职责,不是构建工具的。
    v0.2.17 重新引入了同名但语义更窄的单步上传器;它只发已 bundle 的安装包。
-2. **`mjm bundle` → `mjm bundle`** —— 名字说清产物:"组装一个可安装的发行版",
+2. **`jeno bundle` → `jeno bundle`** —— 名字说清产物:"组装一个可安装的发行版",
    面向"有用户要 `curl | bash` 的应用",库永远不需要它。
 3. **移除 freeway-flow 依赖** —— 唯一的用户是 `release` 的图。CLI 回到朴素形态,
    少一个依赖。flow 编排仍留在 freeway 框架里供别人用。
@@ -150,9 +150,9 @@ manifest 结构),都要检查 CI 里那步用的是不是新代码。`--version`
 **产物矩阵(现在只有一种产物语义:jar)**:
 
 ```
-mjm package           → target/dist/<name>-<version>.jar   (库;可选 --uber)
-mjm publish           → 读 target/dist/*.jar + 写描述符/sha256 → 上传
-mjm bundle            → target/dist/<name>-<version>/ + .tar.gz   (应用发行版)
+jeno package           → target/dist/<name>-<version>.jar   (库;可选 --uber)
+jeno publish           → 读 target/dist/*.jar + 写描述符/sha256 → 上传
+jeno bundle            → target/dist/<name>-<version>/ + .tar.gz   (应用发行版)
 ```
 
 **留给后来者**:如果再次出现"要不要加一条流水线命令"的念头,先问一句
@@ -194,22 +194,22 @@ git commit ... && git push ... && git tag vX && git push --tags
 
 ## 9. 自举构建的 javac 警告（2026-11-22 记录，同日已解决）
 
-**位置**:`mjm build`（编译 `src/main/java`）的输出；来源是 vendor 里的 junit jar。
+**位置**:`jeno build`（编译 `src/main/java`）的输出；来源是 vendor 里的 junit jar。
 
-**结局（2026-11-22）**:已解决，`mjm build` 现在是零警告。做法是给 `vendor/` 补上真正的
+**结局（2026-11-22）**:已解决，`jeno build` 现在是零警告。做法是给 `vendor/` 补上真正的
 `org.apiguardian:apiguardian-api:1.1.2`（jar + 无 parent 链的独立 pom），并在 5 个 junit 件的
-独立 pom 里声明它——它们本来就该有这条依赖，裁剪时漏了。同时 mjm 自己的 `mjm.toml` 也把
+独立 pom 里声明它——它们本来就该有这条依赖，裁剪时漏了。同时 jeno 自己的 `jeno.toml` 也把
 它列成直接依赖：严格可见性只把直接声明放进 compile classpath，传递依赖是看不见的，所以
 "让警告消失"和"遵守自己的可见性规则"是同一个动作。
 
-顺手暴露并修掉的另一件事：`local:` 仓库的文件改了，`mjm lock` 却读不到——store 的
+顺手暴露并修掉的另一件事：`local:` 仓库的文件改了，`jeno lock` 却读不到——store 的
 URL→digest 索引把旧 pom 缓存住了。现在在线时 `file:` 的 URL 不再走索引（本地文件是工作副本，
 本来就会改），离线时仍然查索引（跨目录的 store 命中靠它，SPEC §1.5）。
 
-**原来的记录（保留作历史）**:`mjm build` 每次刷 87 条
+**原来的记录（保留作历史）**:`jeno build` 每次刷 87 条
 `警告: 未知的枚举常量 Status.MAINTAINED` / `Status.STABLE` / …，
 首条带原因:`找不到 org.apiguardian.api.API$Status 的类文件`。编译成功、产物无异常，
-只是输出噪音——`mjm test` 与 `mjm build` 的数字（87）因此不能当作"零警告"。
+只是输出噪音——`jeno test` 与 `jeno build` 的数字（87）因此不能当作"零警告"。
 
 **成因**:junit 的 class 文件带 `@API(...)` 注解，注解的枚举来自
 `org.apiguardian.api`。`vendor/` 是手工裁剪的 Maven 布局仓库（只有 2 个 freeway 件(commons/ioc)+ `slf4j-api` + 6 个 junit 件的 pom/jar，pom 是无 parent 链的独立清单），**没有 `org.apiguardian.api` 的
@@ -217,7 +217,7 @@ jar 也没有它的 pom**。javac 在编译消费者的源码时看到注解里�
 
 **为什么现在可接受**:
 - 是 `vendor/` 的内容问题，不是代码问题；生产构建（不编译 junit 消费者）不会出现。
-- 不影响字节、不影响测试、不影响发布；`mjm` 是当前唯一受影响的构建。
+- 不影响字节、不影响测试、不影响发布；`jeno` 是当前唯一受影响的构建。
 
 **代价/风险**:
 - 87 条噪音盖住真正的警告——新增一条编译警告时没人会看见。
@@ -229,30 +229,30 @@ jar 也没有它的 pom**。javac 在编译消费者的源码时看到注解里�
 - 有用户把这段输出当成构建错误上报
 
 **正确的解法**:把 `org.apiguardian:apiguardian-api` 的 jar 与 pom 一起放进 `vendor/`
-（sha256 由 `mjm lock` 钉住），补齐闭包——这比在构建参数里压警告更符合"vendor 是一个仓库"
+（sha256 由 `jeno lock` 钉住），补齐闭包——这比在构建参数里压警告更符合"vendor 是一个仓库"
 的定位。**不要**为了让警告消失而把 `@API` 注解从 vendor 的 jar 里删掉（那就动了别人的字节）。
 
 ---
 
 ## 10. `SchemaSource` 的两个位置缺口（2026-11-22 记录）
 
-**位置**:`src/main/java/com/jujin/mjm/project/SchemaSource.java`（schema 报错的 `文件:行:列` 来源）。
+**位置**:`src/main/java/com/jujin/jeno/project/SchemaSource.java`（schema 报错的 `文件:行:列` 来源）。
 
 **现状**:它用一次轻量扫描为 `ProjectReader`/`DescriptorReader` 的错误找位置，但有两类合法 TOML
 没覆盖：
 
 1. **带转义的 quoted key**：`[project]` 下写 `"mi\u0061n" = 1`（TOML 解成 `mian`）。
    扫描器只反转义 `\"` 与 `\\`，不认 `\uXXXX`，于是记录的是 `mi\u0061n`，
-   与解析器给出的 `mian` 对不上，查不到位置 → 报错退化成 `mjm.toml: [project].mian is not a key`。
+   与解析器给出的 `mian` 对不上，查不到位置 → 报错退化成 `jeno.toml: [project].mian is not a key`。
 2. **`[[artifacts]]` 这类数组表**：扫描器把 `[` 后第一个 `]` 当节名结尾，
-   得到 `[artifacts`。在非 lock 文件（mjm.toml / 描述符）里它本来就会触发
+   得到 `[artifacts`。在非 lock 文件（jeno.toml / 描述符）里它本来就会触发
    `must be a table` 的解析错误，这条错误没有位置。
 
 **为什么现在可接受**:
 - 两者都只影响**报错信息的质量**（少一个 `行:列`），不影响解析正确性：键值仍由 TOML 解析器
   决定，扫描器只提供坐标。
 - 转义 key 是合法但极罕见的写法（正常键名 `mian` 直接写即可）；`[[artifacts]]` 是锁文件的内部
-  语法，mjm.toml 里出现它属于误用。
+  语法，jeno.toml 里出现它属于误用。
 - 常规 quoted key（`"group:artifact"`、`"mi=an"`）与 quoted 节名（`["dep"]`）已经带位置，有测试。
 
 **代价/风险**:
@@ -272,14 +272,14 @@ jar 也没有它的 pom**。javac 在编译消费者的源码时看到注解里�
 
 ---
 
-## 11. 项目锁文件不回收（2026-11-22 记录）— **已解决（`mjm cache prune`）**
+## 11. 项目锁文件不回收（2026-11-22 记录）— **已解决（`jeno cache prune`）**
 
-**位置**:`ProjectLock`（`build`/`test`/`clean` 的项目级互斥，文件在 `~/.mjm/locks/<sha256(realpath)>.lock`）。
+**位置**:`ProjectLock`（`build`/`test`/`clean` 的项目级互斥，文件在 `~/.jeno/locks/<sha256(realpath)>.lock`）。
 
 **现状（记录时的样子）**:每个被操作过的项目目录对应一个 0 字节的锁文件，用完不删。一个项目在不同路径下被克隆过几次
 （`/tmp/junit-*` 这类一次性目录、临时 clone、测试 fixture），就会各留一个。清理之前本机累积了 492 个
 （68 KB）——全是空文件，但 `ls` 会很吵。测试现在走临时锁目录，不再往真实 home 里写；已经存在的可以
-直接 `rm -rf ~/.mjm/locks`（下次用到会重建）。
+直接 `rm -rf ~/.jeno/locks`（下次用到会重建）。
 
 **为什么现在可接受**:
 - 单用户、少项目时增长很慢（每次新目录一条，字节数为零）。
@@ -287,27 +287,27 @@ jar 也没有它的 pom**。javac 在编译消费者的源码时看到注解里�
 - 有 GC 反而要判断“这个项目还会不会被用”，比空文件本身更贵。
 
 **代价/风险**:
-- 在 CI 或高并发机器上，一次性 clone 会持续留下空文件；`~/.mjm/locks` 的条目数只增不减。
+- 在 CI 或高并发机器上，一次性 clone 会持续留下空文件；`~/.jeno/locks` 的条目数只增不减。
 - 同一个项目换路径（symlink / 重新 clone）会被当成两个项目，两条锁互不相干（这是有意的：它们确实是
   两个目录）。
 
 **触发重新决定的条件**（任一即可）:
 - 要做 daemon / 常驻进程，锁的生命周期跟着进程走
 - 多人共享同一台机器（或共享 home）时，锁文件数量与命名需要交代清楚
-- `~/.mjm/locks` 的条目数到了打扰人的量级（例如几万）
+- `~/.jeno/locks` 的条目数到了打扰人的量级（例如几万）
 
 **正确的解法（已实施 2026-11-22）**:锁文件现在写入一行 `project=<canonical path>` 侧车（只在文件为空时写，
-不重复改写）；`mjm cache prune` 删掉“项目目录已不存在”的锁、`part-*.tmp` 残留与悬空索引条目，
+不重复改写）；`jeno cache prune` 删掉“项目目录已不存在”的锁、`part-*.tmp` 残留与悬空索引条目，
 旧的无侧车空文件视为未知、保留。锁目录本身也迁到了 XDG state。
 
 ---
 
 ## 12. 已发布的旧二进制读不了新值形态（2026-11-22 记录）
 
-**位置**:`mjm.toml` 的 `[deps]` 值形态（`"com.corp:lib" = "corp:2.1.0"`，SPEC §2.1）。
+**位置**:`jeno.toml` 的 `[deps]` 值形态（`"com.corp:lib" = "corp:2.1.0"`，SPEC §2.1）。
 
 **现状**:本版引入“值里写仓库名”后，仓库自己的 manifest 也已经迁过去了。**在此之前发布的二进制**
-（0.1.1 及更早）不认识这个形态：它把这串值当成 Central 版本，于是 `mjm lock` 会去 Central 找
+（0.1.1 及更早）不认识这个形态：它把这串值当成 Central 版本，于是 `jeno lock` 会去 Central 找
 `vendor:2.0.2` 并失败（实测：`unable to fetch the pom for …:vendor:2.0.2`）。`build`/`test` 还能跑
 （它们只用 lock），但 `lock` 不行。
 
@@ -334,7 +334,7 @@ manifest 可以使用值形态；旧二进制不能 lock 新形态”，并在 C
 
 **位置**:`ProjectLock`（`build`/`test`/`clean`/`add`/`remove`/`lock`/`package`/`bundle`/`publish`/`release` 共用的一把项目锁）。
 
-**现状**:写 `mjm.toml`/`mjm.lock` 的三个命令现在也排队。`prepare` 会访问网络（取 pom/描述符）
+**现状**:写 `jeno.toml`/`jeno.lock` 的三个命令现在也排队。`prepare` 会访问网络（取 pom/描述符）
 并写 store，整段都在锁内，所以一个正在跑的 `add` 会让并发的 `build`/`test`/`clean` 等它。
 写 `dist/` 的命令（`package`/`bundle`/`publish`/`release`）同样持锁；**`publish`/`release` 连上传阶段也在锁内**——
 它们上传读的就是 `dist/` 里的字节，只锁写盘阶段的话，`clean --dist` 仍可能在上传中途把 jar/tar 抽走。
@@ -356,11 +356,11 @@ manifest 可以使用值形态；旧二进制不能 lock 新形态”，并在 C
 
 ---
 
-## 14. `mjm test` 的 classpath 与 processor（2026-11-23 已解决）
+## 14. `jeno test` 的 classpath 与 processor（2026-11-23 已解决）
 
 **位置**:`ClasspathAssembler`，`Mode.TEST` 与 `Mode.EXPORT_TEST`；`TestCommand`。
 
-**曾经的状态**:测试 classpath（`mjm test`）把锁里全部工件放进去，包括 `scope = "processor"`；
+**曾经的状态**:测试 classpath（`jeno test`）把锁里全部工件放进去，包括 `scope = "processor"`；
 `classpath --test`（`EXPORT_TEST`）排除 processor。同一个概念有两个答案。
 
 **现在的行为**:两者都排除 processor。测试编译需要 processor 时，`TestCommand` 像 `build` 一样从

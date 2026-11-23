@@ -1,10 +1,10 @@
-# mjm 的自举 CI/CD(DESIGN.md §7.5)——上一个 release 构建下一个 release。
+# jeno 的自举 CI/CD(DESIGN.md §7.5)——上一个 release 构建下一个 release。
 #
 # 两种触发,两种职责:
 #   push master   只验证:装上一个 release,构建 + 测试(狗粮常磨),不发版
-#   push tag v*   验证 + 发行:一致性门 → mjm bundle --toolchain → minisign 签名 → GitHub Release
+#   push tag v*   验证 + 发行:一致性门 → jeno bundle --toolchain → minisign 签名 → GitHub Release
 #
-# 版本账本是 git tags 本身:人工决定版本号(改 mjm.toml 一处,构建派生),
+# 版本账本是 git tags 本身:人工决定版本号(改 jeno.toml 一处,构建派生),
 # tag 即发布。文档类变更不触发构建。
 
 name: ci
@@ -40,10 +40,10 @@ jobs:
           distribution: temurin
           java-version: '25'
 
-      # No install step: the previous release is still `mjm` and cannot read
-      # this tree's mjm.toml, so it has nothing to contribute. The bootstrap
-      # below compiles the code under test with javac and every later step
-      # runs that. Once an `mjm` release exists this reverts to
+      # No install step: the previous release (0.2.21) still carries the old
+      # name and cannot read jeno.toml, so it has nothing to contribute. The
+      # bootstrap below compiles the code under test with javac and every later
+      # step runs that. Once a jeno release exists this reverts to
       # "install previous release, use it to lock" — the compatibility check
       # self-hosting is really about.
       # Every step runs the code under test: javac straight to target/classes
@@ -54,73 +54,73 @@ jobs:
           CP="$(find vendor -name '*.jar' | tr '\n' ':')"
           javac -d target/classes -cp "$CP" $(find src/main/java -name '*.java')
 
-      - name: lock (with the freshly compiled mjm)
+      - name: lock (with the freshly compiled jeno)
         run: |
           CP="target/classes:$(find vendor -name '*.jar' | tr '\n' ':')"
-          java -cp "$CP" com.jujin.mjm.cli.Mjm lock
+          java -cp "$CP" com.jujin.jeno.cli.Jeno lock
 
-      - name: build (with the freshly compiled mjm)
+      - name: build (with the freshly compiled jeno)
         run: |
           CP="target/classes:$(find vendor -name '*.jar' | tr '\n' ':')"
-          java -cp "$CP" com.jujin.mjm.cli.Mjm build
+          java -cp "$CP" com.jujin.jeno.cli.Jeno build
 
-      - name: test (with the freshly compiled mjm)
+      - name: test (with the freshly compiled jeno)
         run: |
           CP="target/classes:$(find vendor -name '*.jar' | tr '\n' ':')"
-          java -cp "$CP" com.jujin.mjm.cli.Mjm test
+          java -cp "$CP" com.jujin.jeno.cli.Jeno test
 
       # ---- 以下仅 tag 触发:发行段 ----
 
-      - name: verify tag matches mjm.toml version
+      - name: verify tag matches jeno.toml version
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          TOML=$(grep -m1 '^version' mjm.toml | sed 's/.*"\(.*\)".*/\1/')
+          TOML=$(grep -m1 '^version' jeno.toml | sed 's/.*"\(.*\)".*/\1/')
           if [ "$TAG" != "$TOML" ]; then
-            echo "::error::tag v$TAG does not match mjm.toml [project].version $TOML"
+            echo "::error::tag v$TAG does not match jeno.toml [project].version $TOML"
             exit 1
           fi
 
       - name: verify the built binary reports the same version
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          if ! java -cp target/classes com.jujin.mjm.cli.Mjm --version \
-              | grep -q "mjm ${GITHUB_REF_NAME#v} "; then
-            echo "::error::Mjm.VERSION does not match mjm.toml — bump both or neither"
+          if ! java -cp target/classes com.jujin.jeno.cli.Jeno --version \
+              | grep -q "jeno ${GITHUB_REF_NAME#v} "; then
+            echo "::error::Jeno.VERSION does not match jeno.toml — bump both or neither"
             exit 1
           fi
 
-      # bundle is run by the JUST-BUILT mjm, not the installed one. The
-      # installed mjm is the previous release — using it to package the current
+      # bundle is run by the JUST-BUILT jeno, not the installed one. The
+      # installed jeno is the previous release — using it to package the current
       # tree means a change to the packaging itself only lands one release
       # later (the v0.1.4 artifact still had the old nine-jar layout for
       # exactly this reason). Packaging with the code under test closes that.
       #
-      # mjm's own release still uses bundle + gh release create: the `mjm
+      # jeno's own release still uses bundle + gh release create: the `jeno
       # release` command exists for user applications (it publishes pkg
-      # installers), while mjm itself is a tool distributed as a tar.gz with a
+      # installers), while jeno itself is a tool distributed as a tar.gz with a
       # bootstrap script. Signing is added here explicitly.
-      - name: bundle (with the freshly built mjm)
+      - name: bundle (with the freshly built jeno)
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           CP="target/classes:$(find vendor -name '*.jar' | tr '\n' ':')"
-          java -cp "$CP" com.jujin.mjm.cli.Mjm bundle --toolchain
+          java -cp "$CP" com.jujin.jeno.cli.Jeno bundle --toolchain
 
-      - name: stage the release asset (mjm-bin-<version>.tar.gz)
+      - name: stage the release asset (jeno-bin-<version>.tar.gz)
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           mkdir dist-release
-          cp "target/dist/mjm-$VERSION.tar.gz" "dist-release/mjm-bin-$VERSION.tar.gz"
+          cp "target/dist/jeno-$VERSION.tar.gz" "dist-release/jeno-bin-$VERSION.tar.gz"
 
       - name: install minisign and sign the release asset
         if: startsWith(github.ref, 'refs/tags/v')
         env:
-          MINISIGN_KEY_B64: ${{ secrets.MJM_MINISIGN_KEY }}
+          MINISIGN_KEY_B64: ${{ secrets.JENO_MINISIGN_KEY }}
         run: |
           set -euo pipefail
           if [ -z "${MINISIGN_KEY_B64:-}" ]; then
-            echo "::error::MJM_MINISIGN_KEY repository secret is not set — sign or do not release"
+            echo "::error::JENO_MINISIGN_KEY repository secret is not set — sign or do not release"
             exit 1
           fi
           sudo apt-get update
@@ -128,14 +128,14 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           KEY_DIR="$RUNNER_TEMP/minisign"
           mkdir -p "$KEY_DIR"
-          printf '%s' "$MINISIGN_KEY_B64" | base64 -d > "$KEY_DIR/mjm.key"
-          chmod 600 "$KEY_DIR/mjm.key"
-          minisign -R -s "$KEY_DIR/mjm.key" -p "$KEY_DIR/mjm.pub"
-          ASSET="dist-release/mjm-bin-$VERSION.tar.gz"
-          minisign -S -q -W -s "$KEY_DIR/mjm.key" -m "$ASSET" -x "$ASSET.minisig"
-          minisign -V -q -P "$(tail -1 "$KEY_DIR/mjm.pub")" -m "$ASSET" -x "$ASSET.minisig"
-          cp "$KEY_DIR/mjm.pub" dist-release/minisign.pub
-          echo "signed $ASSET; public key $(tail -1 "$KEY_DIR/mjm.pub" | cut -c1-16)…"
+          printf '%s' "$MINISIGN_KEY_B64" | base64 -d > "$KEY_DIR/jeno.key"
+          chmod 600 "$KEY_DIR/jeno.key"
+          minisign -R -s "$KEY_DIR/jeno.key" -p "$KEY_DIR/jeno.pub"
+          ASSET="dist-release/jeno-bin-$VERSION.tar.gz"
+          minisign -S -q -W -s "$KEY_DIR/jeno.key" -m "$ASSET" -x "$ASSET.minisig"
+          minisign -V -q -P "$(tail -1 "$KEY_DIR/jeno.pub")" -m "$ASSET" -x "$ASSET.minisig"
+          cp "$KEY_DIR/jeno.pub" dist-release/minisign.pub
+          echo "signed $ASSET; public key $(tail -1 "$KEY_DIR/jeno.pub" | cut -c1-16)…"
 
       # 重发安全:先删同 tag 的旧 release(保留 tag),规避附件 CDN 缓存。
       - name: create the GitHub release
@@ -144,7 +144,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="$GITHUB_REF_NAME"
-          ASSET="dist-release/mjm-bin-${TAG#v}.tar.gz"
+          ASSET="dist-release/jeno-bin-${TAG#v}.tar.gz"
           gh release view "$TAG" >/dev/null 2>&1 && gh release delete "$TAG" --yes || true
           # The annotated tag message becomes the release notes, so what a
           # release changed lives with the tag that made it — one place to
@@ -152,7 +152,7 @@ jobs:
           gh release create "$TAG" "$ASSET" "$ASSET.minisig" \
             dist-release/minisign.pub \
             --target "$GITHUB_SHA" \
-            --title "mjm $TAG" \
+            --title "jeno $TAG" \
             --notes-from-tag
 
       - name: verify the published release by downloading it
@@ -168,21 +168,21 @@ jobs:
           mkdir -p "$VERIFY"
           for attempt in 1 2 3 4 5; do
             gh release download "$TAG" \
-              --pattern "mjm-bin-$VERSION.tar.gz*" --dir "$VERIFY" --clobber || true
+              --pattern "jeno-bin-$VERSION.tar.gz*" --dir "$VERIFY" --clobber || true
             gh release download "$TAG" \
               --pattern "minisign.pub" --dir "$VERIFY" --clobber || true
-            if [ -f "$VERIFY/mjm-bin-$VERSION.tar.gz" ] \
-                && [ -f "$VERIFY/mjm-bin-$VERSION.tar.gz.minisig" ] \
+            if [ -f "$VERIFY/jeno-bin-$VERSION.tar.gz" ] \
+                && [ -f "$VERIFY/jeno-bin-$VERSION.tar.gz.minisig" ] \
                 && [ -f "$VERIFY/minisign.pub" ]; then
               break
             fi
             echo "assets not visible yet (attempt $attempt) — retrying"
             sleep 3
           done
-          test -f "$VERIFY/mjm-bin-$VERSION.tar.gz"
-          test -f "$VERIFY/mjm-bin-$VERSION.tar.gz.minisig"
+          test -f "$VERIFY/jeno-bin-$VERSION.tar.gz"
+          test -f "$VERIFY/jeno-bin-$VERSION.tar.gz.minisig"
           test -f "$VERIFY/minisign.pub"
           minisign -V -q -P "$(tail -1 "$VERIFY/minisign.pub")" \
-            -m "$VERIFY/mjm-bin-$VERSION.tar.gz" \
-            -x "$VERIFY/mjm-bin-$VERSION.tar.gz.minisig"
+            -m "$VERIFY/jeno-bin-$VERSION.tar.gz" \
+            -x "$VERIFY/jeno-bin-$VERSION.tar.gz.minisig"
           echo "published asset verified: sha256 + minisign"

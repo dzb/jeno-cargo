@@ -11,7 +11,7 @@
 
 **事故**:`gh:` 发布消费闭环在真机上崩了三处,全都没被单测覆盖:
 HTTP/2 在 GitHub 附件重定向上 EOF(loopback 服务器只讲 HTTP/1.1,协议协商永远选不到)、
-空仓库的 422 被当成 tag 冲突(测试里的 422 永远模拟冲突)、`mjm run` 不读 `[project].main`
+空仓库的 422 被当成 tag 冲突(测试里的 422 永远模拟冲突)、`jeno run` 不读 `[project].main`
 (测试永远显式给主类)。加上验证 `audit` 时发现的 `dependencyManagement` scope 缺陷,
 四个都是"代码看着对、单测全绿、真机必错"。
 
@@ -24,7 +24,7 @@ HTTP/2 在 GitHub 附件重定向上 EOF(loopback 服务器只讲 HTTP/1.1,协�
 
 ## 2. 错误信息指的方向,比它的措辞重要
 
-**事故**:对空仓库发布,gitee 返回 422 + `Repository is empty.`,mjm 报的是
+**事故**:对空仓库发布,gitee 返回 422 + `Repository is empty.`,jeno 报的是
 `release v0.1.0 already exists … but could not be looked up`。这句话让我去查
 "release 是不是真的存在",而真实原因是仓库一个 commit 都没有。
 
@@ -58,7 +58,7 @@ HTTP/2 在 GitHub 附件重定向上 EOF(loopback 服务器只讲 HTTP/1.1,协�
 
 ## 5. 产生数据的代码,与读取数据的代码,必须是同一套规则
 
-**事故**:`mjm init --ws` 写完 `mjm.ws.toml` 后,用同一个 `Workspaces` 解析器读回校验,
+**事故**:`jeno init --ws` 写完 `jeno.ws.toml` 后,用同一个 `Workspaces` 解析器读回校验,
 不通过就删文件——所以不会写出一个自己都读不了的文件。同类的还有 classpath 唯一 seam:
 四个命令经过同一个装配点,替换只改那一处。
 
@@ -68,7 +68,7 @@ HTTP/2 在 GitHub 附件重定向上 EOF(loopback 服务器只讲 HTTP/1.1,协�
 
 ## 6. 重构里不要顺手改语义
 
-**事故**:抽 `ClasspathAssembler` 时发现 `mjm test` 的 classpath 含 processor 工件,
+**事故**:抽 `ClasspathAssembler` 时发现 `jeno test` 的 classpath 含 processor 工件,
 而 `classpath --test` 明确排除。这大概不是本意,但那一单的承诺是"输出逐字节不变",
 所以只记进 `REMINDS.md` §14,不在重构里改。
 
@@ -79,9 +79,9 @@ HTTP/2 在 GitHub 附件重定向上 EOF(loopback 服务器只讲 HTTP/1.1,协�
 
 ## 7. 改名要一次改干净,并留一条 grep 门
 
-**事故**:`mj` → `mjm` 改名漏了约 20 处**用户可见**文案,包括 `mj add …` 这种让人照抄
+**事故**:`mj` → `jeno` 改名漏了约 20 处**用户可见**文案,包括 `mj add …` 这种让人照抄
 就 command not found 的指令,以及 `delete ~/.mj/store` 这种删错目录的恢复指引。
-后来 `mjm.work.toml` → `mjm.ws.toml` 也走了一遍同样的流程。
+后来 `jeno.work.toml` → `jeno.ws.toml` 也走了一遍同样的流程。
 
 **以后**:改名后 `grep` 旧名必须零命中(含文档与测试),否则两个名字会并存很久,而读者不知道哪个是现在。
 
@@ -89,7 +89,7 @@ HTTP/2 在 GitHub 附件重定向上 EOF(loopback 服务器只讲 HTTP/1.1,协�
 
 ## 8. 文档里的数字会腐烂,而且比没有更糟
 
-**事故**:`docs/comparison.md` 里的实测数据写着 0.2.4 / 16 个动词 / `target/`+`dist/` / `~/.mjm`,
+**事故**:`docs/comparison.md` 里的实测数据写着 0.2.4 / 16 个动词 / `target/`+`dist/` / `~/.jeno`,
 几轮之后全过时了,而我一直在拿它当依据引用。
 
 **以后**:带数字的文档顶部写版本戳,并在同一行并列"当时 / 现在"。读者一眼能看出这是快照还是现状。
@@ -98,7 +98,7 @@ HTTP/2 在 GitHub 附件重定向上 EOF(loopback 服务器只讲 HTTP/1.1,协�
 
 ## 9. 审计报告也会错,先看它引用的那句话在文档里的位置
 
-**事故**:我按审计意见准备给 plain jar 补 `mjm-Dependencies`、给 `publish` 加本地字节提示。
+**事故**:我按审计意见准备给 plain jar 补 `jeno-Dependencies`、给 `publish` 加本地字节提示。
 复核后发现:DESIGN 那句在 **uber-jar 段落**里(普通 package 从未被声称会写),
 而 `publish` 上传的普通 jar 本来就不含依赖字节——两处都是审计误读段落归属,不是实现漏了。
 
@@ -109,7 +109,7 @@ HTTP/2 在 GitHub 附件重定向上 EOF(loopback 服务器只讲 HTTP/1.1,协�
 
 ## 10. 真跑比读文档可靠
 
-**事故**:SPEC 写着 `main` 是"`mjm run` 缺参时的入口",代码里 `run` 从来没读过它——
+**事故**:SPEC 写着 `main` 是"`jeno run` 缺参时的入口",代码里 `run` 从来没读过它——
 `package` 和 `bundle` 都读了,只有 `run` 漏。读文档读不出来,只有真跑才发现。
 
 **以后**:把 SPEC 的每条承诺当成一条**待验证的断言**,而不是事实。承诺越多,越要抽几条真跑。
@@ -118,12 +118,12 @@ HTTP/2 在 GitHub 附件重定向上 EOF(loopback 服务器只讲 HTTP/1.1,协�
 
 ## 11. 破坏性命令的验证,必须隔离整个 HOME
 
-**事故**:验证 `mjm cache purge` 时只设了 `XDG_CACHE_HOME=/tmp/...`,但 `Paths` 在旧
-`~/.mjm/store` 存在时优先使用旧路径——结果命令删除了本机真实的 `~/.mjm/store` 与
-`~/.mjm/sources`(约 22.8 MiB)。mjm-cargo 已重新 `lock`、freeway 已从 vendor 回填;
-项目、`mjm.lock` 与发布物未受损,但其他项目曾缓存的工件需要各自重新下载。
+**事故**:验证 `jeno cache purge` 时只设了 `XDG_CACHE_HOME=/tmp/...`,但 `Paths` 在旧
+`~/.jeno/store` 存在时优先使用旧路径——结果命令删除了本机真实的 `~/.jeno/store` 与
+`~/.jeno/sources`(约 22.8 MiB)。jeno-cargo 已重新 `lock`、freeway 已从 vendor 回填;
+项目、`jeno.lock` 与发布物未受损,但其他项目曾缓存的工件需要各自重新下载。
 
-**错在**:把 XDG 环境变量当成了隔离;没有先 `mjm cache dir` 确认真实 roots;而且当时的
+**错在**:把 XDG 环境变量当成了隔离;没有先 `jeno cache dir` 确认真实 roots;而且当时的
 `cache purge` 没有 `--yes`/`--dry-run`,一个单词就能删光缓存。
 
 **以后**:

@@ -1,8 +1,8 @@
 # Maven Central 兼容矩阵（真机证据）
 
-**基线**：mjm `0.2.17` · JDK 25 · Maven Central · `[limits] max-depth = 20` · 2026-11-23
-**方法**：每个库一个独立临时项目（`/tmp/mjm-compat/<slug>`），先 `mjm lock`，再用一个只引用该库公开类型的
-`compat.Main` 跑 `mjm build`。不是 CI 门禁；这是某个时点的真机快照。
+**基线**：jeno `0.2.17` · JDK 25 · Maven Central · `[limits] max-depth = 20` · 2026-11-23
+**方法**：每个库一个独立临时项目（`/tmp/jeno-compat/<slug>`），先 `jeno lock`，再用一个只引用该库公开类型的
+`compat.Main` 跑 `jeno build`。不是 CI 门禁；这是某个时点的真机快照。
 
 ## 结果
 
@@ -38,8 +38,8 @@
 ## 复现
 
 ```bash
-mkdir -p /tmp/mjm-compat/jackson/src/main/java/compat
-cat > /tmp/mjm-compat/jackson/mjm.toml <<'TOML'
+mkdir -p /tmp/jeno-compat/jackson/src/main/java/compat
+cat > /tmp/jeno-compat/jackson/jeno.toml <<'TOML'
 [project]
 name = "compat-jackson"
 version = "0.1.0"
@@ -53,8 +53,8 @@ max-depth = 20
 [deps]
 "com.fasterxml.jackson.core:jackson-databind" = "2.17.2"
 TOML
-cd /tmp/mjm-compat/jackson
-~/.mjm/bin/mjm lock
+cd /tmp/jeno-compat/jackson
+~/.jeno/bin/jeno lock
 cat > src/main/java/compat/Main.java <<'JAVA'
 package compat;
 
@@ -64,7 +64,7 @@ public final class Main {
     static void touch() { ObjectMapper m = null; }
 }
 JAVA
-~/.mjm/bin/mjm build
+~/.jeno/bin/jeno build
 ```
 
 其他库把坐标与 import 换掉即可；Netty/Log4j/JUnit 请引用本 jar 自己的类型（见备注），否则第一次会得到严格可见性的
