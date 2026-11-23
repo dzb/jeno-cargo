@@ -87,7 +87,7 @@ public final class BuildCommand implements Command {
                 new BuildCommand(store, moduleDir).executeHuman(args));
         if (captured.exitCode() != 0) {
             return JsonWorkspace.ModuleResult.failed(captured.exitCode(),
-                    "BUILD_FAILED", captured.message());
+                    captured.exitCode() == 2 ? "USAGE" : "BUILD_FAILED", captured.message());
         }
         try {
             MjProject project = ProjectReader.parse(

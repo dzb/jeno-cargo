@@ -115,7 +115,8 @@ public final class TestCommand implements Command {
                     "TEST_FAILED", summary.failed() + " test(s) failed");
         }
         return JsonWorkspace.ModuleResult.failed(captured.exitCode(),
-                "TEST_FAILED", "test run failed before producing reports — see stderr");
+                captured.exitCode() == 2 ? "USAGE" : "TEST_FAILED",
+                "test run failed before producing reports — see stderr");
     }
 
     private int executeHuman(List<String> args, boolean machineOutput) {

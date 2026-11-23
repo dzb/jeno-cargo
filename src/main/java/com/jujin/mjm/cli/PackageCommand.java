@@ -107,7 +107,7 @@ public final class PackageCommand implements Command {
                 new PackageCommand(store, moduleDir).executeHuman(args));
         if (captured.exitCode() != 0) {
             return JsonWorkspace.ModuleResult.failed(captured.exitCode(),
-                    "PACKAGE_FAILED", captured.message());
+                    captured.exitCode() == 2 ? "USAGE" : "PACKAGE_FAILED", captured.message());
         }
         try {
             MjProject project = ProjectReader.parse(

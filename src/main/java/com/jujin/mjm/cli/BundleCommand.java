@@ -238,7 +238,7 @@ public final class BundleCommand implements Command {
                 new BundleCommand(store, moduleDir).executeHuman(args));
         if (captured.exitCode() != 0) {
             return JsonWorkspace.ModuleResult.failed(captured.exitCode(),
-                    "BUNDLE_FAILED", captured.message());
+                    captured.exitCode() == 2 ? "USAGE" : "BUNDLE_FAILED", captured.message());
         }
         try {
             MjProject project = ProjectReader.parse(

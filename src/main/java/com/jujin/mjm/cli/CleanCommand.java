@@ -109,7 +109,7 @@ public final class CleanCommand implements Command {
                 new CleanCommand(moduleDir).executeHuman(args));
         if (captured.exitCode() != 0) {
             return JsonWorkspace.ModuleResult.failed(captured.exitCode(),
-                    "CLEAN_FAILED", captured.message());
+                    captured.exitCode() == 2 ? "USAGE" : "CLEAN_FAILED", captured.message());
         }
 
         JsonArray removed = JsonUtils.array();
