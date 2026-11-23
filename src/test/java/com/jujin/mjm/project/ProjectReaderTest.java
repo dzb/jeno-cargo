@@ -254,7 +254,7 @@ class ProjectReaderTest {
 
             [repos]
             mine = "mjm:http://repo.example/"
-            """, "mjm:local:");
+            """, "private network");
     }
 
     @Test

@@ -106,7 +106,7 @@ class RepositoryDeclarationTest {
             url = "https://b.example/"
             """);
         assertEquals(Repository.Layout.MAVEN, parsed.repos().get("mavenish").layout());
-        assertEquals(Repository.Transport.HTTPS, parsed.repos().get("mavenish").transport());
+        assertEquals(Repository.Transport.NETWORK, parsed.repos().get("mavenish").transport());
         assertEquals(Repository.Layout.MJM, parsed.repos().get("mjmish").layout());
         assertEquals("mjm:https://b.example/", parsed.repos().get("mjmish").declaration());
     }
@@ -220,7 +220,7 @@ class RepositoryDeclarationTest {
             """);
 
         assertEquals(Repository.Layout.MAVEN, parsed.repos().get("plain").layout());
-        assertEquals(Repository.Transport.HTTPS, parsed.repos().get("plain").transport());
+        assertEquals(Repository.Transport.NETWORK, parsed.repos().get("plain").transport());
         assertEquals(Repository.Layout.MAVEN, parsed.repos().get("maven-local").layout());
         assertEquals(Repository.Transport.LOCAL, parsed.repos().get("maven-local").transport());
         assertEquals(Repository.Layout.MJM, parsed.repos().get("native").layout());

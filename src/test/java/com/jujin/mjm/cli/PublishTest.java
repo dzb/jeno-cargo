@@ -119,6 +119,27 @@ class PublishTest {
     }
 
     @Test
+    void jsonPrivateLanDryRunCarriesThePlainHttpWarning() throws Exception {
+        writeProject(dir);
+        Files.createDirectories(dir.resolve("target/classes/demo"));
+        Files.writeString(dir.resolve("target/classes/demo/A.class"), "class bytes");
+        Path dist = Files.createDirectories(dir.resolve("target/dist"));
+        Files.writeString(dist.resolve("demo-1.0.0.jar"), "jar bytes");
+
+        Result result = publishJson("--json", "--dry-run",
+                "mjm:http://192.168.1.39:18080/upload/");
+
+        assertEquals(0, result.exit(), result.err());
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(result.out());
+        assertEquals("PLAIN_HTTP_INSECURE",
+                json.getArray("diagnostics").getObject(0).getString("code"));
+        assertEquals("warning",
+                json.getArray("diagnostics").getObject(0).getString("severity"));
+        assertFalse(Files.exists(dist.resolve("demo-1.0.0.mjm.toml")),
+                "the warning path is still a side-effect-free dry-run");
+    }
+
+    @Test
     void jsonPublishReportsTheWrittenTriple() throws Exception {
         writeProject(dir);
         Files.createDirectories(dir.resolve("target/classes/demo"));

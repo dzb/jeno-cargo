@@ -82,8 +82,9 @@ mjm 又用严格可见性约束用户项目的依赖边界——**这个工具�
 | D18 | 签名是发布步骤的一部分;mjm 不托管密钥 | sha256 只证明字节完整,不证明来源;minisign 让"推着发布的人"与"构建产物"之间有一条可验证的签名链。密钥属于用户(minisign -G),mjm 只调用本地二进制,不生成、不上传、不打印 secret。「host 被攻破也安全」不成立:公钥与 setup 可被一起替换,需带外核对 fingerprint |
 | D17 | `mjm release` 是单步文件分发,不做 CI/生命周期 | 构建、测试、何时发版都属于项目的 CI/flow;工具只负责"把已打好的安装包发出去并读回验证"。它会拒绝隐式 build/test/bundle,否则"发布"就变成"重新构建一个没人审过的产物" |
 | D19 | HTTP 发布用 PUT,不用 POST | mjm 布局的最终 URL 是确定的,PUT 把该 URL 直接变成资源:重试幂等、服务端不参与命名、发布后可以逐字节回读。POST 适合由服务端分配 URL 的表单/上传 API,采用它就得为每个 host 定义不同协议,反而更窄。只支持 POST 的主机可用 PUT 网关代理 |
-| D20 | 测试 toolchain 由 `[toolchain].jars` 显式声明 | 不能从 `org.junit.*` 之类的包名前缀猜:那会把非 JUnit 测试库漏进生产 jar,或把恰好同前缀的库塞进 toolchain。显式 id 清单是 packaging metadata,不改变解析、可见性或锁语义 |
-| D21 | 只认 `mjm.toml`/`mjm.lock`/`mjm.ws.toml`;旧 `mj.*` 只诊断不兼容 | 双名兼容会让“当前文件是否存在”变成隐式回退,锁与 manifest 的来源也更难解释。旧名通过 `mjm doctor` 和 `mjm init --ws` 的迁移提示显式暴露;用户改名/迁移并重新 lock,而不是让两套文件长期共存 |
+| D20 | 明文 HTTP 只放行字面私有网络地址 | 局域网自建仓库(192.168/10/172.16)常常没有 TLS,拒绝全部 http 会把“自己机器上的仓库”也排除;但放行主机名或公网 http 等于把安全策略交给 DNS。只接受字面 IP + localhost,不解析域名;非 loopback 的明文目标在 publish/release 打一行“流量与 token 不加密”的 warning。https 行为与“公网 http 拒绝”不变 |
+| D21 | 测试 toolchain 由 `[toolchain].jars` 显式声明 | 不能从 `org.junit.*` 之类的包名前缀猜:那会把非 JUnit 测试库漏进生产 jar,或把恰好同前缀的库塞进 toolchain。显式 id 清单是 packaging metadata,不改变解析、可见性或锁语义 |
+| D22 | 只认 `mjm.toml`/`mjm.lock`/`mjm.ws.toml`;旧 `mj.*` 只诊断不兼容 | 双名兼容会让“当前文件是否存在”变成隐式回退,锁与 manifest 的来源也更难解释。旧名通过 `mjm doctor` 和 `mjm init --ws` 的迁移提示显式暴露;用户改名/迁移并重新 lock,而不是让两套文件长期共存 |
 
 ---
 
@@ -194,14 +195,14 @@ Central 的元数据是 `pom.xml`;要拖库就绕不开它。mjm 把 XML 当作*
 理由:**有描述符 = 完整公民**(可传递解析),无描述符的裸 jar = 叶子。描述符带
 `[retract]`(作者端撤回,SPEC §3.4),与消费端的 `[overrides]` 凑成一对:坏版本死得快、死得可见。
 
-发布目标只有 mjm 能回读的三种(`gh:`、`mjm:https:`、`mjm:local:`);Maven 布局是只读源,
-不是发布目标——mjm 不写 POM(见 D15)。
+发布目标只有 mjm 能回读的几种形式(`gh:`、`mjm:https:`、字面私有网络的 `mjm:http:`、
+`mjm:local:`);Maven 布局是只读源,不是发布目标——mjm 不写 POM(见 D15/D20)。
 
 ### 7.3 GitHub 后端(以及为什么不再是 Gitee)
 
 - **GitHub**:release 附件匿名可下载,消费方零配置
 - **Gitee**:2026-11-22 随 `gitee:` 物种移除——附件匿名下载需 Bearer 令牌,违背零配置。需要它时用裸 URL 叶子或自建主机
-- **自建主机是一等目标,但只发 mjm 布局**:`mjm publish mjm:https://my.host/` 按两层布局 PUT 三件套,再 GET 回读并逐字节比对;Maven 布局(`https://host/`、`local:<dir>`)**不是发布目标**——mjm 不生成 POM,发出去两边都读不回来。Maven 仓库仍可读(`[repos] type = "maven"`),只是不往它发。用 PUT 而不是 POST,是因为最终 URL 确定、重试幂等;POST 需要 host 专属的上传协议,反而更窄
+- **自建主机是一等目标,但只发 mjm 布局**:`mjm publish mjm:https://my.host/`(LAN 可用字面私有 `mjm:http://<ip>/`,会警告明文传输)按两层布局 PUT 三件套,再 GET 回读并逐字节比对;Maven 布局(`https://host/`、`local:<dir>`)**不是发布目标**——mjm 不生成 POM,发出去两边都读不回来。Maven 仓库仍可读(`[repos] type = "maven"`),只是不往它发。用 PUT 而不是 POST,是因为最终 URL 确定、重试幂等;POST 需要 host 专属的上传协议,反而更窄
 - **仓内自举是一等目标**:`mjm publish mjm:local:<dir>` 直接把 mjm 布局三件套写进仓库内的目录(`name/version/`,建目录、原子写、不联网);`[repos] x = "mjm:local:<dir>"` 读它。不再需要手写 Maven pom 与 `jar --create` 来喂 `local:` 目录
 - 迁库只改一行 `[repos]`:从 GitHub 到自建服务器、从公司仓库到镜像,不需要账号迁移或重新发布
 - `mjm publish`:生成 `target/dist/` 三件套;可选目标会上传并回读校验

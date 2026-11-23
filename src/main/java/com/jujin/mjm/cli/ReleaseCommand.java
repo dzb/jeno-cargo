@@ -26,8 +26,9 @@ import java.util.List;
  * {@code target/dist/<name>-<version>.tar.gz}.
  *
  * <p>Without a target it prepares {@code target/dist/release/} and prints the
- * upload checklist. With {@code gh:}, {@code mjm:https://…} or
- * {@code mjm:local:<dir>} it uploads the installer, a bootstrap {@code setup.sh},
+ * upload checklist. With {@code gh:}, {@code mjm:https://…},
+ * {@code mjm:http://<private-ip>/} (LAN only) or {@code mjm:local:<dir>} it
+ * uploads the installer, a bootstrap {@code setup.sh},
  * a checksum and {@code release.json}, then reads the installer back and
  * compares its sha256 — a publish that cannot be verified is not done.
  */
@@ -54,7 +55,8 @@ public final class ReleaseCommand implements Command {
 
     @Override
     public String summary() {
-        return "publish a bundled installer: gh:, mjm:https://host/, mjm:local:<dir>";
+        return "publish a bundled installer: gh:, mjm:https://host/,"
+                + " mjm:http://<private-ip>/, mjm:local:<dir>";
     }
 
     @Override
@@ -63,6 +65,8 @@ public final class ReleaseCommand implements Command {
                needs target/dist/<name>-<version>.tar.gz (run mjm bundle first);
                signed with minisign by default: set MJM_MINISIGN_KEY, and optionally
                MJM_MINISIGN_PUBKEY/MJM_MINISIGN; --allow-unsigned is the explicit opt-out.
+               targets: gh:<owner>/<repo>, mjm:https://host/, mjm:http://<private-ip>/
+               (literal LAN address only; public hosts need https), mjm:local:<dir>.
                no target prepares target/dist/release/ and prints the upload list.
                --dry-run prepares the same files and shows the URLs without uploading.""";
     }
@@ -232,6 +236,13 @@ public final class ReleaseCommand implements Command {
             return 2;
         }
 
+        if (plan.repository != null && plan.repository.isPlainHttp()
+                && !plan.repository.isLoopbackNetwork()) {
+            System.err.println("warning: releasing over plain HTTP ("
+                    + plan.repository.declaration() + ") — the traffic and MJM_PUBLISH_TOKEN"
+                    + " are not encrypted");
+        }
+
         Path releaseDir = projectDir.resolve(RELEASE);
         List<Path> files;
         try {
@@ -344,7 +355,8 @@ public final class ReleaseCommand implements Command {
 
     private record ReleasePlan(Path moduleDir, MjProject project, Plan plan, Path tar,
                                String sha, int jdk, ReleaseSigner.Preview signing,
-                               Path releaseDir, List<PlannedReleaseFile> files) {}
+                               Path releaseDir, List<PlannedReleaseFile> files,
+                               boolean insecureHttp) {}
 
     private record PlannedReleaseFile(String kind, Path path, boolean wouldWrite,
                                       String sha256, long bytes) {}
@@ -385,9 +397,11 @@ public final class ReleaseCommand implements Command {
             files.add(planned("signature", releaseDir.resolve(tarName + ".minisig"), true, null));
             files.add(planned("public-key", releaseDir.resolve("minisign.pub"), true, null));
         }
+        boolean insecureHttp = plan.repository != null && plan.repository.isPlainHttp()
+                && !plan.repository.isLoopbackNetwork();
         return new ReleasePlan(moduleDir, project, plan, tar, sha,
                 project.javaVersion() != null ? project.javaVersion() : Runtime.version().feature(),
-                signing, releaseDir, List.copyOf(files));
+                signing, releaseDir, List.copyOf(files), insecureHttp);
     }
 
     private static PlannedReleaseFile planned(String kind, Path path, boolean wouldWrite,
@@ -407,6 +421,11 @@ public final class ReleaseCommand implements Command {
     }
 
     private void emitPlan(ReleasePlan plan, boolean dryRun) {
+        if (dryRun && plan.insecureHttp()) {
+            System.err.println("warning: releasing over plain HTTP ("
+                    + plan.plan().target + ") — the traffic and MJM_PUBLISH_TOKEN"
+                    + " are not encrypted");
+        }
         if (dryRun) {
             if (plan.plan().target == null) {
                 System.out.println("dry run — would prepare " + plan.releaseDir() + ":");
@@ -455,7 +474,7 @@ public final class ReleaseCommand implements Command {
             plan.plan().auxiliaryUrls.forEach(wouldUpload::add);
         }
         boolean uploaded = !dryRun && plan.plan().target != null;
-        JsonResult.start("release")
+        JsonResult result = JsonResult.start("release")
                 .workspace(plan.moduleDir(), "single")
                 .put("dryRun", dryRun)
                 .put("target", plan.plan().target)
@@ -467,8 +486,13 @@ public final class ReleaseCommand implements Command {
                 .put("files", files)
                 .put("wouldUpload", wouldUpload)
                 .put("uploaded", uploaded)
-                .put("verified", uploaded && plan.plan().repository != null)
-                .emit(0);
+                .put("verified", uploaded && plan.plan().repository != null);
+        if (plan.insecureHttp()) {
+            result.diagnostic("warning", "PLAIN_HTTP_INSECURE",
+                    "releasing over plain HTTP (" + plan.plan().target + ") — the traffic and"
+                            + " MJM_PUBLISH_TOKEN are not encrypted", List.of());
+        }
+        result.emit(0);
     }
 
     // ------------------------------------------------------------------
@@ -505,8 +529,8 @@ public final class ReleaseCommand implements Command {
         Repository repository = Repository.parse(target);
         if (repository.layout() != Repository.Layout.MJM) {
             throw new IllegalArgumentException("release publishes installers, not Maven "
-                    + "artifacts — use gh:<owner>/<repo>, mjm:https://host/ or "
-                    + "mjm:local:<dir>");
+                    + "artifacts — use gh:<owner>/<repo>, mjm:https://host/,"
+                    + " mjm:http://<private-ip>/ (LAN only) or mjm:local:<dir>");
         }
         String root = repository.isLocal()
                 ? repository.directory(ArtifactLocations.projectRoot()).toUri().toString()

@@ -14,7 +14,7 @@ curl -fsSL https://raw.githubusercontent.com/dzb/mjm-cargo/master/setup.sh | bas
 mjm --version          # mjm <version> — modern java manager
 ```
 
-**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D21, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
+**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D22, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
 
 ---
 
@@ -153,12 +153,13 @@ The layout is [SPEC.md](SPEC.md) §7; a Maven-layout target is refused because m
 |---|---|---|
 | GitHub Releases | `gh:owner/repo@v1.2.3` | `mjm publish gh:owner/repo` |
 | ~~Gitee Releases~~ | 已移除:附件匿名下载需令牌,违反零配置;用裸 URL 或自建主机 | — |
-| **your own host** — mjm layout | `[repos.mine]` `type = "mjm"`, `url = "https://my.host/"` + `"lib" = "mine:1.2.3"` | `mjm publish mjm:https://my.host/` — two levels, no `group` needed |
+| **your own host** — mjm layout | `[repos.mine]` `type = "mjm"`, `url = "https://my.host/"` (or a literal private-network `http://192.168.x.x/`, with a warning) + `"lib" = "mine:1.2.3"` | `mjm publish mjm:https://my.host/` — two levels, no `group` needed |
 | **your own host** — Maven layout (the default type) | `[repos.corp]` `url = "https://nexus.corp/"` + `"com.corp:lib" = "corp:1.2.3"` | readable by mjm, but **not a publish target**: mjm writes no POM. Publish the layout with your own tooling, or use the mjm layout |
 | a local directory | `[repos.vend]` `type = "mjm"`, `url = "vendor"` (or the legacy `local:/path` string) | `mjm publish mjm:local:vendor` (writes the triple in place) |
 | any static server | a bare `https://…/x.jar` leaf | upload the jar your way (a leaf carries no descriptor, so it is not a `publish` target) |
 
-The `mjm:` layout is the shortest one: `mjm publish mjm:https://my.host/` writes
+The `mjm:` layout is the shortest one: `mjm publish mjm:https://my.host/` (or a
+literal private-address `mjm:http://192.168.x.x:port/` on a LAN) writes
 `<name>/<version>/<name>-<version>.{jar,mjm.toml,sha256}` and needs no `[project].group`
 on either side. A Maven-layout target is **refused**: mjm generates no POM, so
 neither mjm nor Maven could read the triple back. Maven repositories remain
@@ -309,6 +310,7 @@ mjm publish gh:owner/repo
 mjm bundle
 mjm release --dry-run                  # show the URLs it would upload
 mjm release mjm:local:../releases      # or gh:owner/repo / mjm:https://host/
+mjm release mjm:http://192.168.1.39:8080/upload/  # literal private IP only
 curl -fsSL https://host/app/setup.sh | bash
 ```
 
@@ -324,6 +326,7 @@ export MJM_MINISIGN_KEY=~/.minisign/minisign.key
 export MJM_MINISIGN_PUBKEY=~/.minisign/minisign.pub   # optional; derived if omitted
 mjm bundle
 mjm release mjm:https://my.host/
+# LAN: mjm release mjm:http://192.168.1.39:8080/upload/   (plain http, private IP only)
 ```
 
 `MJM_MINISIGN` points at the binary (default `minisign`). Every release carries

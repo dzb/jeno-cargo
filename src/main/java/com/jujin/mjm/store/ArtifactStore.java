@@ -28,7 +28,7 @@ import java.util.Set;
  * every concurrent write is guarded by a URL-level file lock. The classpath
  * points straight into the store — nothing is ever copied per project.
  *
- * <p>Downloads are the JDK's own {@link HttpClient} for https URLs;
+ * <p>Downloads are the JDK's own {@link HttpClient} for https and private-network http URLs;
  * {@code file://} URLs (a {@code local:} repository) are read straight from
  * disk — the copy through the store still pins the sha256, so a local
  * bootstrap is exactly as tamper-evident as a remote one.
@@ -295,13 +295,12 @@ public final class ArtifactStore {
             }
         }
         URI uri = URI.create(url);
-        // https everywhere, except plain http on the loopback — the local
-        // test/dev channel never crosses a network.
-        boolean loopbackHttp = url.startsWith("http://")
-                && (uri.getHost().equals("localhost") || uri.getHost().equals("127.0.0.1"));
-        if (!url.startsWith("https://") && !loopbackHttp) {
-            throw new StoreException("only https, file: and loopback http URLs are fetched, got "
-                    + url);
+        // https everywhere, plus plain http only on literal private-network
+        // addresses (localhost/LAN) — the rule lives in Repository.
+        boolean privateHttp = com.jujin.mjm.project.Repository.isLocalNetworkHttp(url);
+        if (!url.startsWith("https://") && !privateHttp) {
+            throw new StoreException("only https, file: and private-network http URLs are "
+                    + "fetched, got " + url);
         }
         try {
             HttpResponse<byte[]> response = http.send(

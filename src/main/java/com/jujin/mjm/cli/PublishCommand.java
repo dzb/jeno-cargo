@@ -37,6 +37,8 @@ import java.util.Map;
  *   mjm publish gh:owner/repo     → target/dist/ + GitHub native upload
  *   mjm publish mjm:https://host/ → target/dist/ + mjm layout PUT (no group needed)
  *                                  and GET-read-back verification of all three files
+ *   mjm publish mjm:http://192.168.1.39:8080/upload/ → same, plain http on a
+ *                                 literal private-network address (warning: not encrypted)
  *   mjm publish mjm:local:<dir>   → target/dist/ + the same layout on disk
  * </pre>
  *
@@ -71,15 +73,18 @@ public final class PublishCommand implements Command {
 
     @Override
     public String summary() {
-        return "write the release triple and upload it: gh:, mjm:https://host/, mjm:local:<dir>";
+        return "write the release triple and upload it: gh:, mjm:https://host/,"
+                + " mjm:http://<private-ip>/, mjm:local:<dir>";
     }
 
     @Override
     public String help() {
         return """
                targets mjm can read back: gh:<owner>/<repo>, mjm:https://host/,
-               mjm:local:<dir>; no target only prepares target/dist/.
-               --dry-run validates the plan without writing target/dist or uploading.
+               mjm:http://<private-ip>/, mjm:local:<dir>; no target only prepares
+               target/dist/. --dry-run validates the plan without writing target/dist
+               or uploading. plain http is for literal private addresses only
+               (LAN); public hosts need https.
                a Maven-layout target (https://host/, local:<dir>) is refused:
                mjm writes no POM, so neither mjm nor Maven could consume it.""";
     }
@@ -245,8 +250,14 @@ public final class PublishCommand implements Command {
             if (publishTarget.layout() == Repository.Layout.MAVEN) {
                 System.err.println(Ui.errPrefix() + "cannot publish to a Maven-layout target — mjm writes "
                         + "no POM, so neither mjm nor Maven can read it back; use "
-                        + "gh:<owner>/<repo> or mjm:https://host/ (or mjm:local:<dir>)");
+                        + "gh:<owner>/<repo>, mjm:https://host/,"
+                        + " mjm:http://<private-ip>/ (or mjm:local:<dir>)");
                 return 1;
+            }
+            if (publishTarget.isPlainHttp() && !publishTarget.isLoopbackNetwork()) {
+                System.err.println("warning: publishing over plain HTTP ("
+                        + publishTarget.declaration() + ") — the traffic and MJM_PUBLISH_TOKEN"
+                        + " are not encrypted");
             }
         }
         boolean networkTarget = target != null
@@ -332,7 +343,8 @@ public final class PublishCommand implements Command {
             System.out.println("upload the three files to a GitHub release or an mjm: "
                     + "repository, then tell a teammate:");
             System.out.println("  mjm add \"" + name + "\" gh:<owner>/" + name + "@v" + version);
-            System.out.println("  (or publish mjm:https://host/ to host it yourself)");
+            System.out.println("  (or publish mjm:https://host/ — or"
+                    + " mjm:http://<private-ip>/ on a LAN — to host it yourself)");
             return 0;
         }
 
@@ -508,7 +520,7 @@ public final class PublishCommand implements Command {
 
     private record PublishPlan(Path projectDir, MjProject project, String target,
                                Path dist, List<PlannedArtifact> artifacts,
-                               boolean network) {}
+                               boolean network, boolean insecureHttp) {}
 
     private record PlannedArtifact(String kind, Path path, String sha256, long bytes,
                                    String url, boolean wouldWrite, boolean wouldUpload) {}
@@ -565,8 +577,10 @@ public final class PublishCommand implements Command {
                 shaExists ? sizeOf(sha) : 0,
                 artifactUrl(target, repository, project, shaName),
                 !shaExists, target != null));
+        boolean insecureHttp = repository != null && repository.isPlainHttp()
+                && !repository.isLoopbackNetwork();
         return new PublishPlan(moduleDir, project, target, dist,
-                List.copyOf(artifacts), network);
+                List.copyOf(artifacts), network, insecureHttp);
     }
 
     private static PlannedArtifact plannedArtifact(String kind, Path path, String target,
@@ -623,6 +637,11 @@ public final class PublishCommand implements Command {
     }
 
     private void emitPlan(PublishPlan plan, boolean dryRun) {
+        if (dryRun && plan.insecureHttp()) {
+            System.err.println("warning: publishing over plain HTTP ("
+                    + plan.target() + ") — the traffic and MJM_PUBLISH_TOKEN"
+                    + " are not encrypted");
+        }
         if (dryRun) {
             System.out.println("dry run — would publish "
                     + (plan.target() == null ? "target/dist/" : plan.target()) + ":");
@@ -660,7 +679,7 @@ public final class PublishCommand implements Command {
         JsonObject project = JsonUtils.object();
         project.put("name", plan.project().name());
         project.put("version", plan.project().version());
-        JsonResult.start("publish")
+        JsonResult result = JsonResult.start("publish")
                 .workspace(plan.projectDir(), "single")
                 .put("dryRun", dryRun)
                 .put("target", plan.target())
@@ -668,8 +687,13 @@ public final class PublishCommand implements Command {
                 .put("artifacts", artifacts)
                 .put("uploaded", uploaded)
                 .put("verified", uploaded && plan.target() != null
-                        && !plan.target().startsWith("gh:"))
-                .emit(0);
+                        && !plan.target().startsWith("gh:"));
+        if (plan.insecureHttp()) {
+            result.diagnostic("warning", "PLAIN_HTTP_INSECURE",
+                    "publishing over plain HTTP (" + plan.target() + ") — the traffic and"
+                            + " MJM_PUBLISH_TOKEN are not encrypted", List.of());
+        }
+        result.emit(0);
     }
 
     // ------------------------------------------------------------------

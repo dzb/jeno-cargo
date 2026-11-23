@@ -96,6 +96,9 @@ mjm --json publish --dry-run "mjm:local:../repo" --module libs/core
   create a remote target, or contact the network.
 - `--offline` permits local/no-target publishing and rejects `gh:` / remote
   mjm targets with `OFFLINE_FORBIDDEN` before any network request.
+- Plain HTTP is accepted only for literal private-network addresses
+  (`192.168/10/172.16`, loopback, IPv6 ULA/link-local). Non-loopback HTTP emits
+  a `PLAIN_HTTP_INSECURE` warning; public hosts require HTTPS.
 - `add --json` without a value is remote discovery and returns
   `JSON_DISCOVERY_UNSUPPORTED`; pass an explicit version for mutation.
 

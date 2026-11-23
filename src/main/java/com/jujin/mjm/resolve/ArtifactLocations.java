@@ -216,8 +216,9 @@ public final class ArtifactLocations {
 
     /**
      * The mjm repository layout: {@code <base>/<name>/<version>/<name>-<version>.<ext>} —
-     * two levels, no group. {@code base} is the declaration, {@code mjm:https://…},
-     * whose prefix is stripped here.
+     * two levels, no group. {@code base} is the declaration — {@code mjm:https://…}
+     * or a private-network {@code mjm:http://<literal-ip>…} — whose prefix is
+     * stripped here.
      */
     /** The mjm two-level layout under a repository, local or remote. */
     public static String mjmFile(Repository repository, String name, String version,

@@ -84,13 +84,15 @@ key = 坐标,value 形态决定物种:
 
 **`mjm:` 仓库**(`[repos] mine = "mjm:https://repo.example/"` 或 `"mjm:local:../vendor"`):mjm 自己的两层布局,发布物三件套
 平铺在 `<base>/<name>/<version>/` 下(`<name>` = 发布方 `[project].name`),**不需要 `[project].group`**。
-传输可以是 HTTPS(`mjm:https://…`)或本地目录(`mjm:local:<dir>`,`~` 展开、相对路径相对项目根,
-`mjm publish mjm:local:<dir>` 直接写入)。
+传输可以是 HTTPS(`mjm:https://…`)、字面私有网络 HTTP(`mjm:http://<private-ip>/…`,LAN 专用)
+或本地目录(`mjm:local:<dir>`,`~` 展开、相对路径相对项目根,`mjm publish mjm:local:<dir>` 直接写入)。
 依赖写成 `"<name>" = "mine:<semver>"`(或 legacy `[deps.mine] "<name>" = "<semver>"`);元数据取自同目录的
 `.mjm.toml` 描述符,`[project].name` 必须与 key 一致(由 `DescriptorReader` 校验)。描述符里的裸名+裸版本
 指向同一仓库的兄弟工件(描述符只写事实,不写仓库规则)——**这条兄弟规则仅适用于从 `mjm:` 仓库取到的
 描述符**;从 `gh:` 取到的描述符里写裸名不会变成同仓库,仍按 Central 坐标报错。`mjm:https://` 与
-`mjm:local:` 都支持(loopback `http://` 仅供测试);store 索引与 `--offline` 行为不变。
+`mjm:local:` 都支持;`http://` 只接受**字面私有网络地址**(localhost/127/8、10/8、
+172.16-31、192.168/16、169.254/16、IPv6 ::1/fc00::/7/fe80::/10),公网 http 与主机名一律拒绝;
+store 索引与 `--offline` 行为不变。
 
 **歧义规则**(无例外):
 
@@ -152,19 +154,20 @@ url = "vendor"
 |---|---|
 | key | 仓库名,`^[a-z][a-z0-9-]*$` |
 | `type` | `maven` \| `mjm`(封闭枚举;缺省 `maven`) |
-| `url` | `https://…`(loopback `http://` 仅测试)或文件系统路径。以 http 开头即 URL,否则即目录 |
+| `url` | `https://…`、私有网络内的 `http://<literal-ip>…`(不做 DNS;公网/主机名 http 拒绝)或文件系统路径。以 http 开头即 URL,否则即目录 |
 
-| 布局(由 `type` 决定) \ 位置(由 `url` 决定) | HTTPS | 本地路径 |
+| 布局(由 `type` 决定) \ 位置(由 `url` 决定) | 网络(https 或私有 http) | 本地路径 |
 |---|---|---|
-| **`type = "maven"`** | `https://host/…` | `url = "vendor"` |
-| **`type = "mjm"`** | `url = "https://host/"` | `url = "vendor"` |
+| **`type = "maven"`** | `https://host/…` 或 `http://192.168.1.39/…` | `url = "vendor"` |
+| **`type = "mjm"`** | `url = "https://host/"` 或私有 `http://…` | `url = "vendor"` |
 
 布局是声明的属性,不是 URL 的属性:同一台 https 主机可以装任一布局,所以协议必须由 `type`
 声明,不能从 URL 前缀猜。子表里只允许 `type`、`url` 两个键,未知键报错(带 `file:line:column`)。
 
 **legacy 字符串写法**(仍可读,等价于上表):
-`"https://…"` = maven+https;`"local:<dir>"` = maven+本地;`"mjm:https://…"` = mjm+https;
-`"mjm:local:<dir>"` = mjm+本地。写锁时两种写法都归一成这四个规范串,锁格式不变。
+`"https://…"` = maven+https;`"http://<私有 IP>…"` = maven+私有 http;`"local:<dir>"` = maven+本地;
+`"mjm:https://…"` = mjm+https;`"mjm:http://<私有 IP>…"` = mjm+私有 http;`"mjm:local:<dir>"` = mjm+本地。
+写锁时这些写法都归一成同样的规范声明,锁格式不变。
 
 查找顺序:**互不回退**——`[deps.{repo}]` 只查对应仓库,`[deps]` 只查 Central。
 `local:` 仓库的字节同样经过 store 的 sha256 钉定,与远程仓库同等可审计。
@@ -342,7 +345,7 @@ scope = "dev"             # 可选:[dev-deps] 可达的工件。缺省 = main
 
 1. id 在闭包内唯一(MVS 单版本)
 2. sha256 与 meta-sha256 必为 64 位十六进制(URL 叶子无元数据,meta-sha256 缺省);**每次下载都强制核对,任一不匹配即失败**(release asset 可变风险由它们兜底;元数据变了依赖图就变了——go.sum 同时哈希 zip 与 go.mod 的先例)。`local:` 仓库与远程同等钉定
-3. url 必须 https;唯一例外是 loopback `mjm:` 仓库(`http://localhost` / `http://127.0.0.1`,仅供测试)
+3. url 必须 https;明文 http 仅限字面私有网络地址(localhost、127/8、10/8、172.16-31、192.168/16、169.254/16、IPv6 ::1/fc00::/7/fe80::/10),公网 http 与主机名拒绝
 4. depth ≥ 1
 5. 按 id 字典序输出(稳定 diff)
 6. 一致性:lock 的依赖集合与 mjm.toml + 描述符闭包一致;不一致 → 拒绝 build/run,提示 `mjm lock`。`tree`/`why` 也以锁为权威:二者先读锁、再解析 manifest 只为补父子边,id/version/source/depth/scope 任一不一致即 exit 1(至多 10 行差异,不输出图);无锁 → exit 1
@@ -417,9 +420,9 @@ modules = ["libs/core", "apps/web"]
 | `mjm doctor` | **只读**本地诊断:检查当前项目或 workspace 每个模块的 `mjm.toml`/`mjm.lock` 是否存在且可解析,报告旧 `mj.toml`/`mj.lock`(mjm **不会**读取它们),并检查 XDG store/sources/locks 路径可写性;不解析依赖、不写文件、不访问网络。健康 exit 0,有问题 exit 1,带参数 exit 2 |
 | `mjm audit [--json] [--dev]` | OSV 漏洞查询;默认只查 MAIN,`--dev` 才含 dev/processor;只查 Central 坐标,其余列 `notChecked` 并给原因;漏洞或查询失败 exit 1 |
 | `mjm verify` | **只读本地发布预检**:解析 `mjm.toml`/`mjm.lock`,核对每一条直接声明与锁定行的 id/version/source/MAIN scope;按 sha256 校验 store 中每个 jar 与元数据(workspace 本地替换则校验 classes 与版本戳);若 `target/dist/` 已存在,校验发布三件套内部一致性与 bundle `SHA256SUMS`。不解析依赖、不下载、不修改项目文件、不访问网络。通过 exit 0,失败 exit 1,带参数 exit 2 |
-| `mjm publish [target]` | 写三件套;目标只接受 `gh:`、`mjm:https:`、`mjm:local:`(§6.6)。`mjm:https:` 逐文件 PUT 后立即 GET 回读,三个文件的字节必须完全一致,否则 exit 1 |
+| `mjm publish [target] [--json] [--dry-run]` | 写三件套;目标只接受 `gh:`、`mjm:https:`、私有网络 `mjm:http://<literal-ip>…`、`mjm:local:`(§6.6)。mjm 布局逐文件 PUT 后立即 GET 回读,三个文件的字节必须完全一致,否则 exit 1;`--dry-run` 不写 descriptor/sha256、不创建目标、不上传 |
 | `mjm upgrade` / `mjm update`(alias) | 自升级(同一实现) |
-| `mjm release [target] [--dry-run] [--allow-unsigned]` | 发布 `mjm bundle` 产生的安装包(默认用 minisign 签名,`--allow-unsigned` 才允许无签名):`gh:<owner>/<repo>`、`mjm:https://host/`(loopback `http://` 仅供测试)、`mjm:local:<dir>`;无 target 只准备 `target/dist/release/` 并打印上传清单。**不隐式 build/test/bundle**;发布后回读并校验 tar 的 sha256(§7.3) |
+| `mjm release [target] [--json] [--dry-run] [--allow-unsigned]` | 发布 `mjm bundle` 产生的安装包(默认用 minisign 签名,`--allow-unsigned` 才允许无签名):`gh:<owner>/<repo>`、`mjm:https://host/`、私有网络 `mjm:http://<literal-ip>…`、`mjm:local:<dir>`;无 target 只准备 `target/dist/release/` 并打印上传清单。**不隐式 build/test/bundle**;发布后回读并校验 tar 的 sha256(§7.3) |
 
 ### 6.2 参数约定
 
@@ -630,17 +633,20 @@ noTests,reportFiles[],durationMs}`。测试失败仍是有效结果:module exit 
 | `local-repository` | 本地 Maven 布局目录(无版本索引) |
 | `named-repository` | 命名 HTTPS Maven 仓库;无法解析的 source 也归到这里 |
 
-### 6.6 publish 与 release
+### 6.6 publish 与 release 目标
 
-`publish` 发布**库**的三件套(jar/描述符/sha256,§7.1),目标只接受 `gh:`、`mjm:https://`、`mjm:local:`。
-`release` 发布**应用安装包**(`bundle` 的 tar.gz + bootstrap setup),目标是同一组三种;两者都不接受
-Maven 布局。区别在于产物:库给依赖解析用,安装包给最终用户 `curl | bash`。
+`publish` 发布**库**的三件套(jar/描述符/sha256,§7.1);`release` 发布**应用安装包**
+(`bundle` 的 tar.gz + bootstrap)。两者接受同一组目标:
 
-### 6.6 publish 目标
+- `gh:owner/repo`
+- `mjm:https://host/`
+- 私有网络 `mjm:http://<literal-ip>:<port>/…`(字面私有地址,不做 DNS)
+- `mjm:local:<dir>`
 
-只接受 mjm 自己能回读的目标:`gh:owner/repo`、`mjm:https://host/`(loopback `http://` 仅供测试)、
-`mjm:local:<dir>`;无 target 只准备 `target/dist/` 三件套。
-**Maven 布局不是发布目标**:mjm 不写 POM,`https://host/`、`http://host/`、`local:<dir>` 一律拒绝(exit 1)。
+无 target 时只准备本地产物(`target/dist/` 三件套 / `target/dist/release/`),不上传。
+非 loopback 的明文 http 目标会在 stderr 打一行“流量与 token 不加密”的 warning。
+**Maven 布局不是发布目标**:mjm 不写 POM,`https://host/`、`http://host/`、`local:<dir>` 一律拒绝
+(exit 1);其中公网 `http://` 在仓库声明阶段就会被拒绝,私有网络 http 才可使用。
 Maven 布局仓库仍可**读取**(`[repos]` 的 `type = "maven"`,§2.1)。
 
 HTTP mjm-layout 发布固定使用 **PUT**,不是 POST:
@@ -677,9 +683,10 @@ HTTP mjm-layout 发布固定使用 **PUT**,不是 POST:
 ```
 
 生成在 `target/dist/`;`mjm package` 产出 jar,`mjm publish` 写描述符与 sha256。
-发布**只发 mjm 布局**:`mjm:https://` 的 `<base>/<name>/<version>/` 或 `mjm:local:<dir>` 的同构目录;
-Maven 布局(`group/...`,需要 POM)不是发布目标(§6.6)。HTTP 上传为 PUT,并以 GET 回读三件套做
-逐字节校验;目标主机必须是可写、匿名可读的 PUT 端点。
+发布**只发 mjm 布局**:`mjm:https://` 或私有网络 `mjm:http://<literal-ip>` 的
+`<base>/<name>/<version>/`,或 `mjm:local:<dir>` 的同构目录;Maven 布局(`group/...`,需要 POM)
+不是发布目标(§6.6)。HTTP 上传为 PUT,并以 GET 回读三件套做逐字节校验;目标主机必须是可写、
+匿名可读的 PUT 端点。非 loopback 的明文 HTTP 会提示流量与 token 未加密。
 
 ### 7.2 bundle 形态
 

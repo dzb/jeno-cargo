@@ -143,6 +143,20 @@ class ReleaseCommandTest {
     }
 
     @Test
+    void jsonPrivateLanDryRunCarriesThePlainHttpWarning() throws Exception {
+        Result result = runRaw("--json", "--dry-run", "--allow-unsigned",
+                "mjm:http://192.168.1.39:18080/upload/");
+
+        assertEquals(0, result.exit(), result.err());
+        assertFalse(Files.exists(dir.resolve("target/dist/release")));
+        var json = JsonUtils.parseObject(result.out());
+        assertEquals("PLAIN_HTTP_INSECURE",
+                json.getArray("diagnostics").getObject(0).getString("code"));
+        assertEquals("warning",
+                json.getArray("diagnostics").getObject(0).getString("severity"));
+    }
+
+    @Test
     void jsonReleaseReportsPreparedFilesWithoutATarget() throws Exception {
         Result result = runRaw("--json", "--allow-unsigned");
 
