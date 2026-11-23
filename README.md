@@ -241,29 +241,27 @@ the next invocation.
 
 ## Commands
 
-| | |
-|---|---|
-| `init` / `init --pom` / `init --ws` | create a project, migrate one from Maven, or write `mjm.ws.toml` for a local workspace (`--ws [paths] [--force]`) |
-| `add` / `remove` | edit a declaration and re-lock. `add` writes the value shape (`1.2.3`, `corp:1.2.3`, `gh:owner/repo@tag`, or the shorthand `owner/repo@tag`) |
-| `lock [--check] [--refresh]` | resolve, download, pin. `--check` regenerates in memory and compares byte-for-byte with the lock on disk (Cargo's `--locked`); it fetches metadata, so it needs the network unless every byte is already in the store |
-| `build` | compile against declared deps only |
-| `test` | forked JVM: `@MjmTest` + JUnit Jupiter. Writes surefire-shaped XML to `target/test-results/` (one `TEST-<class>.xml` per class) |
-| `run` | run a main class, a `[scripts]` entry, or `[project].main` when given no argument. mjm's flags (`--module`, `--offline`) are read only **before** the target; after it they belong to the program. `[scripts]` wins over a class of the same name |
-| `tree [--json]` / `why` | see the graph and every introduction path. Both read `mjm.lock` as the authority and resolve the manifest only for the edges the lock does not carry; if the two drift they exit 1 naming up to ten differences and print no graph. `tree --json` is one machine-readable document (id-sorted artifacts, sorted children) |
-| `info [--source]` | everything about one dependency, including its source |
-| `classpath [--test] [--file <p>]` | the classpath an IDE should use. Default is the **compile** classpath under strict visibility — project classes plus the jars you declare directly, no transitive jars, so the IDE never accepts code `mjm build` rejects. `--test` widens it to the test classpath (test classes + main classes + full closure). Paths are the store's content-addressed jars; nothing is copied. Local-only: do not commit `--file` output |
-| `package [--uber]` | the jar. `--uber` merges the closure and writes `...-uber.jar`, so the two never overwrite each other |
-| `bundle` | an installable distribution (bin + lib + setup.sh + tar.gz), in `target/dist/` |
-| `clean [--target \| --dist]` | remove the whole `target/` by default (deliverables live in `target/dist/`); `--dist` removes only `target/dist/` and keeps classes; never the store |
-| `cache dir \| size \| prune \| clean` | inspect or reclaim the user-level store, sources and lock files (`dir` shows the three roots, `size` their occupancy, `prune` removes only provably useless files, `clean` deletes store and sources) |
-| `outdated [--json]` | pinned dependencies with newer versions available; `--json` gives `upToDate`/`updates`/`notChecked`/`failures` |
-| `audit [--json] [--dev]` | known vulnerabilities for the locked closure (OSV). Maven-coordinate artifacts are checked; `gh:`/`url`/`local:`/`mjm:`/named repositories are listed as `notChecked` with the reason — never as clean. Vulnerabilities or failed queries exit 1; `--json` gives `vulnerabilities`/`notChecked`/`failures` |
-| `publish [target]` | the release triple; `gh:owner/repo`, `mjm:https://host/` (two levels, no group), `mjm:local:<dir>` (the same layout written into a directory, no network), or no target (prepare `target/dist/` only). A Maven-layout target (`https://host/`, `local:<dir>`) is refused — mjm writes no POM, so it could not read the result back |
-| `update` / `upgrade` | self-upgrade from GitHub Releases |
-| `-o`, `--offline` (flag) | refuse all network access — store hits only. Not for `update`/`publish`/`outdated`/`audit`, which are network by nature. It is mjm's only before a `run` target; after the target (or after `--`) it is the program's |
-| `--` (terminator) | end mjm's options: everything after it is a positional argument. A strict command rejects it (`build -- --offline` is a usage error); `run` hands it to the program |
-| unknown arguments | a usage error (exit 2), never silently ignored |
-| `mjm <command> --help` | that command's syntax and explanation (may run to several lines) |
+A few everyday shapes; `mjm --help` prints the command list, and
+[SPEC.md](SPEC.md) §6 is the contract (arguments, exit codes, workspace
+strategy, JSON fields).
+
+```sh
+mjm init
+mjm add "org.apache.logging.log4j:log4j-api" 2.25.4
+mjm lock
+mjm build && mjm test
+mjm run                          # [project].main, or: mjm run app.Main -- args…
+mjm package --uber
+mjm bundle
+mjm classpath --test
+mjm audit
+mjm publish gh:owner/repo
+```
+
+Unknown arguments are usage errors (exit 2), never silently ignored. `--` ends
+mjm's own options: after it, arguments belong to the command — for `run`, to the
+program (`mjm run app.Main -- --offline` passes `--offline` through).
+
 Deliverables moved: `dist/` is now `target/dist/` (it is build output, and
 `mjm clean` removes the whole `target/` tree). Scripts that read `dist/` need
 one edit; an existing `dist/` is no longer read and `publish` tells you so.
@@ -286,6 +284,17 @@ The substitution happens where the classpath is assembled, so it is visible to
 unchanged. The design record, including why `publish` is unaffected, is in
 [docs/workspace-design.md](docs/workspace-design.md).
 
+## Where the truth lives
+
+| File | Role |
+|---|---|
+| [SPEC.md](SPEC.md) | the contract: file formats, CLI, artifact layout; wins on conflict |
+| [DESIGN.md](DESIGN.md) | the reasons: decisions, alternatives, architecture, budget |
+| [RELEASE.md](RELEASE.md) | how mjm itself is released (pipeline details) |
+| [REMINDS.md](REMINDS.md) | deliberate tradeoffs, with cost and re-decision trigger |
+| [docs/comparison.md](docs/comparison.md) | historical survey of other package managers |
+| [docs/history-0.2.md](docs/history-0.2.md) | release-by-release history |
+
 ## Design notes
 
 mjm is built on four rules, visible throughout
@@ -303,8 +312,8 @@ mjm is built on four rules, visible throughout
   ("run mjm lock", "align the versions, or pin one in [overrides]"), not in
   stack traces.
 
-[SPEC.md](SPEC.md) is the formal contract: file grammars, field tables,
-validation rules, and the lockfile invariants. [REMINDS.md](REMINDS.md) records
+[SPEC.md](SPEC.md) is the formal contract: file grammars, CLI behaviour, artifact
+layout and the Maven decoding scope. [REMINDS.md](REMINDS.md) records
 the deliberate tradeoffs — each with its cost and the condition that should
 make someone re-decide.
 

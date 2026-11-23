@@ -1,7 +1,9 @@
-# mjm 文件格式规范(SPEC)
+# mjm 规范（SPEC）：文件与 CLI 契约
 
-状态:草案 v0.1(2026-11-21,待评审)
-配套:[DESIGN.md](DESIGN.md)(决策与理由)。本文只定义**文件的语法与语义**,是实现验收的依据。
+状态:现行;最后核对 2026-11-23
+
+**SPEC 是规范;DESIGN 是理由;冲突以 SPEC 为准。** 本文定义文件格式、CLI 契约、发行物布局与
+Maven 解码范围,是实现与验收的依据;取舍与替代方案见 [DESIGN.md](DESIGN.md)。
 
 总原则:**拒绝式解析**。任何未在本 spec 中定义的节、键、值形态、语法糖 → 立即报错。
 schema 封闭,拼写错误(`[dep]` ≠ `[deps]`)不会静默失效。
@@ -15,7 +17,7 @@ schema 封闭,拼写错误(`[dep]` ≠ `[deps]`)不会静默失效。
 | `mjm.toml` | 人 | mjm | 是 |
 | `{artifact}-{version}.mjm.toml`(描述符) | `mjm publish` 生成 | mjm(消费方解析时) | 随发布物 |
 | `mjm.lock` | mjm | mjm | 是 |
-| `mjm.ws.toml` | `mjm init --ws` 或人 | mjm | **否**(本地文件,§4.5) |
+| `mjm.ws.toml` | `mjm init --ws` 或人 | mjm | **否**(本地文件,§5) |
 
 ---
 
@@ -42,24 +44,6 @@ string-array  = "[" ws basic-string *( "," ws basic-string ) [","] ws "]"
 - **不支持**(出现即报错):多行字符串、字面字符串(`'...'`)、内联表、点键 keyval(`a.b = 1`)、日期/时间类型
 - integer:十进制,64 位
 - 同一 key 重复定义 → 报错;同一 key 同时出现在普通表与数组表 → 报错
-
----
-
-## 1.5 全局旗标
-
-### `--offline`
-
-**禁止本次运行的一切网络访问。** store 里已有的内容照常使用（会话缓存 → 持久索引 → 字节校验）；缺任何东西即失败，错误消息报出缺失的 URL，并说明如何填充。
-
-不是"优先本地"：没有回退到网络的降级路径。让旗标有时说谎比没有旗标更糟。
-
-每个 store 访问都经过同一个判定点（`ArtifactStore.ensure`），所以 `lock` / `build` / `test` / `info --source` 都自动遵守。
-
-**不适用的命令**：`update`、`publish`、`outdated` —— 它们的存在就是联网操作。传入 `--offline` 报用法错误（退出码 2），而不是假装接受。
-
-**`add` 的 discover 形态**：不带显式版本时（列举版本 = 读 `maven-metadata.xml`，或裸名走 Central 索引搜索）是联网操作，`--offline` 下报用法错误（退出码 2）——要离线就带上显式版本：`mjm add "<id>" <version>` 只读 store，`--offline` 下照常可用。
-
-**为什么可行**：store 有持久化的 URL → digest 索引（`store/index/<sha256(url)>.url`）。没有它，索引未命中会是常态（每个 pom 都被当作"没见过"），`--offline` 必然失败。
 
 ---
 
@@ -348,12 +332,13 @@ scope = "dev"             # 可选:[dev-deps] 可达的工件。缺省 = main
 4. depth ≥ 1
 5. 按 id 字典序输出(稳定 diff)
 6. 一致性:lock 的依赖集合与 mjm.toml + 描述符闭包一致;不一致 → 拒绝 build/run,提示 `mjm lock`。`tree`/`why` 也以锁为权威:二者先读锁、再解析 manifest 只为补父子边,id/version/source/depth/scope 任一不一致即 exit 1(至多 10 行差异,不输出图);无锁 → exit 1
-7. 命中策略:lock 有效 → 直接采用(sha256 权威,不重新解析);`mjm lock --refresh` 强制重解
+7. 命中策略:lock 有效 → 直接采用(sha256 权威,不重新解析);`mjm lock` **总是重解**并重写锁。
+   `--refresh` 为 **legacy no-op**:仍被接受以兼容旧脚本,但不在本契约内,移除它是单独的行为单
 8. 兼容性:旧锁里 `source` 以 `gitee:` 开头的行,**读锁即报**可执行的迁移错误(gitee: 物种已移除),而不是留给下游命令各自报 URI 错误;`source` 以 `mjm:` 开头的行照常读
 
 ---
 
-## 4.5 `mjm.ws.toml`(本地工作区文件)
+## 5. `mjm.ws.toml`(本地工作区文件)
 
 列出同一目录树里的若干模块,让彼此依赖时用本地的 `target/classes` 取代已发布的 jar。
 **只影响字节来源,不影响解析与锁**(见 DESIGN.md §8 与 `docs/workspace-design.md`)。
@@ -363,7 +348,7 @@ scope = "dev"             # 可选:[dev-deps] 可达的工件。缺省 = main
 modules = ["libs/core", "apps/web"]
 ```
 
-### 4.5.1 字段(closed schema)
+### 5.1 字段(closed schema)
 
 | 节 | 键 | 类型 | 规则 |
 |---|---|---|---|
@@ -374,7 +359,7 @@ modules = ["libs/core", "apps/web"]
 - `modules = []` → 解析错误:本 TOML 子集不支持空字符串数组(§1)。
   (`mjm init --ws` 扫不到模块时也会拒绝写文件——它不生成一个空工作区。)
 
-### 4.5.2 语义
+### 5.2 语义
 
 - **查找**:从当前目录向上找最近的 `mjm.ws.toml`;没有则按单模块工作(与本文档其余部分完全一致)。
 - **根不能是模块**:同一目录同时含 `mjm.toml` 与 `mjm.ws.toml` → 报错。
@@ -383,14 +368,124 @@ modules = ["libs/core", "apps/web"]
 - **不提交**:这是本机文件(git 由用户管,mjm 不写 `.gitignore`、不检查跟踪状态)。
 - **不参与发布**:发布物只描述已发布版本;本地 classes 的替换不写进锁、不写进描述符。
 
-### 4.5.3 与锁的关系
+### 5.3 与锁的关系
 
 `mjm.lock` 的格式与语义**完全不变**:每个模块仍各有一份锁,锁里仍是从仓库解析出来的
 工件(sha256 权威)。替换发生在装配 classpath 时,因此锁在任何机器上都一致。
 
 ---
 
-## 5. 错误信息规范
+
+## 6. CLI 契约
+
+### 6.1 命令
+
+19 个命令,以本表为准(`mjm --help` 只打印同一份清单的摘要)。
+
+| 命令 | 契约 |
+|---|---|
+| `mjm init [--pom] [--ws] [--force]` | 写 `mjm.toml` 骨架;`--pom` 从 `pom.xml` 迁移并逐条报告不可表达的事实;`--ws` 写 `mjm.ws.toml`(§5)。**工作区根目录拒绝 `init`/`--pom`/`--force`**(exit 1),`--ws` 仍可用 |
+| `mjm add <dep> [ver]` | 写一行 `[deps]` 并立即重锁;值形态:精确版本、`<repo>:<version>`、`gh:owner/repo@tag`、裸名搜索(联网) |
+| `mjm remove <id>` | 删除一行声明并重锁 |
+| `mjm lock [--check]` | 解析并写出 `mjm.lock`;**总是重解**。`--check` 只在内存生成并与磁盘逐字节比较,不写文件。legacy `--refresh` 是 no-op,不在契约内 |
+| `mjm build` | javac 编译 `src/main/java`,严格可见性 classpath(只含 MAIN 声明);`--release` 取 `[java].version`;processor 走 `-processorpath` |
+| `mjm test` | fork JVM:`@MjmTest` + JUnit Platform;classpath 含 MAIN + dev;XML 报告写 `target/test-results/` |
+| `mjm run [<main>] [args…]` | 在 runtime classpath(排除 dev)上运行;无参数时用 `[project].main`;`[scripts]` 优先于同名主类。mjm 旗标只在 target 之前生效(§6.2) |
+| `mjm tree [--json]` | 依赖树 + 深度;**以 `mjm.lock` 为准**:先读锁,再解析 manifest 只为补父子边;id/version/source/depth/scope 任一不一致 → exit 1、至多 10 行差异、不输出图 |
+| `mjm why <id>` | 每个引入路径与深度;同样以锁为准,漂移拒绝画图 |
+| `mjm info <id> [--source]` | 身份/来源/依赖/源码地址;`--source` 取源码树 |
+| `mjm classpath [--test] [--file <path>]` | IDE 用 classpath;默认编译可见性,`--test` 为测试闭包;路径指向 store 内容寻址 jar,不拷贝 |
+| `mjm package [--uber]` | `target/dist/<name>-<version>.jar`;`--uber` 合并闭包输出 `...-uber.jar` |
+| `mjm bundle` | `target/dist/<name>-<version>/`(bin/lib/setup.sh/SHA256SUMS)+ `.tar.gz` |
+| `mjm clean [--target (default) \| --dist]` | 默认整棵删 `target/`;`--dist` 只删 `target/dist/` 保留 classes;永不触碰 store |
+| `mjm cache dir \| size \| prune \| clean` | `dir`/`size` 只读;`prune` 删可证明无用之物;`clean` 删 store 与 sources |
+| `mjm outdated [--json]` | 已钉版本 vs 仓库可用版本;`gh:`/`url`/`local:`/`mjm:` 列为未检查;跨 major 单列 |
+| `mjm audit [--json] [--dev]` | OSV 漏洞查询;只查 Central 坐标,其余列 `notChecked` 并给原因;漏洞或查询失败 exit 1 |
+| `mjm publish [target]` | 写三件套;目标只接受 `gh:`、`mjm:https:`、`mjm:local:`(§6.6) |
+| `mjm update` / `mjm upgrade` | 自升级(同一实现) |
+
+### 6.2 参数约定
+
+- **未知参数是用法错误**:exit 2,不静默忽略(`build`/`test`/`bundle`/`update` 无参数;`why` 恰好一个 id;`publish` 最多一个 target)。
+- **`--` 结束 mjm 的选项**:之后的内容作为位置参数交给命令(`run` 交给程序)。
+- **`--help` / `-h`**:只在 `--` 之前、且是唯一剩余参数时生效;`mjm --help` 打印清单 exit 0。
+- **`run` 的旗标边界**:mjm 的 `--module`/`--offline` 只在 target 之前生效;target 之后(或 `--` 之后)全部是程序参数。
+
+### 6.3 退出码
+
+| 码 | 含义 |
+|---|---|
+| 0 | 成功;或查询完成且结果干净(`outdated`/`audit`)、`tree`/`why` 一致 |
+| 1 | 失败:构建/测试/解析错误,锁与 manifest 漂移,发现漏洞,查询失败 |
+| 2 | 用法错误:未知命令/参数、`--offline` 用于联网命令、工作区根缺 `--module` |
+
+### 6.4 工作区策略
+
+| 策略 | 命令 | 根目录行为 |
+|---|---|---|
+| orchestrate | `lock`、`build`、`test`、`package`、`bundle`、`clean` | 按依赖拓扑序逐模块;`--module <path>` 只跑一个;`build`/`package`/`bundle`/`lock` 遇错即停,`test`/`clean` 继续并汇总 |
+| requireModule | `add`、`remove`、`run`、`classpath`、`info`、`tree`、`why`、`publish`、`audit`、`outdated` | 无 `--module` → exit 2 标准句;带 `--module` → 在该模块执行 |
+| global | `init`、`cache`、`update` | 不参与编排;`init` 在根目录拒绝(§6.1) |
+
+### 6.5 输出与 JSON
+
+`tree`、`outdated`、`audit` 支持 `--json`:stdout 只有**一个** JSON 文档,诊断/警告走 stderr。
+其余命令是人类可读输出。`--json` 的字段集合是契约的一部分,新增字段向后兼容,删改需新版本。
+
+### 6.6 publish 目标
+
+只接受 mjm 自己能回读的目标:`gh:owner/repo`、`mjm:https://host/`(loopback `http://` 仅供测试)、
+`mjm:local:<dir>`;无 target 只准备 `target/dist/` 三件套。
+**Maven 布局不是发布目标**:mjm 不写 POM,`https://host/`、`http://host/`、`local:<dir>` 一律拒绝(exit 1)。
+Maven 布局仓库仍可**读取**(`[repos]` 的 `type = "maven"`,§2.1)。
+
+### 6.7 全局旗标 `--offline`
+
+**禁止本次运行的一切网络访问。** store 里已有的内容照常使用（会话缓存 → 持久索引 → 字节校验）；缺任何东西即失败，错误消息报出缺失的 URL，并说明如何填充。
+
+不是"优先本地"：没有回退到网络的降级路径。让旗标有时说谎比没有旗标更糟。
+
+每个 store 访问都经过同一个判定点（`ArtifactStore.ensure`），所以 `lock` / `build` / `test` / `info --source` 都自动遵守。
+
+**不适用的命令**：`update`、`publish`、`outdated`、`audit` —— 它们的存在就是联网操作。传入 `--offline` 报用法错误（退出码 2），而不是假装接受。
+
+**`add` 的 discover 形态**：不带显式版本时（列举版本 = 读 `maven-metadata.xml`，或裸名走 Central 索引搜索）是联网操作，`--offline` 下报用法错误（退出码 2）——要离线就带上显式版本：`mjm add "<id>" <version>` 只读 store，`--offline` 下照常可用。
+
+**为什么可行**：store 有持久化的 URL → digest 索引（`store/index/<sha256(url)>.url`）。没有它，索引未命中会是常态（每个 pom 都被当作"没见过"），`--offline` 必然失败。
+
+---
+
+
+---
+
+## 7. 发行物布局
+
+### 7.1 发布三件套
+
+```
+<name>-<version>.jar
+<name>-<version>.mjm.toml     # 描述符(§3)
+<name>-<version>.sha256       # jar 字节的 sha256
+```
+
+生成在 `target/dist/`;`mjm package` 产出 jar,`mjm publish` 写描述符与 sha256。
+发布**只发 mjm 布局**:`mjm:https://` 的 `<base>/<name>/<version>/` 或 `mjm:local:<dir>` 的同构目录;
+Maven 布局(`group/...`,需要 POM)不是发布目标(§6.6)。
+
+### 7.2 bundle 形态
+
+```
+target/dist/<name>-<version>/
+  bin/<name>          # launcher
+  lib/                # 应用 jar(含闭包)与 toolchain
+  setup.sh            # 自安装脚本
+  SHA256SUMS
+target/dist/<name>-<version>.tar.gz
+```
+
+---
+
+## 8. 错误信息规范
 
 - 文件解析错误:`{文件}:{行}:{列}: {描述}(期望 …,实际 …)`
 - 依赖图错误:完整引入路径 + 当前预算值 + 出口建议(§2.3)
@@ -398,7 +493,29 @@ modules = ["libs/core", "apps/web"]
 
 ---
 
-## 6. 本 spec 未决项
+## 9. 本 spec 未决项
 
 - `[repos]` 回退链语法与私库排除(V2)
 - ~~`mjm jdk` toolchain 管理~~ —— 2026-11-22 决定不做(见 DESIGN.md §8):只校验、不管理
+
+---
+
+## 附录 A Maven POM 解码范围
+
+mjm 只把 pom 当作 Central 的**线路格式**读取,不追求 Maven 语义保真;范围如下(理由见 DESIGN §5)。
+
+**支持**:
+
+- parent POM 递归链(版本常藏在 parent)
+- 属性插值(`${project.version}` 等)
+- `dependencyManagement` 与 BOM `<scope>import</scope>`
+- `dependencies` 中 scope = compile / runtime 的条目;`dependencyManagement` 提供的 scope 同样参与决议(依赖自身省略 scope 时生效)
+- exclusions、classifiers(按需)、packaging: jar / pom / bundle(按 jar 处理)
+
+**拒绝并报错**:
+
+- version ranges、snapshots
+- 非 jar/pom/bundle 的 packaging
+- pom 中声明的 `<repositories>`:不跟随(仓库只能由 `mjm.toml` 的 `[repos]` 指定)
+
+**范围**:只保证"把库拖下来且传递依赖正确";scopes 只关心 compile/runtime。
