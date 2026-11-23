@@ -80,7 +80,7 @@ can never leak into what mjm publishes.
 mjm init                      # skeleton mjm.toml
 mjm add "org.slf4j:slf4j-api" 2.0.18
 mjm lock                      # resolve, download into ${XDG_CACHE_HOME:-~/.cache}/mjm/store, pin sha256
-mjm build                     # javac against declared deps only
+mjm build                     # javac against declared deps only (resources-only modules copy too)
 mjm test                      # forked JVM: @MjmTest + JUnit Jupiter
 mjm run com.example.App
 mjm cache purge --dry-run     # destructive: shows store/sources; --yes actually deletes

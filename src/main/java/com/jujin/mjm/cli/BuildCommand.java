@@ -27,6 +27,7 @@ import java.util.stream.Stream;
 public final class BuildCommand implements Command {
 
     private static final String SOURCES = "src/main/java";
+    private static final String RESOURCES = "src/main/resources";
     private static final String OUTPUT = "target/classes";
 
     private final ArtifactStore store;
@@ -114,8 +115,11 @@ public final class BuildCommand implements Command {
             return 1;
         }
         List<String> sources = sources();
-        if (sources.isEmpty()) {
-            System.err.println("mjm: no sources under " + projectDir.resolve(SOURCES));
+        boolean resources = hasResources();
+        if (sources.isEmpty() && !resources) {
+            System.err.println("mjm: no sources under " + projectDir.resolve(SOURCES)
+                    + " and no resources under " + projectDir.resolve(RESOURCES)
+                    + " — nothing to build");
             return 1;
         }
 
@@ -125,6 +129,16 @@ public final class BuildCommand implements Command {
         } catch (IOException e) {
             System.err.println("mjm: cannot create " + output);
             return 1;
+        }
+
+        // A resource-only module is a legal build product: no javac step, but
+        // the resources (and the version stamp) still land in target/classes.
+        if (sources.isEmpty()) {
+            SourceResources.copy(projectDir.resolve(RESOURCES), output);
+            writeVersionResource(project, output);
+            System.out.println("copied resources into " + output
+                    + " (no Java sources to compile)");
+            return 0;
         }
 
         // In-process javac: mjm runs on a JDK, so the compiler is always here —
@@ -178,6 +192,19 @@ public final class BuildCommand implements Command {
      * version is not a source constant: a resource survives every layout,
      * while {@code Package.getImplementationVersion()} is null off a jar.
      */
+    /** Whether {@code src/main/resources} holds any file at all. */
+    private boolean hasResources() {
+        Path root = projectDir.resolve(RESOURCES);
+        if (!Files.isDirectory(root)) {
+            return false;
+        }
+        try (Stream<Path> walk = Files.walk(root)) {
+            return walk.anyMatch(Files::isRegularFile);
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     private void writeVersionResource(MjProject project, Path output) {
         Path target = output.resolve("META-INF/mjm/version.properties");
         try {

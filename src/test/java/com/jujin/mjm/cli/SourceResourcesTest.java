@@ -96,4 +96,40 @@ class SourceResourcesTest {
         }
         assertEquals(0, exit, "the fixture read both resources on the forked classpath");
     }
+
+    @Test
+    void aResourceOnlyModuleBuilds(@TempDir Path storeDir) throws Exception {
+        Files.createDirectories(dir.resolve("src/main/resources/demo"));
+        Files.writeString(dir.resolve("mjm.toml"), """
+            [project]
+            name = "assets"
+            version = "0.1.0"
+            """);
+        Files.writeString(dir.resolve("src/main/resources/demo/data.txt"), "payload");
+        Files.writeString(dir.resolve("mjm.lock"),
+                LockFile.serialize(new ResolvedGraph(List.of(), List.of(), Map.of()),
+                        url -> "e".repeat(64)));
+
+        int exit = new BuildCommand(new ArtifactStore(storeDir), dir).execute(List.of());
+
+        assertEquals(0, exit, "resources are a build product even without Java sources");
+        assertEquals("payload",
+                Files.readString(dir.resolve("target/classes/demo/data.txt")).strip());
+    }
+
+    @Test
+    void aProjectWithoutSourcesOrResourcesIsStillAnError(@TempDir Path storeDir) throws Exception {
+        Files.writeString(dir.resolve("mjm.toml"), """
+            [project]
+            name = "empty"
+            version = "0.1.0"
+            """);
+        Files.writeString(dir.resolve("mjm.lock"),
+                LockFile.serialize(new ResolvedGraph(List.of(), List.of(), Map.of()),
+                        url -> "e".repeat(64)));
+
+        int exit = new BuildCommand(new ArtifactStore(storeDir), dir).execute(List.of());
+
+        assertEquals(1, exit);
+    }
 }
