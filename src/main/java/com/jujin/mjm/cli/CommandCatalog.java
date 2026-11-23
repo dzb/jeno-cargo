@@ -81,9 +81,9 @@ final class CommandCatalog {
 
     /** Minimal structured error for failures that happen before a command runs. */
     static void printError(String command, int exitCode, String code, String message,
-                           List<String> argv) {
+                           List<String> argv, boolean effectiveOffline) {
         boolean dryRun = false;
-        boolean offline = ArtifactStore.isOffline();
+        boolean offline = effectiveOffline || ArtifactStore.isOffline();
         for (String arg : argv) {
             if (arg.equals("--")) {
                 break;

@@ -83,7 +83,7 @@ public final class CommandRunner {
                 }
                 CommandCatalog.printError("", 2, "MISSING_COMMAND",
                         "no command given; use --json --help for the catalog",
-                        List.of(args));
+                        List.of(args), false);
                 return 2;
             }
             return usage(help ? 0 : 2);
@@ -94,7 +94,7 @@ public final class CommandRunner {
         if (command == null) {
             if (json) {
                 CommandCatalog.printError(commandName, 2, "UNKNOWN_COMMAND",
-                        "unknown command '" + commandName + "'", List.of(args));
+                        "unknown command '" + commandName + "'", List.of(args), false);
                 return 2;
             }
             System.err.println(Ui.error("unknown command '" + commandName + "'"));
@@ -130,7 +130,7 @@ public final class CommandRunner {
             CommandCatalog.printError(command.name(), 2, "JSON_UNSUPPORTED",
                     "command '" + command.name() + "' does not declare JSON output yet; "
                     + "use `mjm --json " + command.name() + " --help` for its descriptor",
-                    List.of(args));
+                    rest.subList(0, flagsEnd), offline);
             return 2;
         }
         if (json) {
@@ -159,7 +159,7 @@ public final class CommandRunner {
                         + "--offline does not apply";
                 if (json) {
                     CommandCatalog.printError(command.name(), 2, "OFFLINE_FORBIDDEN", message,
-                            List.of(args));
+                            rest.subList(0, flagsEnd), offline);
                 } else {
                     System.err.println(Ui.error(message));
                 }

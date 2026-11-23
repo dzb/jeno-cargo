@@ -287,6 +287,16 @@ class CommandCatalogTest {
             Map<String, Object> offline = parse(run("--json", "--offline", "outdated").out());
             assertEquals(false, offline.get("dryRun"));
             assertEquals(true, offline.get("offline"));
+
+            Map<String, Object> runDry = parse(
+                    run("--json", "run", "app", "--dry-run").out());
+            assertEquals(false, runDry.get("dryRun"));
+            assertEquals(false, runDry.get("offline"));
+
+            Map<String, Object> runOffline = parse(
+                    run("--json", "run", "app", "--offline").out());
+            assertEquals(false, runOffline.get("dryRun"));
+            assertEquals(false, runOffline.get("offline"));
         } finally {
             resetOffline();
         }
