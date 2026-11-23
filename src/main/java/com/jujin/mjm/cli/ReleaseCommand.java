@@ -24,8 +24,9 @@ import java.util.List;
  * {@code target/dist/<name>-<version>.tar.gz}.
  *
  * <p>Without a target it prepares {@code target/dist/release/} and prints the
- * upload checklist. With {@code gh:}, {@code mjm:https://…} or
- * {@code mjm:local:<dir>} it uploads the installer, a bootstrap {@code setup.sh},
+ * upload checklist. With {@code gh:}, {@code mjm:https://…},
+ * {@code mjm:http://<private-ip>/} (LAN only) or {@code mjm:local:<dir>} it
+ * uploads the installer, a bootstrap {@code setup.sh},
  * a checksum and {@code release.json}, then reads the installer back and
  * compares its sha256 — a publish that cannot be verified is not done.
  */
@@ -52,7 +53,8 @@ public final class ReleaseCommand implements Command {
 
     @Override
     public String summary() {
-        return "publish a bundled installer: gh:, mjm:https://host/, mjm:local:<dir>";
+        return "publish a bundled installer: gh:, mjm:https://host/,"
+                + " mjm:http://<private-ip>/, mjm:local:<dir>";
     }
 
     @Override
@@ -61,6 +63,8 @@ public final class ReleaseCommand implements Command {
                needs target/dist/<name>-<version>.tar.gz (run mjm bundle first);
                signed with minisign by default: set MJM_MINISIGN_KEY, and optionally
                MJM_MINISIGN_PUBKEY/MJM_MINISIGN; --allow-unsigned is the explicit opt-out.
+               targets: gh:<owner>/<repo>, mjm:https://host/, mjm:http://<private-ip>/
+               (literal LAN address only; public hosts need https), mjm:local:<dir>.
                no target prepares target/dist/release/ and prints the upload list.
                --dry-run prepares the same files and shows the URLs without uploading.""";
     }
@@ -240,8 +244,8 @@ public final class ReleaseCommand implements Command {
         Repository repository = Repository.parse(target);
         if (repository.layout() != Repository.Layout.MJM) {
             throw new IllegalArgumentException("release publishes installers, not Maven "
-                    + "artifacts — use gh:<owner>/<repo>, mjm:https://host/ or "
-                    + "mjm:local:<dir>");
+                    + "artifacts — use gh:<owner>/<repo>, mjm:https://host/,"
+                    + " mjm:http://<private-ip>/ (LAN only) or mjm:local:<dir>");
         }
         String root = repository.isLocal()
                 ? repository.directory(ArtifactLocations.projectRoot()).toUri().toString()

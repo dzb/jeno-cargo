@@ -13,6 +13,7 @@ import java.nio.file.Path;
  * <pre>
  *   https://host/…        NETWORK + MAVEN    local:&lt;dir&gt;        LOCAL + MAVEN
  *   mjm:https://host/…    NETWORK + MJM      mjm:local:&lt;dir&gt;    LOCAL + MJM
+ *   mjm:http://<private-ip>/…  NETWORK + MJM  (LAN only; literal address)
  *
  * Plain {@code http://} is a NETWORK location too, but only for literal
  * private-network addresses ({@link #isLocalNetworkHttp}).
@@ -52,11 +53,7 @@ public record Repository(String name, Layout layout, Transport transport,
      */
     public static Repository parse(String name, String declaration) {
         if (declaration == null || declaration.isBlank()) {
-            throw new IllegalArgumentException(
-                    "a repository is a location plus a layout:\n"
-                    + "  https://host/…        or local:<dir>      (Maven layout)\n"
-                    + "  mjm:https://host/…    or mjm:local:<dir>  (mjm layout, artifact names, "
-                    + "no group)");
+            throw new IllegalArgumentException(twoShapes());
         }
         boolean mjm = declaration.startsWith("mjm:");
         String rest = mjm ? declaration.substring("mjm:".length()) : declaration;
@@ -326,9 +323,12 @@ public record Repository(String name, Layout layout, Transport transport,
     }
     private static String twoShapes() {
         return "a repository is a location plus a layout:\n"
-                + "  https://host/…        or local:<dir>      (Maven layout)\n"
-                + "  mjm:https://host/…    or mjm:local:<dir>  (mjm layout, artifact names, "
-                + "no group)";
+                + "  https://host/…          or local:<dir>       (Maven layout)\n"
+                + "  http://<private-ip>/…   or local:<dir>       (Maven layout, LAN only)\n"
+                + "  mjm:https://host/…      or mjm:local:<dir>   (mjm layout, artifact names,\n"
+                + "                                                no group)\n"
+                + "  mjm:http://<private-ip>/… or mjm:local:<dir> (mjm layout, LAN only)\n"
+                + "  plain http: literal private address only; public hosts need https.";
     }
 
     public boolean isLocal() {

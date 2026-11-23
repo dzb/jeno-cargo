@@ -35,6 +35,8 @@ import java.util.Map;
  *   mjm publish                    → target/dist/ + upload hint
  *   mjm publish gh:owner/repo     → target/dist/ + GitHub native upload
  *   mjm publish mjm:https://host/ → target/dist/ + mjm layout PUT (no group needed)
+ *   mjm publish mjm:http://192.168.1.39:8080/upload/ → same, plain http on a
+ *                                 LAN address (warning: not encrypted)
  *   mjm publish mjm:local:<dir>   → target/dist/ + the same layout on disk
  * </pre>
  *
@@ -74,14 +76,17 @@ public final class PublishCommand implements Command {
 
     @Override
     public String summary() {
-        return "write the release triple and upload it: gh:, mjm:https://host/, mjm:local:<dir>";
+        return "write the release triple and upload it: gh:, mjm:https://host/,"
+                + " mjm:http://<private-ip>/, mjm:local:<dir>";
     }
 
     @Override
     public String help() {
         return """
                targets mjm can read back: gh:<owner>/<repo>, mjm:https://host/,
-               mjm:local:<dir>; no target only prepares target/dist/.
+               mjm:http://<private-ip>/, mjm:local:<dir>; no target only prepares
+               target/dist/. plain http is for literal private addresses only
+               (LAN); public hosts need https.
                a Maven-layout target (https://host/, local:<dir>) is refused:
                mjm writes no POM, so neither mjm nor Maven could consume it.""";
     }
@@ -146,7 +151,8 @@ public final class PublishCommand implements Command {
             if (publishTarget.layout() == Repository.Layout.MAVEN) {
                 System.err.println("mjm: cannot publish to a Maven-layout target — mjm writes "
                         + "no POM, so neither mjm nor Maven can read it back; use "
-                        + "gh:<owner>/<repo> or mjm:https://host/ (or mjm:local:<dir>)");
+                        + "gh:<owner>/<repo>, mjm:https://host/,"
+                        + " mjm:http://<private-ip>/ (or mjm:local:<dir>)");
                 return 1;
             }
             if (publishTarget.isPlainHttp() && !publishTarget.isLoopbackNetwork()) {
@@ -231,7 +237,8 @@ public final class PublishCommand implements Command {
             System.out.println("upload the three files to a GitHub release or an mjm: "
                     + "repository, then tell a teammate:");
             System.out.println("  mjm add \"" + name + "\" gh:<owner>/" + name + "@v" + version);
-            System.out.println("  (or publish mjm:https://host/ to host it yourself)");
+            System.out.println("  (or publish mjm:https://host/ — or"
+                    + " mjm:http://<private-ip>/ on a LAN — to host it yourself)");
             return 0;
         }
 
