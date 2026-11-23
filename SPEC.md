@@ -389,7 +389,7 @@ modules = ["libs/core", "apps/web"]
 | `mjm remove <id>` | 删除一行声明并重锁 |
 | `mjm lock [--check]` | 解析并写出 `mjm.lock`;**总是重解**。`--check` 只在内存生成并与磁盘逐字节比较,不写文件。legacy `--refresh` 是 no-op,不在契约内 |
 | `mjm build` | javac 编译 `src/main/java`,严格可见性 classpath(只含 MAIN 声明);`--release` 取 `[java].version`;processor 走 `-processorpath`。**当前要求至少一个 Java 源**;resource-only 模块会失败(报没有 sources) |
-| `mjm test` | fork JVM:`@MjmTest` + JUnit Platform;当前 classpath 含 MAIN + dev + **processor**;XML 报告写 `target/test-results/` |
+| `mjm test` | fork JVM:`@MjmTest` + JUnit Platform;当前 classpath 含 MAIN + dev + **processor**;每次运行先清空 `target/test-results/`(空测试/编译失败也会清空),XML 报告写该目录 |
 | `mjm run [<main>] [args…]` | 在 runtime classpath(排除 dev)上运行;无参数时用 `[project].main`;`[scripts]` 优先于同名主类。target 在 `--` 之前(可省略);mjm 旗标只在 target 之前生效;`--` 之后**全部**是程序参数(§6.2) |
 | `mjm tree [--json]` | 依赖树 + 深度;**以 `mjm.lock` 为准**:先读锁,再解析 manifest 只为补父子边;id/version/source/depth/scope 任一不一致 → exit 1、至多 10 行差异、不输出图 |
 | `mjm why <id>` | 每个引入路径与深度;同样以锁为准,漂移拒绝画图 |

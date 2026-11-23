@@ -238,4 +238,74 @@ class TestReportsTest {
         assertEquals(true, nodes.getLength() > 0, "expected a <" + tag + ">");
         return (Element) nodes.item(0);
     }
+
+    @Test
+    void anEmptySuiteStillClearsThePreviousResults(@TempDir Path storeDir) throws Exception {
+        project();
+        Path testSource = dir.resolve("src/test/java/demo/Tests.java");
+        Files.createDirectories(testSource.getParent());
+        Files.writeString(testSource, """
+            package demo;
+
+            import com.jujin.mjm.test.MjmTest;
+
+            public class Tests {
+                @MjmTest
+                void one() { }
+            }
+            """);
+        lock();
+        ArtifactStore store = new ArtifactStore(storeDir);
+        Path reports = dir.resolve("target/test-results");
+        try (var central = VendoredToolchain.start()) {
+            assertEquals(0, new TestCommand(store, dir).execute(List.of()));
+            assertTrue(Files.exists(reports.resolve("TEST-demo.Tests.xml")), "first run wrote XML");
+
+            Files.delete(testSource);
+
+            assertEquals(0, new TestCommand(store, dir).execute(List.of()),
+                    "no tests is still a success");
+        }
+
+        assertTrue(emptyDirectory(reports), "the previous run's XML is gone");
+    }
+
+    @Test
+    void aCompileFailureLeavesTheResultsEmpty(@TempDir Path storeDir) throws Exception {
+        project();
+        Path testSource = dir.resolve("src/test/java/demo/Tests.java");
+        Files.createDirectories(testSource.getParent());
+        Files.writeString(testSource, """
+            package demo;
+
+            import com.jujin.mjm.test.MjmTest;
+
+            public class Tests {
+                @MjmTest
+                void one() { }
+            }
+            """);
+        lock();
+        ArtifactStore store = new ArtifactStore(storeDir);
+        Path reports = dir.resolve("target/test-results");
+        try (var central = VendoredToolchain.start()) {
+            assertEquals(0, new TestCommand(store, dir).execute(List.of()));
+            assertTrue(Files.exists(reports.resolve("TEST-demo.Tests.xml")), "first run wrote XML");
+
+            Files.writeString(testSource, "package demo; public class Tests { this is not java }");
+
+            assertEquals(1, new TestCommand(store, dir).execute(List.of()));
+        }
+
+        assertTrue(emptyDirectory(reports), "a failed compile leaves no results from this run");
+    }
+
+    private static boolean emptyDirectory(Path directory) throws IOException {
+        if (!Files.isDirectory(directory)) {
+            return true;
+        }
+        try (var entries = Files.list(directory)) {
+            return entries.findAny().isEmpty();
+        }
+    }
 }

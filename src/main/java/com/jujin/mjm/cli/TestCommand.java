@@ -81,25 +81,44 @@ public final class TestCommand implements Command {
         }
         Filter filter = Filter.from(projectDir);
         List<String> testSources = sources(projectDir.resolve(TEST_SOURCES), filter);
-        if (testSources.isEmpty()) {
-            System.out.println("no tests under " + projectDir.resolve(TEST_SOURCES));
-            return 0;
-        }
-        // Tests compile against the project's own classes. Without them javac
-        // reports a symbol error deep inside a test file, which reads as "your
-        // test is wrong" instead of "build first" — the other commands that use
-        // target/classes (package/bundle/publish/run) already say the latter.
-        // A pure-test project has no main sources and needs no target/classes.
-        if (hasMainSources() && !Files.exists(projectDir.resolve(MAIN_OUTPUT))) {
-            System.err.println("mjm: " + MAIN_OUTPUT + " is missing — run mjm build first");
-            return 1;
-        }
 
         // The output tree is rewritten in place (deleted, then compiled into):
         // a second command touching target/ — another test run, a build, a
         // clean — would pull classes out from under the fork, and the lazily
         // loaded javac companions (enum switch maps) die first.
-        return ProjectLock.with(projectDir, () -> runTests(testSources));
+        return ProjectLock.with(projectDir, () -> {
+            // Last run's XML must not outlive this one: an empty suite or a
+            // compile failure below still means "the results on disk are not
+            // from this run", so clearing happens before both.
+            if (!clearResults()) {
+                return 1;
+            }
+            if (testSources.isEmpty()) {
+                System.out.println("no tests under " + projectDir.resolve(TEST_SOURCES));
+                return 0;
+            }
+            // Tests compile against the project's own classes. Without them javac
+            // reports a symbol error deep inside a test file, which reads as "your
+            // test is wrong" instead of "build first" — the other commands that use
+            // target/classes (package/bundle/publish/run) already say the latter.
+            // A pure-test project has no main sources and needs no target/classes.
+            if (hasMainSources() && !Files.exists(projectDir.resolve(MAIN_OUTPUT))) {
+                System.err.println("mjm: " + MAIN_OUTPUT + " is missing — run mjm build first");
+                return 1;
+            }
+            return runTests(testSources);
+        });
+    }
+
+    /** Empties {@code target/test-results}; false when it cannot be done. */
+    private boolean clearResults() {
+        try {
+            DistOutput.clear(projectDir.resolve(RESULTS));
+            return true;
+        } catch (IOException e) {
+            System.err.println("mjm: cannot clear " + RESULTS + " — " + e.getMessage());
+            return false;
+        }
     }
 
     /** Whether {@code src/main/java} actually holds Java sources to compile. */
@@ -129,14 +148,6 @@ public final class TestCommand implements Command {
         Path testOutput = projectDir.resolve(TEST_OUTPUT);
 
         Path results = projectDir.resolve(RESULTS);
-        try {
-            // last run's XML must not mix with this one
-            DistOutput.clear(results);
-        } catch (IOException e) {
-            System.err.println("mjm: cannot clear " + results + " — " + e.getMessage());
-            return 1;
-        }
-
         List<String> command = new ArrayList<>();
         command.add("java");
         command.add("-cp");
