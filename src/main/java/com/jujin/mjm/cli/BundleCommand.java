@@ -125,9 +125,12 @@ public final class BundleCommand implements Command {
 
         if [ -d "$INSTALL_DIR/lib" ]; then mv "$INSTALL_DIR/lib" "$BACKUP/lib"; fi
         if [ -d "$INSTALL_DIR/bin" ]; then mv "$INSTALL_DIR/bin" "$BACKUP/bin"; fi
+        cp "$SCRIPT_DIR/uninstall.sh" "$STAGING/uninstall.sh"
         if ! mv "$STAGING/lib" "$INSTALL_DIR/lib" \\
-                || ! mv "$STAGING/SHA256SUMS" "$INSTALL_DIR/SHA256SUMS"; then
+                || ! mv "$STAGING/SHA256SUMS" "$INSTALL_DIR/SHA256SUMS" \\
+                || ! mv "$STAGING/uninstall.sh" "$INSTALL_DIR/uninstall.sh"; then
             rm -rf "$INSTALL_DIR/lib"
+            rm -f "$INSTALL_DIR/uninstall.sh"
             if [ -d "$BACKUP/lib" ]; then mv "$BACKUP/lib" "$INSTALL_DIR/lib"; fi
             if [ -d "$BACKUP/bin" ]; then mv "$BACKUP/bin" "$INSTALL_DIR/bin"; fi
             echo "%1$s: install failed — the previous version was restored" >&2

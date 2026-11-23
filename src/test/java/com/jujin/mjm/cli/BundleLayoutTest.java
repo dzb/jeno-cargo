@@ -252,6 +252,7 @@ class DistLayoutTest {
         assertTrue(setup.contains("shasum -a 256 -c"), "a macOS fallback exists");
         assertTrue(setup.contains("SHA256SUMS verification failed"), setup);
         assertTrue(setup.contains(".staging."), "lib/bin are swapped via staging");
+        assertTrue(setup.contains("uninstall.sh"), "the uninstaller is installed, not left in the download");
 
         Path uninstall = dir.resolve("target/dist/demo-2.0.0/uninstall.sh");
         assertTrue(Files.exists(uninstall), "an uninstaller ships with the dist");

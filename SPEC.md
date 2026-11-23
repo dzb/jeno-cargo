@@ -518,7 +518,7 @@ target/dist/<name>-<version>/
   lib/<name>-<version>.jar
   lib/toolchain/      # 仅 mjm bundle --toolchain
   setup.sh            # JDK 检查 + SHA256SUMS 校验 + staging 交换
-  uninstall.sh        # 删除 $HOME/.<name>,提示手动清 PATH 行
+  uninstall.sh        # 同时装到 $HOME/.<name>/uninstall.sh;提示手动清 PATH 行
   SHA256SUMS
 target/dist/<name>-<version>.tar.gz
 ```
