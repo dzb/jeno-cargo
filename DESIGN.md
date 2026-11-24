@@ -90,6 +90,7 @@ jeno 又用严格可见性约束用户项目的依赖边界——**这个工具�
 | D25 | lockfile 使用版本 marker,`api` 行记录导出闭包 | 版本 marker 用 TOML 注释保存,旧 reader 可忽略;`api = true` 记录消费者需要的显式 API 编译闭包,避免每个命令重读传递描述符 |
 | D26 | 依赖身份的 canonical source 必须一致 | 同一 id 从不同仓库/GitHub/URL 进入是硬冲突;同一来源用两个 alias 也是硬冲突,禁止第一个来源静默获胜 |
 | D27 | 依赖节统一 deps 前缀,限定词后置 | `[deps]`、`[deps-dev]`、`[deps-api]` 的思维链都是“这是依赖,再说明是哪类依赖”; dot 不再用于依赖节,旧 `[deps.<repo>]` / `[deps-dev.<repo>]` 分组表已移除,避免 `deps` 后面出现两套修饰语法。旧 `[dev-deps]` 直接给迁移错误,不做双名兼容 |
+| D28 | named jeno repository 使用 per-artifact `index.jeno.toml` | index 只做 add/outdated 的版本发现,由发布流程更新;它不进入 lock、不存 jar/sha、索引缺失时 build/lock 不受影响。全局跨仓库搜索仍是独立 catalog |
 
 ---
 

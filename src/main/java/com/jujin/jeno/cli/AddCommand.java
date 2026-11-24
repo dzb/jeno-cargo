@@ -5,14 +5,18 @@ import com.jujin.jeno.pom.PomSource;
 import com.jujin.jeno.project.DescriptorSource;
 import com.jujin.jeno.project.ProjectReader;
 import com.jujin.jeno.resolve.DigestSource;
+import com.jujin.freeway.commons.json.JsonArray;
 import com.jujin.freeway.commons.json.JsonObject;
 import com.jujin.freeway.commons.json.JsonUtils;
+import com.jujin.jeno.project.JenoProject;
+import com.jujin.jeno.project.Repository;
 import com.jujin.jeno.store.ArtifactStore;
 import com.jujin.jeno.store.LockFileReader;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -23,8 +27,10 @@ import java.util.Map;
  * <ul>
  *   <li>a Central coordinate ({@code group:artifact}) lists every version
  *       the repository publishes ({@link MetadataVersions})</li>
- *   <li>a bare name searches the Central index ({@code jeno add jackson}) —
- *       the fuzzy search Q1 scheduled for M5</li>
+ *   <li>a bare name searches the Central index ({@code jeno add jackson})</li>
+ *   <li>{@code --repo <name>} reads the named jeno repository's
+ *       {@code <base>/<name>/index.jeno.toml} and lists its versions without
+ *       modifying the manifest</li>
  * </ul>
  */
 public final class AddCommand implements Command {
@@ -47,7 +53,7 @@ public final class AddCommand implements Command {
 
     @Override
     public String usage() {
-        return "<key> [value]";
+        return "<key> [value] [--repo <name>]";
     }
 
     @Override
@@ -82,8 +88,21 @@ public final class AddCommand implements Command {
         ProjectFiles.rejectLegacy(projectDir);
         boolean json = args.contains("--json");
         List<String> cleaned = args.stream().filter(arg -> !arg.equals("--json")).toList();
+        RepoOption repoOption;
+        try {
+            repoOption = parseRepoOption(cleaned);
+        } catch (IllegalArgumentException e) {
+            if (json) {
+                JsonResult.error("add", 2, "USAGE", e.getMessage()).emit(2);
+            } else {
+                System.err.println(Ui.errPrefix() + e.getMessage());
+            }
+            return 2;
+        }
+        cleaned = repoOption.args();
+        String selectedRepo = repoOption.repository();
         if (!json) {
-            return executeHuman(cleaned);
+            return executeHuman(cleaned, selectedRepo);
         }
         if (cleaned.isEmpty() || cleaned.size() > 2) {
             JsonResult.error("add", 2, "USAGE",
@@ -121,7 +140,16 @@ public final class AddCommand implements Command {
 
         String key = moduleArgs.getFirst();
         String value = moduleArgs.size() == 2 ? moduleArgs.get(1) : null;
+        if (selectedRepo != null && value != null) {
+            JsonResult.error("add", 2, "USAGE",
+                    "--repo is only for version discovery; pass either a value or --repo, not both")
+                    .emit(2);
+            return 2;
+        }
         boolean nativeShorthand = key.contains("/") && !key.contains(":");
+        if (value == null && selectedRepo != null) {
+            return discoverNamedJson(moduleDir, key, selectedRepo);
+        }
         if (value == null && !nativeShorthand) {
             JsonResult.error("add", 2, "JSON_DISCOVERY_UNSUPPORTED",
                     "add without a value is a remote discovery mode; pass an explicit version")
@@ -132,7 +160,7 @@ public final class AddCommand implements Command {
         Path targetDir = moduleDir;
         List<String> targetArgs = moduleArgs;
         JsonCapture.Result captured = JsonCapture.run(() ->
-                new AddCommand(lockService, store, targetDir).executeHuman(targetArgs));
+                new AddCommand(lockService, store, targetDir).executeHuman(targetArgs, null));
         if (captured.exitCode() != 0) {
             JsonResult.error("add", captured.exitCode(),
                     captured.exitCode() == 2 ? "USAGE" : "ADD_FAILED", captured.message())
@@ -168,24 +196,30 @@ public final class AddCommand implements Command {
         }
     }
 
-    private int executeHuman(List<String> args) {
+    private int executeHuman(List<String> args, String selectedRepo) {
         Integer workspace = WorkspaceRun.requireModule(projectDir, args,
-                (dir, rest) -> new AddCommand(lockService, store, dir).execute(rest));
+                (dir, rest) -> new AddCommand(lockService, store, dir)
+                        .executeHuman(rest, selectedRepo));
         if (workspace != null) {
             return workspace;
         }
         if (args.isEmpty() || args.size() > 2) {
             System.err.println(Ui.errPrefix() + "add needs a key and an optional value — "
-                    + "jeno add \"group:artifact\" 1.2.3 | jeno add mylib gh:owner/repo@v1.0.0");
+                    + "jeno add \"group:artifact\" 1.2.3 | jeno add mylib --repo mine");
             return 2;
         }
         String key = args.get(0);
         String value = args.size() == 2 ? args.get(1) : null;
+        if (selectedRepo != null && value != null) {
+            System.err.println(Ui.errPrefix() + "--repo is only for version discovery; "
+                    + "pass either a value or --repo, not both");
+            return 2;
+        }
 
         // add writes jeno.toml and jeno.lock; build/test/clean/lock take the same
         // project lock, so a concurrent writer waits instead of interleaving.
         // No nesting: the body calls prepare/commit directly, never refresh.
-        return ProjectLock.with(projectDir, () -> add(key, value));
+        return ProjectLock.with(projectDir, () -> add(key, value, selectedRepo));
     }
 
     private static boolean hasModuleOption(List<String> args) {
@@ -193,7 +227,7 @@ public final class AddCommand implements Command {
                 arg.equals("--module") || arg.startsWith("--module="));
     }
 
-    private int add(String key, String value) {
+    private int add(String key, String value, String selectedRepo) {
         String mjToml;
         try {
             mjToml = Files.readString(projectDir.resolve("jeno.toml"));
@@ -204,12 +238,132 @@ public final class AddCommand implements Command {
         }
 
         if (value == null) {
+            if (selectedRepo != null) {
+                return discoverNamed(key, selectedRepo);
+            }
             if (key.contains("/") && !key.contains(":")) {
                 return addNativeShorthand(key, mjToml);
             }
             return discover(key);
         }
         return addDependency(key, value, mjToml);
+    }
+
+    /** Parse and remove the optional {@code --repo <name>} discovery selector. */
+    private static RepoOption parseRepoOption(List<String> args) {
+        List<String> cleaned = new ArrayList<>();
+        String repository = null;
+        for (int i = 0; i < args.size(); i++) {
+            String arg = args.get(i);
+            if (arg.equals("--repo")) {
+                if (i + 1 >= args.size() || args.get(i + 1).isBlank()) {
+                    throw new IllegalArgumentException("--repo needs a repository name");
+                }
+                if (repository != null) {
+                    throw new IllegalArgumentException("--repo may be given only once");
+                }
+                repository = args.get(++i);
+            } else if (arg.startsWith("--repo=")) {
+                if (repository != null) {
+                    throw new IllegalArgumentException("--repo may be given only once");
+                }
+                repository = arg.substring("--repo=".length());
+                if (repository.isBlank()) {
+                    throw new IllegalArgumentException("--repo needs a repository name");
+                }
+            } else {
+                cleaned.add(arg);
+            }
+        }
+        return new RepoOption(List.copyOf(cleaned), repository);
+    }
+
+    /** Human-readable version discovery for one named jeno repository. */
+    private int discoverNamed(String name, String repoName) {
+        JenoProject project = readProject();
+        Repository repository = namedJenoRepository(project, repoName);
+        try {
+            JenoIndex.Index index = JenoIndex.read(repository, name);
+            System.out.println(Ui.heading("versions of " + name + " in " + repoName
+                    + " (newest last):"));
+            for (String version : index.versions()) {
+                System.out.println("  " + version);
+            }
+            System.out.println("choose one: jeno add \"" + name + "\" \""
+                    + repoName + ":" + index.versions().getLast() + "\"");
+            return 0;
+        } catch (JenoIndex.IndexException e) {
+            System.err.println(Ui.errPrefix() + e.getMessage());
+            return 1;
+        }
+    }
+
+    /** JSON discovery for one named jeno repository. */
+    private int discoverNamedJson(Path moduleDir, String name, String repoName) {
+        if (ArtifactStore.isOffline()) {
+            JsonResult.error("add", 2, "OFFLINE_FORBIDDEN",
+                    "version discovery reads a repository index — pass an explicit version, "
+                            + "or drop --offline").emit(2);
+            return 2;
+        }
+        JenoProject project;
+        Repository repository;
+        try {
+            project = ProjectReader.parse(Files.readString(moduleDir.resolve("jeno.toml")));
+            repository = namedJenoRepository(project, repoName);
+        } catch (IOException e) {
+            JsonResult.error("add", 1, "MANIFEST_UNREADABLE", e.getMessage()).emit(1);
+            return 1;
+        } catch (RuntimeException e) {
+            JsonResult.error("add", 1, "REPOSITORY_INVALID", e.getMessage()).emit(1);
+            return 1;
+        }
+        try {
+            JenoIndex.Index index = JenoIndex.read(repository, name);
+            JsonArray versions = JsonUtils.array();
+            index.versions().forEach(versions::add);
+            JsonResult.start("add")
+                    .workspace(moduleDir, "single")
+                    .put("mode", "discover")
+                    .put("repository", repoName)
+                    .put("name", name)
+                    .put("versions", versions)
+                    .put("manifest", moduleDir.resolve("jeno.toml")
+                            .toAbsolutePath().normalize().toString())
+                    .put("lockUpdated", false)
+                    .emit(0);
+            return 0;
+        } catch (JenoIndex.IndexUnavailable e) {
+            JsonResult.error("add", 1, "INDEX_UNAVAILABLE", e.getMessage()).emit(1);
+            return 1;
+        } catch (JenoIndex.IndexException e) {
+            JsonResult.error("add", 1, "INDEX_INVALID", e.getMessage()).emit(1);
+            return 1;
+        }
+    }
+
+    private JenoProject readProject() {
+        try {
+            return ProjectReader.parse(Files.readString(projectDir.resolve("jeno.toml")));
+        } catch (IOException e) {
+            throw new IllegalStateException("no jeno.toml in " + projectDir
+                    + " — run jeno init to create one", e);
+        }
+    }
+
+    private static Repository namedJenoRepository(JenoProject project, String repoName) {
+        Repository repository = project.repos().get(repoName);
+        if (repository == null) {
+            String declared = project.repos().isEmpty() ? "(none)"
+                    : String.join(", ", project.repos().keySet());
+            throw new IllegalArgumentException("repository '" + repoName
+                    + "' is not declared in [repos] — declared: " + declared);
+        }
+        if (repository.layout() != Repository.Layout.JENO) {
+            throw new IllegalArgumentException("repository '" + repoName
+                    + "' is a Maven layout; --repo discovery is only for jeno: repositories");
+        }
+        return repository;
     }
 
     /**
@@ -356,4 +510,6 @@ public final class AddCommand implements Command {
         lines.add(insertAt, line);
         return String.join("\n", lines) + "\n";
     }
+
+    private record RepoOption(List<String> args, String repository) {}
 }

@@ -91,7 +91,10 @@ final class ProjectLock {
         queue.lock();
         try (FileChannel channel = FileChannel.open(lockPath,
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             FileLock ignored = channel.lock()) {
+             FileLock lock = channel.lock()) {
+            if (!lock.isValid()) {
+                throw new IOException("cannot acquire project lock " + lockPath);
+            }
             // a sidecar, written once: `jeno cache prune` can then tell a dead
             // project's lock from a live one. Old empty files stay empty.
             if (channel.size() == 0) {

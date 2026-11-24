@@ -26,7 +26,7 @@ jeno --version
 Both installers need JDK 25+. Windows appends `%USERPROFILE%\.jeno\bin` to the
 user PATH; `jeno upgrade` verifies sha256 before installing.
 
-**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D27, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
+**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D28, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
 
 ---
 
@@ -360,6 +360,43 @@ jeno release jeno:http://192.168.1.39:8080/upload/  # literal private IP only
 curl -fsSL https://host/app/install.sh | bash
 ```
 
+### Named jeno repository discovery
+
+A named `jeno:` repository may publish a per-artifact version index:
+
+```text
+<base>/<name>/index.jeno.toml
+```
+
+```toml
+schemaVersion = 1
+name = "widget"
+versions = ["1.0.0", "1.1.0", "1.2.0"]
+```
+
+`jeno publish` updates this file after a successful named-repository upload.
+It is discovery metadata only: it is not part of the release triple, not
+included in `jeno.lock`, and never overrides a descriptor or sha256.
+
+With a declared repository:
+
+```toml
+[repos]
+mine = "jeno:https://repo.example/"
+```
+
+version discovery is explicit about the repository:
+
+```bash
+jeno add widget --repo mine
+jeno outdated
+```
+
+`outdated` reads `<base>/<name>/index.jeno.toml` for named jeno artifacts. If
+the index is missing, the row is reported as `not checked`; build and lock never
+fail because an index is absent. Global cross-repository search remains a
+separate catalog feature and is intentionally not implied by this index.
+
 ### Signing a release
 
 `jeno release` signs the installer with [minisign](https://jedisct1.github.io/minisign/)
@@ -530,9 +567,11 @@ Mutation commands report the actual project change:
 
 `init --json` reports `mode=project|pom|workspace`, the written file, whether it
 overwrote an existing file, project identity or workspace module list.
-`add --json` without a value is the remote discovery mode and returns a
-structured `JSON_DISCOVERY_UNSUPPORTED`; pass an explicit version to get the
-mutation contract. `remove --json` reports the removed id and updated lock.
+`add --json <name> --repo <repo>` is discover mode for a named jeno repository:
+it returns `{mode:"discover",repository,name,versions[],lockUpdated:false}` and
+never edits the manifest. Without `--repo`, a no-value `add --json` still returns
+`JSON_DISCOVERY_UNSUPPORTED`; pass an explicit version for the mutation contract.
+`remove --json` reports the removed id and updated lock.
 `upgrade --json --check` reports `currentVersion`, `latestVersion`,
 `updateAvailable`, `checkOnly`, and never downloads or installs.
 
@@ -682,8 +721,9 @@ upgrades itself, and builds every freeway module in CI. The test suite is green
 on every push that touches code — the badge above tracks the release. JUnit XML
 reports and local multi-module workspaces are implemented; the remaining known
 gaps are tracked in [REMINDS.md](REMINDS.md) and the release notes. A
-discovery/index layer is deliberately deferred until there is an ecosystem
-worth indexing — knowing a package's coordinates has to work first.
+repository-local `index.jeno.toml` now covers named jeno version discovery;
+a global cross-repository catalog remains deliberately deferred until there is
+an ecosystem worth indexing.
 
 ## License
 

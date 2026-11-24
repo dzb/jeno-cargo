@@ -134,7 +134,8 @@ class JenoRepositoryTest {
         assertEquals(List.of(
                 "/repo/demo/0.1.0/demo-0.1.0.jar",
                 "/repo/demo/0.1.0/demo-0.1.0.jeno.toml",
-                "/repo/demo/0.1.0/demo-0.1.0.sha256"), puts);
+                "/repo/demo/0.1.0/demo-0.1.0.sha256",
+                "/repo/demo/index.jeno.toml"), puts);
 
         exit = new PublishCommand(project).execute(List.of(base + "/maven/"));
         assertEquals(1, exit, "a Maven-layout target is refused: jeno writes no POM");

@@ -101,8 +101,10 @@ jeno --json publish --dry-run "jeno:local:../repo" --module libs/core
   a `PLAIN_HTTP_INSECURE` warning; public hosts require HTTPS. A
   `JENO_PUBLISH_TOKEN` is never sent over cleartext LAN unless
   `JENO_ALLOW_INSECURE_TOKEN=1` is explicitly set.
-- `add --json` without a value is remote discovery and returns
-  `JSON_DISCOVERY_UNSUPPORTED`; pass an explicit version for mutation.
+- `add --json <name> --repo <repo>` is named-repository discovery and returns
+  versions without changing the project.
+- A no-value `add --json` without `--repo` returns `JSON_DISCOVERY_UNSUPPORTED`;
+  pass an explicit version for mutation.
 
 ## CI pattern
 

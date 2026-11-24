@@ -439,6 +439,8 @@ public final class PublishCommand implements Command {
             System.out.println("  " + Ui.ok("PUT " + url + " (verified)"));
         }
 
+        updateIndex(repository, project.name(), project.version());
+
         System.out.println(Ui.ok("published to " + target + " — consume it with:"));
         System.out.println("  [repos]");
         System.out.println("  mine = \"" + target + "\"");
@@ -477,11 +479,30 @@ public final class PublishCommand implements Command {
             System.out.println("  " + directory.resolve(file.getFileName()));
         }
 
+        updateIndex(repository, project.name(), project.version());
+
         System.out.println(Ui.ok("published to " + target + " — consume it with:"));
         System.out.println("  [repos]");
         System.out.println("  mine = \"" + target + "\"");
         System.out.println("  \"" + project.name() + "\" = \"mine:" + project.version() + "\"");
         return 0;
+    }
+
+    /**
+     * Updates the per-artifact discovery index after the artifact triple is
+     * successfully present and readable. The index is discovery metadata, not a
+     * build fact: an unavailable or malformed index is reported as a warning,
+     * but the already-published artifact remains a success.
+     */
+    private static void updateIndex(Repository repository, String name, String version) {
+        try {
+            JenoIndex.Index index = JenoIndex.update(repository, name, version);
+            System.out.println("  " + Ui.ok("index updated: " + JenoIndex.FILE + " ("
+                    + index.versions().size() + " version(s))"));
+        } catch (RuntimeException e) {
+            System.err.println(Ui.warn("artifact published, but " + JenoIndex.FILE
+                    + " was not updated — " + e.getMessage()));
+        }
     }
 
     /** Writes beside the target and moves it into place, so a reader never sees half a file. */

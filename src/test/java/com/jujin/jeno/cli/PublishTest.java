@@ -99,6 +99,25 @@ class PublishTest {
     }
 
     @Test
+    void publishingToALocalJenoRepositoryUpdatesTheArtifactIndex() throws Exception {
+        writeProject(dir);
+        Files.createDirectories(dir.resolve("target/classes/demo"));
+        Files.writeString(dir.resolve("target/classes/demo/A.class"), "class bytes");
+        Path dist = Files.createDirectories(dir.resolve("target/dist"));
+        Files.writeString(dist.resolve("demo-1.0.0.jar"), "jar bytes");
+        Path repo = dir.resolve("repo");
+
+        int exit = new PublishCommand(dir).execute(List.of("jeno:local:" + repo));
+
+        assertEquals(0, exit);
+        Path indexFile = repo.resolve("demo/index.jeno.toml");
+        assertTrue(Files.isRegularFile(indexFile), "publish writes the discovery index");
+        JenoIndex.Index index = JenoIndex.parse(Files.readString(indexFile),
+                "demo", indexFile.toString());
+        assertEquals(java.util.List.of("1.0.0"), index.versions());
+    }
+
+    @Test
     void jsonDryRunPlansTheTripleWithoutWritingIt() throws Exception {
         writeProject(dir);
         Files.createDirectories(dir.resolve("target/classes/demo"));

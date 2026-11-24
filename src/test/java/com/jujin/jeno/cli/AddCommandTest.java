@@ -603,6 +603,83 @@ class AddCommandTest {
     }
 
     @Test
+    void namedRepositoryDiscoveryListsIndexVersionsWithoutWriting() throws Exception {
+        Path repo = dir.resolve("named-repo");
+        Files.createDirectories(repo.resolve("widget"));
+        Files.writeString(repo.resolve("widget/index.jeno.toml"), """
+            schemaVersion = 1
+            name = "widget"
+            versions = ["1.0.0", "1.2.0"]
+            """);
+        Files.writeString(dir.resolve("jeno.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [repos]
+            mine = "jeno:local:%s"
+            """.formatted(repo));
+        String before = Files.readString(dir.resolve("jeno.toml"));
+        ArtifactStore store = new ArtifactStore(storeDir);
+        AddCommand command = new AddCommand(
+                new LockService(store, (g, a, v, base) -> null, text -> null), store, dir);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        PrintStream original = System.out;
+        int exit;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            exit = command.execute(List.of("widget", "--repo", "mine"));
+        } finally {
+            System.setOut(original);
+        }
+
+        assertEquals(0, exit);
+        assertTrue(out.toString(StandardCharsets.UTF_8).contains("1.0.0"));
+        assertTrue(out.toString(StandardCharsets.UTF_8).contains("1.2.0"));
+        assertEquals(before, Files.readString(dir.resolve("jeno.toml")),
+                "discovery must not mutate the manifest");
+    }
+
+    @Test
+    void namedRepositoryDiscoveryIsStructuredInJson() throws Exception {
+        Path repo = dir.resolve("named-json");
+        Files.createDirectories(repo.resolve("widget"));
+        Files.writeString(repo.resolve("widget/index.jeno.toml"), """
+            schemaVersion = 1
+            name = "widget"
+            versions = ["1.0.0", "1.2.0"]
+            """);
+        Files.writeString(dir.resolve("jeno.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [repos]
+            mine = "jeno:local:%s"
+            """.formatted(repo));
+        ArtifactStore store = new ArtifactStore(storeDir);
+        AddCommand command = new AddCommand(
+                new LockService(store, (g, a, v, base) -> null, text -> null), store, dir);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        PrintStream original = System.out;
+        int exit;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            exit = command.execute(List.of("widget", "--repo", "mine", "--json"));
+        } finally {
+            System.setOut(original);
+        }
+
+        assertEquals(0, exit);
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                out.toString(StandardCharsets.UTF_8));
+        assertEquals("discover", json.getString("mode"));
+        assertEquals("mine", json.getString("repository"));
+        assertEquals(2, json.getArray("versions").size());
+        assertEquals(false, json.getBoolean("lockUpdated"));
+    }
+
+    @Test
     void appendsIntoDepsBeforeItsSiblingSections() {
         String text = """
             [project]

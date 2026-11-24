@@ -301,22 +301,49 @@ class CleanOutdatedTest {
     // ------------------------------------------------------------------
 
     @Test
-    void anJenoRepositoryIsNotCheckedAndSaysWhy() throws Exception {
+    void anJenoRepositoryWithoutAnIndexIsNotCheckedAndSaysWhy() throws Exception {
+        String repo = "jeno:local:" + dir.resolve("missing-index-repo");
         projectWithLock("""
             [[artifacts]]
             id = "widget"
             version = "1.0.0"
-            source = "jeno:https://repo.example/"
+            source = "%s"
             url = "https://repo.example/widget/1.0.0/widget-1.0.0.jar"
             sha256 = "%s"
             meta-sha256 = "%s"
             depth = 1
-            """.formatted(SHA, SHA));
+            """.formatted(repo, SHA, SHA));
 
         String out = runOutdated(0);
 
         assertTrue(out.contains("not checked"), out);
         assertTrue(out.contains("no version index"), out);
+        assertFalse(out.contains("everything is up to date"), out);
+    }
+
+    @Test
+    void anIndexedJenoArtifactIsComparedByOutdated() throws Exception {
+        Path repo = dir.resolve("indexed-repo");
+        Files.createDirectories(repo.resolve("widget"));
+        Files.writeString(repo.resolve("widget/index.jeno.toml"), """
+            schemaVersion = 1
+            name = "widget"
+            versions = ["1.0.0", "1.1.0", "1.2.0"]
+            """);
+        projectWithLock("""
+            [[artifacts]]
+            id = "widget"
+            version = "1.0.0"
+            source = "jeno:local:%s"
+            url = "https://repo.example/widget/1.0.0/widget-1.0.0.jar"
+            sha256 = "%s"
+            meta-sha256 = "%s"
+            depth = 1
+            """.formatted(repo, SHA, SHA));
+
+        String out = runOutdated(0);
+
+        assertTrue(out.contains("widget  1.0.0 → 1.2.0"), out);
         assertFalse(out.contains("everything is up to date"), out);
     }
 

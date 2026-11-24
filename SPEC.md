@@ -440,7 +440,7 @@ modules = ["libs/core", "apps/web"]
 | 命令 | 契约 |
 |---|---|
 | `jeno init [--pom] [--ws] [--force] [paths...]` | 写 `jeno.toml` 骨架;`--pom` 从 `pom.xml` 迁移并逐条报告不可表达的事实——本地 parent 从 `relativePath` 读取,本地不存在时经 store 从 Central 读取远端 parent 与 `scope=import` 的 BOM(递归其 parent/嵌套 BOM,`--offline` 只用已缓存内容,深度上限 8);快照/私有仓库 BOM 不自动解析;`[java].version` 从 `maven.compiler.release`/`java.version`/`maven.compiler.target`/`source` 推导;`--ws` 写 `jeno.ws.toml`(§5),此时 `paths...` 可显式指定模块目录。**工作区根目录拒绝 `init`/`--pom`/`--force`**(exit 1),`--ws` 仍可用 |
-| `jeno add <key> [value]` | key: `group:artifact`(Central)、裸名(搜索)、`owner/repo@tag`(原生简写)。value: `1.2.3`、`<repo>:1.2.3`、`gh:owner/repo@tag`、裸 `https://...jar`。无 value 时:`group:artifact`/裸名只查询,不写 `jeno.toml`(查询成功 exit 0);`owner/repo@tag` 会写入 `[deps]` 并重锁 |
+| `jeno add <key> [value] [--repo <name>]` | key: `group:artifact`(Central)、裸名(搜索)、`owner/repo@tag`(原生简写)。value: `1.2.3`、`<repo>:1.2.3`、`gh:owner/repo@tag`、裸 `https://...jar`。无 value 时:`group:artifact`/裸名只查询,不写 `jeno.toml`(查询成功 exit 0);`--repo <name>` 读取该 named `jeno:` repository 的 `<base>/<name>/index.jeno.toml` 并列出版本;`owner/repo@tag` 会写入 `[deps]` 并重锁 |
 | `jeno remove <id>` | 删除一行声明并重锁 |
 | `jeno lock [--check]` | 解析并写出 `jeno.lock`;**总是重解**。`--check` 只在内存生成并与磁盘逐字节比较,不写文件。未知参数是用法错误(exit 2) |
 | `jeno build` | javac 编译 `src/main/java`,严格可见性 classpath(只含 MAIN 声明);`--release` 取 `[java].version`;processor 走 `-processorpath`。至少一个 Java 源或 `src/main/resources` 下的文件必须存在:有源则编译并拷资源;无源但有资源则只创建 `target/classes` 并拷资源、exit 0;两者都没有则报错 |
@@ -454,7 +454,7 @@ modules = ["libs/core", "apps/web"]
 | `jeno bundle [--toolchain]` | `target/dist/<name>-<version>/`(bin/<name>、bin/<name>.cmd、lib/、install.sh、uninstall.sh、SHA256SUMS)+ `.tar.gz`。需要 `[project].main`(缺失即报错);install.sh 的 JDK 要求取 `[java].version`,未声明则取构建 JDK major;安装前用 `sha256sum -c`/`shasum -a 256 -c` 校验 SHA256SUMS,lib/bin 经 staging 交换并保留 store/config;默认不带 toolchain,`--toolchain` 才把 `[toolchain].jars` 对应的锁工件写入 `lib/toolchain`;未在锁图中出现的 toolchain id 是错误 |
 | `jeno clean [--target (default) \| --dist]` | 默认整棵删 `target/`;`--dist` 只删 `target/dist/` 保留 classes;永不触碰 store |
 | `jeno cache dir \| size \| prune \| purge [--dry-run] [--yes]` | `dir`/`size` 只读;`prune` 删可证明无用之物,无需确认;`purge` 删 store 与 sources,是**破坏性**命令——无 `--yes` 时打印路径/大小并 exit 2,`--dry-run` 只展示不删除(exit 0),`--yes` 才执行;`clean` 是兼容 alias,支持同样 flags |
-| `jeno outdated [--json] [--dev]` | **只读 `jeno.lock`**(不需要 `jeno.toml`);已钉版本 vs 仓库可用版本;默认只查 MAIN,`--dev` 含 dev/processor;`gh:`/`url`/`local:`/`jeno:` 列为未检查;跨 major 单列;完成即 exit 0(有更新也是 0) |
+| `jeno outdated [--json] [--dev]` | **只读 `jeno.lock`**(不需要 `jeno.toml`);已钉版本 vs 仓库可用版本;默认只查 MAIN,`--dev` 含 dev/processor;Central 用 `maven-metadata.xml`,named `jeno:` 用 `<base>/<name>/index.jeno.toml`;索引缺失的 jeno row 列为 `not checked`;`gh:`/`url:`/`local:` 仍不可检查;跨 major 单列;完成即 exit 0(有更新也是 0) |
 | `jeno doctor` | **只读**本地诊断:检查当前项目或 workspace 每个模块的 `jeno.toml`/`jeno.lock` 是否存在且可解析,报告旧名文件(jeno **不会**读取它们,命令会给出改名提示),并检查 XDG store/sources/locks 路径可写性;不解析依赖、不写文件、不访问网络。健康 exit 0,有问题 exit 1,带参数 exit 2 |
 | `jeno audit [--json] [--dev]` | OSV 漏洞查询;默认只查 MAIN,`--dev` 才含 dev/processor;只查 Central 坐标,其余列 `notChecked` 并给原因;漏洞或查询失败 exit 1 |
 | `jeno verify` | **只读本地发布预检**:解析 `jeno.toml`/`jeno.lock`,核对每一条直接声明与锁定行的 id/version/source/MAIN scope;按 sha256 校验 store 中每个 jar 与元数据(workspace 本地替换则校验 classes 与版本戳);若 `target/dist/` 已有完整发布三件套,校验其内部一致性与 bundle `SHA256SUMS`;只有 package 产物(仅 jar)视为未准备(skipped),部分三件套仍失败;bundle 目录存在但缺 `SHA256SUMS` 也失败(`artifacts.bundle-incomplete`)。不解析依赖、不下载、不修改项目文件、不访问网络。通过 exit 0,失败 exit 1,带参数 exit 2 |
@@ -634,6 +634,11 @@ noTests,reportFiles[],durationMs}`。测试失败仍是有效结果:module exit 
 根 status=`failed`,并产生 `TEST_FAILED` diagnostic;编译/环境错误无报告时
 也为 `TEST_FAILED`。子进程测试日志走 stderr,不得混入 JSON stdout。
 
+`add --repo <name> --json` 输出 discovery 结果：
+`{mode:"discover",repository,name,versions[],manifest,lockUpdated:false}`；
+它不修改 manifest、不写 lock。索引缺失是 `INDEX_UNAVAILABLE`，索引格式错误是
+`INDEX_INVALID`。
+
 `checks[]` 元素为 `{id, status, message, details?}`;`id` 是稳定机器码,
 `status` 为 `ok|failed|skipped`。以下字段集合(新增字段向后兼容;删改需新版本)。
 
@@ -671,7 +676,7 @@ noTests,reportFiles[],durationMs}`。测试失败仍是有效结果:module exit 
 |---|---|
 | `native-release` | `gh:owner/repo` release(标签就是版本) |
 | `bare-url` | 裸 `https://…jar` 叶子(无元数据) |
-| `jeno-repository` | `jeno:` 布局仓库(含 `jeno:local:`;无版本索引/OSV 坐标) |
+| `jeno-repository` | `jeno:` 布局仓库(含 `jeno:local:`;index 缺失时为 `not checked`,有 `index.jeno.toml` 时可比较版本;OSV 坐标仍不可用) |
 | `local-repository` | 本地 Maven 布局目录(无版本索引) |
 | `named-repository` | 命名 HTTPS Maven 仓库;无法解析的 source 也归到这里 |
 
@@ -710,7 +715,7 @@ HTTP jeno-layout 发布固定使用 **PUT**,不是 POST:
 
 **不因 `--offline` 接受的命令**：`upgrade`(alias `update`)、`outdated`、`audit` 总是联网，传入 `--offline` 报用法错误（退出码 2）。`publish`/`release` 由 target 决定：`jeno:local:` 离线可用；`gh:`、`jeno:https:` 与私有 http 目标在联网前以 `OFFLINE_FORBIDDEN` 拒绝（退出码 2），与实现一致。
 
-**`add` 的 discover 形态**：不带显式版本时（列举版本 = 读 `maven-metadata.xml`，或裸名走 Central 索引搜索）是联网操作，`--offline` 下报用法错误（退出码 2）——要离线就带上显式版本：`jeno add "<id>" <version>` 只读 store，`--offline` 下照常可用。
+**`add` 的 discover 形态**：不带显式版本时（列举 Central 版本、Central 裸名搜索，或 named jeno repository 的 `index.jeno.toml`）是联网操作，`--offline` 下报用法错误（退出码 2）——要离线就带上显式版本：`jeno add "<id>" <version>` 只读 store，`--offline` 下照常可用。
 
 **为什么可行**：store 有持久化的 URL → digest 索引（`store/index/<sha256(url)>.url`）。没有它，索引未命中会是常态（每个 pom 都被当作"没见过"），`--offline` 必然失败。
 
@@ -731,6 +736,35 @@ HTTP jeno-layout 发布固定使用 **PUT**,不是 POST:
 `<base>/<name>/<version>/`,或 `jeno:local:<dir>` 的同构目录;Maven 布局(`group/...`,需要 POM)
 不是发布目标(§6.6)。HTTP 上传为 PUT,并以 GET 回读三件套做逐字节校验;目标主机必须是可写、
 匿名可读的 PUT 端点。非 loopback 的明文 HTTP 会提示流量与 token 未加密。
+
+### 7.1.1 `index.jeno.toml`（named jeno repository 的版本发现）
+
+布局：
+
+```text
+<base>/<name>/index.jeno.toml
+```
+
+schema：
+
+```toml
+schemaVersion = 1
+name = "widget"
+versions = ["1.0.0", "1.1.0", "1.2.0"]
+```
+
+规则：
+
+- 只存在于 named `jeno:` repository；不存 jar、descriptor 或 sha256
+- `name` 必须与路径中的 artifact name 一致
+- `versions` 是 jeno-native semver 数组，排序稳定
+- `jeno publish` 在 named repository 的三件套上传并回读校验后自动更新
+- 更新失败不阻塞 artifact 发布，但会输出 warning，并让 `outdated` 暂时标记为未检查
+- index 不进入 `jeno.lock`，不影响 `build`/`lock` 的字节解析
+- `jeno add <name> --repo <repo>` 读取它来列版本；没有 index 时仍可用显式 `<repo>:<version>`
+- `jeno outdated` 对 lock 中 `source` 为该 named jeno repository 的 row 读取它；
+  缺失或损坏时分别降级为 `not checked` / `failures`
+- global cross-repository search 不属于本 index；它需要独立 catalog
 
 ### 7.2 bundle 形态
 

@@ -19,10 +19,12 @@ import java.util.List;
  * you: it reports what exists above what you pinned, and you choose. Nothing
  * is written; {@code jeno lock} is what applies a change.
  *
- * <p>Only Central artifacts can be checked. A {@code gh:} release carries no
- * version index — the tag is the version — and a bare URL leaf has no metadata
- * at all. Those are listed as skipped rather than silently omitted, because
- * "no update found" and "cannot know" are different answers.
+ * <p>Central artifacts use {@code maven-metadata.xml}; named {@code jeno:}
+ * artifacts use their per-artifact {@code index.jeno.toml} when present. A
+ * {@code gh:} release carries no version index — the tag is the version — and
+ * a bare URL leaf has no metadata at all. Uncheckable rows are listed as
+ * skipped rather than silently omitted, because "no update found" and "cannot
+ * know" are different answers.
  *
  * <p>The comparison uses the same ordering the resolver uses
  * ({@link Versions}), so "newer" here means the same thing it means in MVS.
@@ -177,33 +179,48 @@ public final class OutdatedCommand implements Command {
                         "local repository: no version listing"));
                 continue;
             }
-            if (reason.equals("jeno-repository")) {
-                unchecked.add(new Skipped(artifact.id(), reason,
-                        "jeno layout: no version index"));
-                continue;
-            }
-            Repository repository;
-            try {
-                repository = source.equals("central") ? null : Repository.parse(source);
-            } catch (IllegalArgumentException unrecognized) {
-                // ArtifactReasons already labels this named-repository; do not
-                // turn an unknown source into a command failure
-                unchecked.add(new Skipped(artifact.id(), "named-repository",
-                        "unrecognized source: " + source));
-                continue;
-            }
-
             List<String> available;
-            try {
-                available = MetadataVersions.from(
-                        repository == null ? ArtifactLocations.centralBase()
-                                : repository.networkBase(),
-                        group(artifact.id()), artifactName(artifact.id()));
-            } catch (LegacyNames.LegacyException e) {
-            throw e;
-        } catch (RuntimeException e) {
-                failures.add(new Failed(artifact.id(), String.valueOf(e.getMessage())));
-                continue;
+            if (reason.equals("jeno-repository")) {
+                Repository repository;
+                try {
+                    repository = Repository.parse(source);
+                } catch (IllegalArgumentException unrecognized) {
+                    unchecked.add(new Skipped(artifact.id(), reason,
+                            "unrecognized source: " + source));
+                    continue;
+                }
+                try {
+                    available = JenoIndex.read(repository, artifact.id()).versions();
+                } catch (JenoIndex.IndexUnavailable e) {
+                    unchecked.add(new Skipped(artifact.id(), reason,
+                            "no version index: " + e.getMessage()));
+                    continue;
+                } catch (JenoIndex.IndexException e) {
+                    failures.add(new Failed(artifact.id(), e.getMessage()));
+                    continue;
+                }
+            } else {
+                Repository repository;
+                try {
+                    repository = source.equals("central") ? null : Repository.parse(source);
+                } catch (IllegalArgumentException unrecognized) {
+                    // ArtifactReasons already labels this named-repository; do not
+                    // turn an unknown source into a command failure
+                    unchecked.add(new Skipped(artifact.id(), "named-repository",
+                            "unrecognized source: " + source));
+                    continue;
+                }
+                try {
+                    available = MetadataVersions.from(
+                            repository == null ? ArtifactLocations.centralBase()
+                                    : repository.networkBase(),
+                            group(artifact.id()), artifactName(artifact.id()));
+                } catch (LegacyNames.LegacyException e) {
+                    throw e;
+                } catch (RuntimeException e) {
+                    failures.add(new Failed(artifact.id(), String.valueOf(e.getMessage())));
+                    continue;
+                }
             }
 
             if (available.isEmpty()) {
