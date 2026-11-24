@@ -99,8 +99,11 @@ jeno --json publish --dry-run "jeno:local:../repo" --module libs/core
 - Plain HTTP is accepted only for literal private-network addresses
   (`192.168/10/172.16`, loopback, IPv6 ULA/link-local). Non-loopback HTTP emits
   a `PLAIN_HTTP_INSECURE` warning; public hosts require HTTPS. A
-  `JENO_PUBLISH_TOKEN` is never sent over cleartext LAN unless
-  `JENO_ALLOW_INSECURE_TOKEN=1` is explicitly set.
+  `JENO_PUBLISH_TOKEN` is never sent over cleartext LAN unless the named
+  jeno repository declares `insecure = true`, or the process-wide
+  `JENO_ALLOW_INSECURE_TOKEN=1` escape hatch is explicitly set. Prefer the
+  repository-local opt-in; `jeno publish mine` / `jeno release mine` resolve a
+  declared `[repos.mine]` target with its policy.
 - `add --json <name> --repo <repo>` is named-repository discovery and returns
   versions without changing the project.
 - A no-value `add --json` without `--repo` returns `JSON_DISCOVERY_UNSUPPORTED`;

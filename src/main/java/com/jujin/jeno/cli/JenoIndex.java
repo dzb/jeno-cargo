@@ -246,7 +246,8 @@ final class JenoIndex {
         }
         String url = indexUrl(repository, index.name());
         try {
-            JenoUploads.put(url, "application/toml; charset=utf-8", bytes);
+            JenoUploads.put(url, "application/toml; charset=utf-8", bytes,
+                    repository.insecure());
             byte[] readBack = JenoUploads.get(url);
             if (!java.util.Arrays.equals(bytes, readBack)) {
                 throw new IndexException(url + " read-back returned different bytes");

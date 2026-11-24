@@ -26,7 +26,7 @@ jeno --version
 Both installers need JDK 25+. Windows appends `%USERPROFILE%\.jeno\bin` to the
 user PATH; `jeno upgrade` verifies sha256 before installing.
 
-**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D29, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
+**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D30, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
 
 ---
 
@@ -195,13 +195,13 @@ The layout is [SPEC.md](SPEC.md) §7; a Maven-layout target is refused because j
 |---|---|---|
 | GitHub Releases | `gh:owner/repo@v1.2.3` | `jeno publish gh:owner/repo` |
 | ~~Gitee Releases~~ | 已移除:附件匿名下载需令牌,违反零配置;用裸 URL 或自建主机 | — |
-| **your own host** — jeno layout | `[repos.mine]` `type = "jeno"`, `url = "https://my.host/"` (or a literal private-network `http://192.168.x.x/`, with a warning) + `"lib" = "mine:1.2.3"` | `jeno publish jeno:https://my.host/` — two levels, no `group` needed |
+| **your own host** — jeno layout | `[repos.mine]` `type = "jeno"`, `url = "https://my.host/"` (or a literal private-network `http://192.168.x.x/`, with a warning) + `"lib" = "mine:1.2.3"` | `jeno publish mine` (or the full URL) — two levels, no `group` needed |
 | **your own host** — Maven layout (the default type) | `[repos.corp]` `url = "https://nexus.corp/"` + `"com.corp:lib" = "corp:1.2.3"` | readable by jeno, but **not a publish target**: jeno writes no POM. Publish the layout with your own tooling, or use the jeno layout |
 | a local directory | `[repos.vend]` `type = "jeno"`, `url = "vendor"` (or the legacy `local:/path` string) | `jeno publish jeno:local:vendor` (writes the triple in place) |
 | any static server | a bare `https://…/x.jar` leaf | upload the jar your way (a leaf carries no descriptor, so it is not a `publish` target) |
 
-The `jeno:` layout is the shortest one: `jeno publish jeno:https://my.host/` (or a
-literal private-address `jeno:http://192.168.x.x:port/` on a LAN) writes
+The `jeno:` layout is the shortest one: `jeno publish mine`, where
+`[repos.mine]` declares `type = "jeno"` and its URL, writes
 `<name>/<version>/<name>-<version>.{jar,jeno.toml,sha256}` and needs no `[project].group`
 on either side. A Maven-layout target is **refused**: jeno generates no POM, so
 neither jeno nor Maven could read the triple back. Maven repositories remain
@@ -211,6 +211,19 @@ which jeno does not have. A dependency names its repository in the value
 accepted.
 `gh` is a reserved name — the `gh:` prefix wins, so a repository cannot take it.
 `JENO_PUBLISH_TOKEN` adds a bearer token when the jeno-layout host wants one.
+For a private-network cleartext repository, bind the exception to that repository:
+
+```toml
+[repos.mine]
+type = "jeno"
+url = "http://192.168.1.39:8080/repo/"
+insecure = true
+```
+
+`insecure = true` permits the token over that one plain-HTTP destination. It is
+accepted only for `type = "jeno"` + a literal private-network `http://` URL;
+HTTPS needs no opt-in, and the process-wide `JENO_ALLOW_INSECURE_TOKEN=1` remains
+a legacy escape hatch.
 
 Before publishing, run the local preflight:
 

@@ -30,6 +30,20 @@ class OfflineFlagTest {
     }
 
     @Test
+    void repositoryInsecureOptInIsTheOnlyLocalTokenException() {
+        if (System.getenv("JENO_ALLOW_INSECURE_TOKEN") == null) {
+            assertFalse(JenoUploads.tokenMayCrossCleartext(
+                    "http://192.168.1.39:8080/", false));
+        }
+        assertTrue(JenoUploads.tokenMayCrossCleartext(
+                "http://192.168.1.39:8080/", true));
+        assertTrue(JenoUploads.tokenMayCrossCleartext(
+                "https://repo.example/", false));
+        assertTrue(JenoUploads.tokenMayCrossCleartext(
+                "http://127.0.0.1:8080/", false));
+    }
+
+    @Test
     void lockedFlagIsConsumedAndDisablesWorkspaceOverrides() {
         AtomicBoolean localOverrides = new AtomicBoolean();
         AtomicBoolean forwarded = new AtomicBoolean();

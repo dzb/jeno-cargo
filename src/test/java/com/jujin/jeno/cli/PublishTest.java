@@ -118,6 +118,29 @@ class PublishTest {
     }
 
     @Test
+    void aDeclaredJenoRepositoryNameIsAValidPublishTarget() throws Exception {
+        writeProject(dir);
+        Files.writeString(dir.resolve("jeno.toml"), Files.readString(dir.resolve("jeno.toml")) + """
+
+            [repos.mine]
+            type = "jeno"
+            url = "%s"
+            """.formatted(dir.resolve("named-repo")));
+        Files.createDirectories(dir.resolve("target/classes/demo"));
+        Files.writeString(dir.resolve("target/classes/demo/A.class"), "class bytes");
+        Path dist = Files.createDirectories(dir.resolve("target/dist"));
+        Files.writeString(dist.resolve("demo-1.0.0.jar"), "jar bytes");
+
+        int exit = new PublishCommand(dir).execute(List.of("mine"));
+
+        assertEquals(0, exit);
+        assertTrue(Files.isRegularFile(
+                dir.resolve("named-repo/demo/1.0.0/demo-1.0.0.jar")));
+        assertTrue(Files.isRegularFile(
+                dir.resolve("named-repo/demo/index.jeno.toml")));
+    }
+
+    @Test
     void jsonDryRunPlansTheTripleWithoutWritingIt() throws Exception {
         writeProject(dir);
         Files.createDirectories(dir.resolve("target/classes/demo"));

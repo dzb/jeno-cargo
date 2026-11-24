@@ -81,12 +81,15 @@ public final class PublishCommand implements Command {
     public String help() {
         return """
                targets jeno can read back: gh:<owner>/<repo>, jeno:https://host/,
-               jeno:http://<private-ip>/, jeno:local:<dir>; no target only prepares
+               jeno:http://<private-ip>/, jeno:local:<dir>, or the name of a
+               declared [repos.<name>] with type = "jeno"; no target only prepares
                target/dist/. --dry-run validates the plan without writing target/dist
                or uploading. plain http is for literal private addresses only
                (LAN); public hosts need https.
                a Maven-layout target (https://host/, local:<dir>) is refused:
-               jeno writes no POM, so neither jeno nor Maven could consume it.""";
+               jeno writes no POM, so neither jeno nor Maven could consume it.
+               A named private-network http repository may set insecure = true
+               to explicitly permit JENO_PUBLISH_TOKEN on cleartext.""";
     }
     @Override
     public String usage() {
@@ -243,7 +246,7 @@ public final class PublishCommand implements Command {
         Repository publishTarget = null;
         if (target != null && !target.startsWith("gh:")) {
             try {
-                publishTarget = Repository.parse(target);
+                publishTarget = Repository.resolveTarget(project, target);
             } catch (IllegalArgumentException e) {
                 System.err.println(Ui.errPrefix() + e.getMessage());
                 return 1;
@@ -410,7 +413,7 @@ public final class PublishCommand implements Command {
             byte[] bytes;
             try {
                 bytes = Files.readAllBytes(file);
-                JenoUploads.put(url, contentType(file), bytes);
+                JenoUploads.put(url, contentType(file), bytes, repository.insecure());
             } catch (IOException | InterruptedException e) {
                 System.err.println(Ui.errPrefix() + "PUT " + url + " failed — " + e.getMessage());
                 System.err.println("  jeno uploads to the final artifact URL with HTTP PUT because "
@@ -443,7 +446,7 @@ public final class PublishCommand implements Command {
 
         System.out.println(Ui.ok("published to " + target + " — consume it with:"));
         System.out.println("  [repos]");
-        System.out.println("  mine = \"" + target + "\"");
+        System.out.println("  mine = \"" + repository.declaration() + "\"");
         System.out.println("  \"" + project.name() + "\" = \"mine:" + project.version() + "\"");
         return 0;
     }
@@ -483,7 +486,7 @@ public final class PublishCommand implements Command {
 
         System.out.println(Ui.ok("published to " + target + " — consume it with:"));
         System.out.println("  [repos]");
-        System.out.println("  mine = \"" + target + "\"");
+        System.out.println("  mine = \"" + repository.declaration() + "\"");
         System.out.println("  \"" + project.name() + "\" = \"mine:" + project.version() + "\"");
         return 0;
     }
@@ -565,7 +568,7 @@ public final class PublishCommand implements Command {
             if (target.startsWith("gh:")) {
                 network = true;
             } else {
-                repository = Repository.parse(target);
+                repository = Repository.resolveTarget(project, target);
                 if (repository.layout() == Repository.Layout.MAVEN) {
                     throw new IllegalStateException("cannot publish to a Maven-layout target — "
                             + "jeno writes no POM; use gh:<owner>/<repo> or jeno:https://host/");
@@ -646,16 +649,6 @@ public final class PublishCommand implements Command {
         } catch (IOException e) {
             return 0;
         }
-    }
-
-    private static boolean requiresNetwork(String target) {
-        if (target == null) {
-            return false;
-        }
-        if (target.startsWith("gh:")) {
-            return true;
-        }
-        return !Repository.parse(target).isLocal();
     }
 
     private void emitPlan(PublishPlan plan, boolean dryRun) {

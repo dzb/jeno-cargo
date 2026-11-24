@@ -25,13 +25,22 @@ import java.nio.file.Path;
  * the declaration text. Adding a third layout (or a future git transport) is an
  * enum value plus URLs here — not a new {@code startsWith} in every command.
  *
- * <p>{@link #declaration()} is the exact text the manifest wrote; it is what
- * the lock records as {@code source}, because the lock records facts. Reading a
- * lock parses that text with {@link #parse}, the same parser, so the two sides
- * cannot drift.
+ * <p>{@link #declaration()} is the exact location text the manifest wrote; it
+ * is what the lock records as {@code source}, because the lock records
+ * artifacts. The table-only {@code insecure} flag is a write policy, not an
+ * artifact fact, so it is not part of that declaration. Reading a lock parses
+ * the declaration with {@link #parse}, the same parser, so the two sides cannot
+ * drift.
  */
 public record Repository(String name, Layout layout, Transport transport,
-                         String declaration, String localPath, String networkBase) {
+                         String declaration, String localPath, String networkBase,
+                         boolean insecure) {
+
+    /** Compatibility constructor for declarations that carry no token opt-in. */
+    public Repository(String name, Layout layout, Transport transport,
+                      String declaration, String localPath, String networkBase) {
+        this(name, layout, transport, declaration, localPath, networkBase, false);
+    }
 
     /** How artifacts are laid out under the location. */
     public enum Layout {
@@ -91,6 +100,17 @@ public record Repository(String name, Layout layout, Transport transport,
     }
 
     /**
+     * Resolve a publish/release target: a declared repository name wins over
+     * URL parsing, so {@code jeno publish mine} can carry the repository's
+     * security policy (notably {@code insecure = true}). A target that is not
+     * a declared name is still accepted as a URL declaration.
+     */
+    public static Repository resolveTarget(JenoProject project, String target) {
+        Repository named = project.repos().get(target);
+        return named != null ? named : parse(target);
+    }
+
+    /**
      * The explicit form: {@code [repos.<name>] type = "maven"|"jeno", url = ...}.
      * The type decides the layout — a static host can serve either one, so the
      * protocol is a declared fact, never guessed from the URL. A url that starts
@@ -102,6 +122,16 @@ public record Repository(String name, Layout layout, Transport transport,
      * shape.
      */
     public static Repository of(String name, String type, String url) {
+        return of(name, type, url, false);
+    }
+
+    /**
+     * The same explicit form plus the opt-in that permits
+     * {@code JENO_PUBLISH_TOKEN} on a private-network cleartext repository.
+     * The opt-in is deliberately repository-local and absent from the lock
+     * declaration: it is a write policy, not an artifact fact.
+     */
+    public static Repository of(String name, String type, String url, boolean insecure) {
         String kind = type == null || type.isBlank() ? "maven" : type.strip();
         if (kind.equalsIgnoreCase(LegacyNames.REPOSITORY_TYPE)) {
             throw new IllegalArgumentException(LegacyNames.repositoryType());
@@ -128,13 +158,24 @@ public record Repository(String name, Layout layout, Transport transport,
                     "url is a location, not a type — write type = \"" + kind
                     + "\" and url without the jeno:/local: prefix");
         }
+        if (insecure) {
+            if (layout != Layout.JENO) {
+                throw new IllegalArgumentException(
+                        "insecure = true is only for type = \"jeno\" repositories");
+            }
+            if (!location.startsWith("http://")) {
+                throw new IllegalArgumentException(
+                        "insecure = true is only for a private-network http:// repository; "
+                                + "https already encrypts JENO_PUBLISH_TOKEN");
+            }
+        }
         if (network) {
             String declaration = (layout == Layout.JENO ? "jeno:" : "") + location;
             return new Repository(name, layout, Transport.NETWORK, declaration, null,
-                    location.endsWith("/") ? location : location + "/");
+                    location.endsWith("/") ? location : location + "/", insecure);
         }
         String declaration = (layout == Layout.JENO ? "jeno:" : "") + "local:" + location;
-        return new Repository(name, layout, Transport.LOCAL, declaration, location, null);
+        return new Repository(name, layout, Transport.LOCAL, declaration, location, null, false);
     }
 
     /**

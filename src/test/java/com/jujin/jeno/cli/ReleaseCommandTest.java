@@ -132,6 +132,24 @@ class ReleaseCommandTest {
     }
 
     @Test
+    void aDeclaredRepositoryNameIsAValidReleaseTarget() throws Exception {
+        Path repo = dir.resolve("named-release-repo");
+        Files.writeString(dir.resolve("jeno.toml"),
+                Files.readString(dir.resolve("jeno.toml")) + """
+
+                    [repos.release-repo]
+                    type = "jeno"
+                    url = "%s"
+                    """.formatted(repo));
+
+        Result result = run("release-repo");
+
+        assertEquals(0, result.exit(), result.out() + result.err());
+        assertTrue(Files.exists(repo.resolve("app/1.0.0/release/app-1.0.0.tar.gz")));
+        assertTrue(Files.exists(repo.resolve("app/install.sh")));
+    }
+
+    @Test
     void dryRunWritesNothingToTheTarget() throws Exception {
         Path repo = dir.resolve("never");
 

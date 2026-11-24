@@ -186,7 +186,90 @@ class RepositoryDeclarationTest {
                     """));
 
         assertTrue(error.getMessage().contains("jeno.toml:6:1"), error.getMessage());
-        assertTrue(error.getMessage().contains("allowed: type, url"), error.getMessage());
+        assertTrue(error.getMessage().contains("allowed: type, url, insecure"),
+                error.getMessage());
+    }
+
+    @Test
+    void insecureTokenOptInIsRepositoryLocalAndOnlyForPrivateJenoHttp() {
+        JenoProject parsed = ProjectReader.parse("""
+            [project]
+            name = "x"
+            version = "1.0.0"
+
+            [repos.mine]
+            type = "jeno"
+            url = "http://192.168.1.39:8080/repo/"
+            insecure = true
+            """);
+
+        Repository mine = parsed.repos().get("mine");
+        assertTrue(mine.insecure());
+        assertEquals("jeno:http://192.168.1.39:8080/repo/", mine.declaration());
+
+        ProjectException maven = assertThrows(ProjectException.class, () ->
+                ProjectReader.parse("""
+                    [project]
+                    name = "x"
+                    version = "1.0.0"
+
+                    [repos.mine]
+                    type = "maven"
+                    url = "http://192.168.1.39:8080/repo/"
+                    insecure = true
+                    """));
+        assertTrue(maven.getMessage().contains("only for type = \"jeno\""),
+                maven.getMessage());
+
+        ProjectException https = assertThrows(ProjectException.class, () ->
+                ProjectReader.parse("""
+                    [project]
+                    name = "x"
+                    version = "1.0.0"
+
+                    [repos.mine]
+                    type = "jeno"
+                    url = "https://host/repo/"
+                    insecure = true
+                    """));
+        assertTrue(https.getMessage().contains("private-network http://"),
+                https.getMessage());
+
+        ProjectException type = assertThrows(ProjectException.class, () ->
+                ProjectReader.parse("""
+                    [project]
+                    name = "x"
+                    version = "1.0.0"
+
+                    [repos.mine]
+                    type = "jeno"
+                    url = "http://192.168.1.39:8080/repo/"
+                    insecure = "yes"
+                    """));
+        assertTrue(type.getMessage().contains("must be true or false"),
+                type.getMessage());
+    }
+
+    @Test
+    void aDeclaredRepositoryNameCanBeAWriteTargetAndKeepsItsPolicy() {
+        JenoProject parsed = ProjectReader.parse("""
+            [project]
+            name = "x"
+            version = "1.0.0"
+
+            [repos.mine]
+            type = "jeno"
+            url = "http://192.168.1.39:8080/repo/"
+            insecure = true
+            """);
+
+        Repository named = Repository.resolveTarget(parsed, "mine");
+        assertTrue(named.insecure());
+        assertEquals("jeno:http://192.168.1.39:8080/repo/", named.declaration());
+
+        Repository url = Repository.resolveTarget(parsed,
+                "jeno:https://host/repo/");
+        assertEquals("jeno:https://host/repo/", url.declaration());
     }
 
     @Test

@@ -85,13 +85,14 @@ jeno 又用严格可见性约束用户项目的依赖边界——**这个工具�
 | D20 | 改名 jeno,cargo 风格干净切换 | 旧名文件、旧前缀与旧仓库类型不兼容;双名回退会让“当前文件是否存在”变成隐式规则,锁与描述符来源无法自证。迁移只给命令,不做运行时兼容;0.3.0 是改名后的首个发布 |
 | D21 | 测试 toolchain 由 `[toolchain].jars` 显式声明 | 不能从 `org.junit.*` 之类的包名前缀猜:那会把非 JUnit 测试库漏进生产 jar,或把恰好同前缀的库塞进 toolchain。显式 id 清单是 packaging metadata,不改变解析、可见性或锁语义 |
 | D22 | 只认 `jeno.toml`/`jeno.lock`/`jeno.ws.toml`;旧名文件只诊断不兼容 | 双名兼容会让“当前文件是否存在”变成隐式回退,锁与 manifest 的来源也更难解释。旧名通过 `jeno doctor` 和 `jeno init --ws` 的迁移提示显式暴露;用户改名/迁移并重新 lock,而不是让两套文件长期共存 |
-| D23 | 明文 HTTP 只放行字面私有网络地址 | 局域网自建仓库(192.168/10/172.16)常常没有 TLS,拒绝全部 http 会把“自己机器上的仓库”也排除;但放行主机名或公网 http 等于把安全策略交给 DNS。只接受字面 IP + localhost,不解析域名;非 loopback 的明文目标在 publish/release 打一行“流量与 token 不加密”的 warning；`JENO_PUBLISH_TOKEN` 默认拒绝发往 cleartext LAN，只有显式设置 `JENO_ALLOW_INSECURE_TOKEN=1` 才允许。https 行为与“公网 http 拒绝”不变 |
+| D23 | 明文 HTTP 只放行字面私有网络地址 | 局域网自建仓库(192.168/10/172.16)常常没有 TLS,拒绝全部 http 会把“自己机器上的仓库”也排除;但放行主机名或公网 http 等于把安全策略交给 DNS。只接受字面 IP + localhost,不解析域名;非 loopback 的明文目标在 publish/release 打一行“流量与 token 不加密”的 warning；`JENO_PUBLISH_TOKEN` 默认拒绝发往 cleartext LAN，只有 named jeno 仓库的 `insecure = true` 或显式 `JENO_ALLOW_INSECURE_TOKEN=1` 才允许。逐仓库 opt-in 把例外绑定到一个 destination,进程级变量保留为逃生舱。https 行为与“公网 http 拒绝”不变 |
 | D24 | 导出的 API 依赖显式标记,不从传递闭包推断 | Java 库的公开签名可能暴露另一个库的类型;不能自动把所有 compile 依赖放回 classpath,否则 strict visibility 失效。`[deps-api]` 只标注已存在于 `[deps]` 的声明,消费者沿显式 API 边获得编译可见性,Maven POM 不做猜测 |
 | D25 | lockfile 使用版本 marker,`api` 行记录导出闭包 | 版本 marker 用 TOML 注释保存,旧 reader 可忽略;`api = true` 记录消费者需要的显式 API 编译闭包,避免每个命令重读传递描述符 |
 | D26 | 依赖身份的 canonical source 必须一致 | 同一 id 从不同仓库/GitHub/URL 进入是硬冲突;同一来源用两个 alias 也是硬冲突,禁止第一个来源静默获胜 |
 | D27 | 依赖节统一 deps 前缀,限定词后置 | `[deps]`、`[deps-dev]`、`[deps-api]` 的思维链都是“这是依赖,再说明是哪类依赖”; dot 不再用于依赖节,旧 `[deps.<repo>]` / `[deps-dev.<repo>]` 分组表已移除,避免 `deps` 后面出现两套修饰语法。旧 `[dev-deps]` 直接给迁移错误,不做双名兼容 |
 | D28 | named jeno repository 使用 per-artifact `index.jeno.toml` | index 只做 add/outdated 的版本发现,由发布流程更新;它不进入 lock、不存 jar/sha、索引缺失时 build/lock 不受影响。全局跨仓库搜索仍是独立 catalog |
 | D29 | `--locked` 关闭 workspace 本地替换 | workspace 的本地 classes 是开发态便利,不能作为发布证据。`--locked` 让 classpath/verify/package/bundle 只消费 `jeno.lock` + store,但仍保留 workspace 的拓扑编排;不改变 lock,不引入第二套发布模型 |
+| D30 | publish/release 接受 declared repository name,明文 token opt-in 绑定仓库 | target 先按 `[repos.<name>]` 解析再按 URL 解析,因此 `jeno publish mine` 能携带仓库的 `insecure = true` 策略;该布尔是写入策略,不进入 lock source。这样不把全局环境变量扩大成所有上传的默认豁免,也避免让用户在命令行重复 URL 与信任决策 |
 
 ---
 

@@ -182,6 +182,7 @@ url = "vendor"
 | key | 仓库名,`^[a-z][a-z0-9-]*$` |
 | `type` | `maven` \| `jeno`(封闭枚举;缺省 `maven`) |
 | `url` | `https://…`、私有网络内的 `http://<literal-ip>…`(不做 DNS;公网/主机名 http 拒绝)或文件系统路径。以 http 开头即 URL,否则即目录 |
+| `insecure` | 可选布尔,缺省 false。仅允许 `type = "jeno"` 且 `url` 为私有网络 `http://…`;显式允许 `JENO_PUBLISH_TOKEN` 发往这一仓库的明文连接。HTTPS/本地目录/maven 布局不得设置 true |
 
 | 布局(由 `type` 决定) \ 位置(由 `url` 决定) | 网络(https 或私有 http) | 本地路径 |
 |---|---|---|
@@ -189,7 +190,8 @@ url = "vendor"
 | **`type = "jeno"`** | `url = "https://host/"` 或私有 `http://…` | `url = "vendor"` |
 
 布局是声明的属性,不是 URL 的属性:同一台 https 主机可以装任一布局,所以协议必须由 `type`
-声明,不能从 URL 前缀猜。子表里只允许 `type`、`url` 两个键,未知键报错(带 `file:line:column`)。
+声明,不能从 URL 前缀猜。子表里只允许 `type`、`url`、`insecure` 三个键,未知键报错(带
+`file:line:column`)。`insecure` 是仓库级写入策略,不进入锁的 `source` 声明原文。
 
 **legacy 字符串写法**(仍可读,等价于上表):
 `"https://…"` = maven+https;`"http://<私有 IP>…"` = maven+私有 http;`"local:<dir>"` = maven+本地;
@@ -691,11 +693,13 @@ noTests,reportFiles[],durationMs}`。测试失败仍是有效结果:module exit 
 - `jeno:https://host/`
 - 私有网络 `jeno:http://<literal-ip>:<port>/…`(字面私有地址,不做 DNS)
 - `jeno:local:<dir>`
+- `[repos.<name>]` 的仓库名(target 先按声明名解析;解析不到才按 URL 声明解析)
 
 无 target 时只准备本地产物(`target/dist/` 三件套 / `target/dist/release/`),不上传。
 非 loopback 的明文 http 目标会在 stderr 打一行“流量与 token 不加密”的 warning;
-`JENO_PUBLISH_TOKEN` 默认不会发往 cleartext LAN,只有显式设置
-`JENO_ALLOW_INSECURE_TOKEN=1` 才允许。
+`JENO_PUBLISH_TOKEN` 默认不会发往 cleartext LAN。named jeno 仓库可在 manifest 写
+`insecure = true` 做逐仓库 opt-in;否则只有显式设置 `JENO_ALLOW_INSECURE_TOKEN=1`
+这个进程级 escape hatch 才允许。
 **Maven 布局不是发布目标**:jeno 不写 POM,`https://host/`、`http://host/`、`local:<dir>` 一律拒绝
 (exit 1);其中公网 `http://` 在仓库声明阶段就会被拒绝,私有网络 http 才可使用。
 Maven 布局仓库仍可**读取**(`[repos]` 的 `type = "maven"`,§2.1)。

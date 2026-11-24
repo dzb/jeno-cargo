@@ -431,11 +431,11 @@ public final class ProjectReader {
                     + "[repos]." + name + " must be a table with type/url, or the legacy string");
         }
         for (Object key : table.keySet()) {
-            if (!key.equals("type") && !key.equals("url")) {
+            if (!key.equals("type") && !key.equals("url") && !key.equals("insecure")) {
                 throw new ProjectException(at(file, source.key("repos." + name,
                         String.valueOf(key)))
                         + "[repos]." + name + "." + key
-                        + " is not a key — allowed: type, url");
+                        + " is not a key — allowed: type, url, insecure");
             }
         }
         Object typeValue = table.get("type");
@@ -444,13 +444,19 @@ public final class ProjectReader {
                     + "[repos]." + name + ".type must be \"maven\" or \"jeno\"");
         }
         String type = typeValue == null ? "maven" : (String) typeValue;
+        Object insecureValue = table.get("insecure");
+        if (insecureValue != null && !(insecureValue instanceof Boolean)) {
+            throw new ProjectException(at(file, source.key("repos." + name, "insecure"))
+                    + "[repos]." + name + ".insecure must be true or false");
+        }
+        boolean insecure = Boolean.TRUE.equals(insecureValue);
         Object urlValue = table.get("url");
         if (!(urlValue instanceof String url) || url.isBlank()) {
             throw new ProjectException(at(file, source.section("repos." + name))
                     + "[repos]." + name + " needs a url = \"https://…\" or a directory");
         }
         try {
-            return Repository.of(name, type, url);
+            return Repository.of(name, type, url, insecure);
         } catch (IllegalArgumentException e) {
             throw new ProjectException(at(file, source.key("repos." + name, "type"))
                     + "[repos]." + name + " — " + e.getMessage());

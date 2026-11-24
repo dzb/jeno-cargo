@@ -32,17 +32,37 @@ final class JenoUploads {
 
     /** One PUT with the generic binary content type. */
     static void put(String url, byte[] bytes) throws IOException, InterruptedException {
-        put(url, "application/octet-stream", bytes);
+        put(url, "application/octet-stream", bytes, false);
+    }
+
+    /** One PUT with an explicit repository-level insecure-token opt-in. */
+    static void put(String url, byte[] bytes, boolean allowInsecureToken)
+            throws IOException, InterruptedException {
+        put(url, "application/octet-stream", bytes, allowInsecureToken);
     }
 
     /** One PUT, treating 200/201/204 as success; JENO_PUBLISH_TOKEN is optional. */
     static void put(String url, String contentType, byte[] bytes)
             throws IOException, InterruptedException {
+        put(url, contentType, bytes, false);
+    }
+
+    /**
+     * The guarded form. A token may cross cleartext non-loopback HTTP only
+     * when the repository itself opts in with {@code insecure = true}, or
+     * when the process-wide {@code JENO_ALLOW_INSECURE_TOKEN=1} escape hatch
+     * is explicitly set. The repository-local opt-in is preferred because it
+     * binds the exception to one destination rather than every upload in the
+     * process.
+     */
+    static void put(String url, String contentType, byte[] bytes,
+                    boolean allowInsecureToken)
+            throws IOException, InterruptedException {
         String token = System.getenv("JENO_PUBLISH_TOKEN");
-        if (token != null && !token.isBlank() && isCleartextNonLoopback(url)
-                && !"1".equals(System.getenv("JENO_ALLOW_INSECURE_TOKEN"))) {
+        if (token != null && !token.isBlank() && !tokenMayCrossCleartext(url, allowInsecureToken)) {
             throw new IOException("refusing to send JENO_PUBLISH_TOKEN over plain HTTP ("
-                    + url + ") — set JENO_ALLOW_INSECURE_TOKEN=1 only for a trusted LAN");
+                    + url + ") — declare the target repository with insecure = true, "
+                    + "or set JENO_ALLOW_INSECURE_TOKEN=1 only for a trusted LAN");
         }
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
                 .header("Content-Type", contentType)
@@ -64,6 +84,16 @@ final class JenoUploads {
     static boolean isCleartextNonLoopback(String url) {
         return url != null && url.startsWith("http://")
                 && !Repository.isLoopbackHttp(url);
+    }
+
+    /**
+     * The single token-transport policy, exposed so repository-local opt-in can
+     * be tested without mutating the process environment.
+     */
+    static boolean tokenMayCrossCleartext(String url, boolean allowInsecureToken) {
+        return !isCleartextNonLoopback(url)
+                || allowInsecureToken
+                || "1".equals(System.getenv("JENO_ALLOW_INSECURE_TOKEN"));
     }
 
     /** One GET; the release read-back check. */

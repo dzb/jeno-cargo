@@ -66,7 +66,10 @@ public final class ReleaseCommand implements Command {
                signed with minisign by default: set JENO_MINISIGN_KEY, and optionally
                JENO_MINISIGN_PUBKEY/JENO_MINISIGN; --allow-unsigned is the explicit opt-out.
                targets: gh:<owner>/<repo>, jeno:https://host/, jeno:http://<private-ip>/
-               (literal LAN address only; public hosts need https), jeno:local:<dir>.
+               (literal LAN address only; public hosts need https), jeno:local:<dir>,
+               or the name of a declared [repos.<name>] with type = "jeno".
+               A named private-network http repository may set insecure = true
+               to explicitly permit JENO_PUBLISH_TOKEN on cleartext.
                no target prepares target/dist/release/ and prints the upload list.
                --notes-file <path> supplies the gh: release body (gh: target only).
                --dry-run prepares the same files and shows the URLs without uploading.""";
@@ -579,7 +582,7 @@ public final class ReleaseCommand implements Command {
             return new Plan(null, target, name, version, tar, stable, windows, urls);
         }
 
-        Repository repository = Repository.parse(target);
+        Repository repository = Repository.resolveTarget(project, target);
         if (repository.layout() != Repository.Layout.JENO) {
             throw new IllegalArgumentException("release publishes installers, not Maven "
                     + "artifacts — use gh:<owner>/<repo>, jeno:https://host/,"
@@ -641,25 +644,31 @@ public final class ReleaseCommand implements Command {
                             Files.readAllBytes(pub));
                 }
             } else {
-                JenoUploads.put(plan.installerUrl, Files.readAllBytes(tar));
+                JenoUploads.put(plan.installerUrl, Files.readAllBytes(tar),
+                        plan.repository.insecure());
                 System.out.println("  PUT " + plan.installerUrl);
                 for (Path file : files) {
                     String url = releaseUrl(plan, file.getFileName().toString());
-                    JenoUploads.put(url, Files.readAllBytes(file));
+                    JenoUploads.put(url, Files.readAllBytes(file),
+                            plan.repository.insecure());
                     System.out.println("  PUT " + url);
                 }
                 Path setupFile = files.stream().filter(path -> path.getFileName().toString()
                         .equals("install.sh")).findFirst().orElseThrow();
                 Path installFile = files.stream().filter(path -> path.getFileName().toString()
                         .equals("install.ps1")).findFirst().orElseThrow();
-                JenoUploads.put(plan.bootstrapUrl, Files.readAllBytes(setupFile));
-                JenoUploads.put(plan.windowsUrl, Files.readAllBytes(installFile));
+                JenoUploads.put(plan.bootstrapUrl, Files.readAllBytes(setupFile),
+                        plan.repository.insecure());
+                JenoUploads.put(plan.windowsUrl, Files.readAllBytes(installFile),
+                        plan.repository.insecure());
                 if (signing.signed()) {
                     Path pub = files.stream().filter(path -> path.getFileName().toString()
                             .equals("minisign.pub")).findFirst().orElseThrow();
                     byte[] bytes = Files.readAllBytes(pub);
-                    JenoUploads.put(plan.auxiliaryUrls.get(5), bytes);
-                    JenoUploads.put(plan.auxiliaryUrls.get(6), bytes);
+                    JenoUploads.put(plan.auxiliaryUrls.get(5), bytes,
+                            plan.repository.insecure());
+                    JenoUploads.put(plan.auxiliaryUrls.get(6), bytes,
+                            plan.repository.insecure());
                 }
             }
         } catch (IOException | InterruptedException e) {
