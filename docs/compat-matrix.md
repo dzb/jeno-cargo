@@ -1,8 +1,9 @@
 # Maven Central 兼容矩阵（真机证据）
 
-**基线**：jeno `0.2.17` · JDK 25 · Maven Central · `[limits] max-depth = 20` · 2026-11-23
-**方法**：每个库一个独立临时项目（`/tmp/jeno-compat/<slug>`），先 `jeno lock`，再用一个只引用该库公开类型的
-`compat.Main` 跑 `jeno build`。不是 CI 门禁；这是某个时点的真机快照。
+**基线**：jeno `0.3.2` · JDK 25 · Maven Central · `[limits] max-depth = 20` · 2026-11-24
+**方法**：每个库一个独立临时项目，先 `jeno lock`，再用一个只引用该库公开类型的
+`compat.Main` 跑 `jeno build`。本次使用 `v0.3.2` tag 的临时 worktree，从 tag 源码 bootstrap 出二进制，
+并使用全新的 XDG cache/state；不是 CI 门禁，这是某个时点的真机快照。
 
 ## 结果
 
@@ -24,7 +25,7 @@
 | Micrometer Core | `io.micrometer:micrometer-core:1.13.4` | exit 0 · 5 | exit 0 | 干净 |
 | JUnit Jupiter API | `org.junit.jupiter:junit-jupiter-api:5.11.0` | exit 0 · 4 | exit 0 | javac 警告 `Status.STABLE` 缺 apiguardian 类（传递依赖，严格可见性下不在编译 classpath）；编译成功，警告非错误 |
 
-**结论：15/15 锁成功，15/15 编译成功**（修正引用类型之后）。没有发现需要修改 POM 解码器的缺口，因此本单无代码修复。
+**结论：15/15 锁成功，15/15 编译成功**（修正引用类型之后；v0.3.2 重跑结果与下表一致）。没有发现需要修改 POM 解码器的缺口，因此本单无代码修复。
 
 ## 首次失败与判定
 
