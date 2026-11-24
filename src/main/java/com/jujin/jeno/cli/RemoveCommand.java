@@ -255,8 +255,7 @@ public final class RemoveCommand implements Command {
 
     private static boolean isDepsSection(String header) {
         return header.equals("[deps]") || header.equals("[deps-api]")
-                || header.equals("[deps-dev]")
-                || header.startsWith("[deps.") || header.startsWith("[deps-dev.");
+                || header.equals("[deps-dev]");
     }
 
     /** Whether one line is {@code <key> = <value>} for this id. */

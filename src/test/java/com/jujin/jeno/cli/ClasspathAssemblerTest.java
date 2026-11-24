@@ -88,11 +88,11 @@ class ClasspathAssemblerTest {
             [repos]
             vendor = "local:vendor"
 
-            [deps.vendor]
-            "com.example:lib-main" = "1.0.0"
+            [deps]
+            "com.example:lib-main" = "vendor:1.0.0"
 
-            [deps-dev.vendor]
-            "com.example:lib-dev" = "1.0.0"
+            [deps-dev]
+            "com.example:lib-dev" = "vendor:1.0.0"
 
             [build]
             processors = ["com.example:lib-proc:1.0.0"]

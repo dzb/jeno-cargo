@@ -136,9 +136,9 @@ class PackageTest {
             [repos]
             fix = "local:fix-repo"
 
-            [deps.fix]
-            "com.example:lib-a" = "1.0.0"
-            "com.example:lib-b" = "1.0.0"
+            [deps]
+            "com.example:lib-a" = "fix:1.0.0"
+            "com.example:lib-b" = "fix:1.0.0"
             """);
         Files.createDirectories(dir.resolve("target/classes"));
 

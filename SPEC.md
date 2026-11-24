@@ -30,7 +30,7 @@ schema 封闭,拼写错误(`[dep]` ≠ `[deps]`)不会静默失效。
 ```
 document      = *( ws / comment / table / array-table / keyval )
 comment       = "#" *( 任意非换行字符 )
-table         = "[" dotted-key "]"                  ; [deps] [deps.corp] [limits] …
+table         = "[" dotted-key "]"                  ; [deps] [deps-dev] [deps-api] [limits] …
 array-table   = "[[" dotted-key "]]"                ; 仅 jeno.lock 使用
 keyval        = key ws "=" ws value
 key           = bare-key / quoted-string
@@ -73,7 +73,7 @@ string-array  = "[" ws basic-string *( "," ws basic-string ) [","] ws "]"
 
 > 注:jeno 自身基于 Freeway(JDK 25+),运行 jeno 需要一个 ≥25 的 JDK;用户项目可通过 `--release` 目标更低版本。
 
-**[deps] 与 [deps.{repo}]**
+**[deps]**
 
 依赖节统一使用 **deps 前缀 + 后置限定词**:
 
@@ -83,9 +83,9 @@ string-array  = "[" ws basic-string *( "," ws basic-string ) [","] ws "]"
 [deps-api]   导出 API 的直接依赖(限定词在后)
 ```
 
-这是命名规则,不是嵌套关系。点号 `.` 仍只用于 legacy 的 `[deps.<repo>]`
-分组;新写法用值形态 `repo:version`。旧 `[dev-deps]` 已不再接受,解析器会给
-出改名到 `[deps-dev]` 的迁移错误。
+这是命名规则,不是嵌套关系。`[dev-deps]` 已不再接受,解析器会给出改名到
+`[deps-dev]` 的迁移错误。旧的仓库分组表 `[deps.<repo>]`、`[deps-dev.<repo>]`
+也已移除;仓库来源用值形态 `repo:version` 表达。
 
 key = 坐标,value 形态决定物种:
 
@@ -100,7 +100,7 @@ key = 坐标,value 形态决定物种:
 平铺在 `<base>/<name>/<version>/` 下(`<name>` = 发布方 `[project].name`),**不需要 `[project].group`**。
 传输可以是 HTTPS(`jeno:https://…`)、字面私有网络 HTTP(`jeno:http://<private-ip>/…`,LAN 专用)
 或本地目录(`jeno:local:<dir>`,`~` 展开、相对路径相对项目根,`jeno publish jeno:local:<dir>` 直接写入)。
-依赖写成 `"<name>" = "mine:<semver>"`(或 legacy `[deps.mine] "<name>" = "<semver>"`);元数据取自同目录的
+依赖写成 `"<name>" = "mine:<semver>"`;元数据取自同目录的
 `.jeno.toml` 描述符,`[project].name` 必须与 key 一致(由 `DescriptorReader` 校验)。描述符里的裸名+裸版本
 指向同一仓库的兄弟工件(描述符只写事实,不写仓库规则)——**这条兄弟规则仅适用于从 `jeno:` 仓库取到的
 描述符**;从 `gh:` 取到的描述符里写裸名不会变成同仓库,仍按 Central 坐标报错。`jeno:https://` 与
@@ -123,9 +123,8 @@ store 索引与 `--offline` 行为不变。
 > 替代写法:直接写 release jar 的 `https://…jar` 叶子,或发布到自己的主机并在 `[repos]` 声明后用
 > 值形态引用。遇到 `gitee:` 会报错并给出这两种写法。
 
-- `[deps.{repo}]` 分区写法为 **legacy**:仍可读、语义与值形态完全相同,但 `jeno add` 不再产生它
-- 同一坐标同时出现在 `[deps]`、任何 `[deps.{repo}]`,或两种写法混用 → 报错(身份撞车)
-- `{repo}` 未在 `[repos]` 中声明 → 报错
+- 仓库分组表 `[deps.<repo>]` / `[deps-dev.<repo>]` 已移除;出现即报错并提示改用 `repo:version`
+- 命名仓库必须先在 `[repos]` 中声明,值形态中的仓库名未声明 → 报错
 
 **[deps-api]** — 导出的 API 依赖标记(可出现在 jeno.toml 与 jeno-native 描述符)
 
@@ -141,10 +140,10 @@ store 索引与 `--offline` 行为不变。
 - Maven POM 没有 API/implementation 区分,不会自动推断;需要导出的 POM 依赖由作者
   在自己的 jeno manifest/描述符中显式声明
 
-**[deps-dev] 与 [deps-dev.{repo}]** — 仅测试可见的依赖(Cargo `dev-dependencies`、uv `[dependency-groups]` 先例)
+**[deps-dev]** — 仅测试可见的依赖(Cargo `dev-dependencies`、uv `[dependency-groups]` 先例)
 
-独立顶层节,不是 `[deps.dev]`——后者已是"来自仓库 dev 的依赖"。声明规则与 `[deps]` **完全一致**
-(同样的物种形态、同样的 `{repo}` 分组、同样的精确版本约束),差别只在可见性:
+独立顶层节,命名遵循“依赖在前、修饰在后”。声明规则与 `[deps]` **完全一致**
+(同样的物种形态、同样的值形态来源、同样的精确版本约束),差别只在可见性:
 
 | 面 | `[deps]` | `[deps-dev]` |
 |---|---|---|
@@ -197,7 +196,7 @@ url = "vendor"
 `"jeno:https://…"` = jeno+https;`"jeno:http://<私有 IP>…"` = jeno+私有 http;`"jeno:local:<dir>"` = jeno+本地。
 写锁时这些写法都归一成同样的规范声明,锁格式不变。
 
-查找顺序:**互不回退**——`[deps.{repo}]` 只查对应仓库,`[deps]` 只查 Central。
+查找顺序:**互不回退**——值形态 `repo:version` 只查对应仓库,裸版本只查 Central。
 `local:` 仓库的字节同样经过 store 的 sha256 钉定,与远程仓库同等可审计。
 
 **[limits]**
@@ -326,8 +325,8 @@ version = 21              # 可选;语义同 §2.1 [java]
 
 ### 3.2 禁止项(出现即报错)
 
-`[repos]`、`[deps.{repo}]`、`[deps-dev]`、`[limits]`、`[scripts]`、`[overrides]`、`[toolchain]`、任何未知节;
-`[deps]` 与 `[deps-api]` 是允许的事实表。
+`[repos]`、`[deps.<repo>]`、`[deps-dev]`、`[limits]`、`[scripts]`、`[overrides]`、`[toolchain]`、任何未知节;
+`[deps]` 与 `[deps-api]` 是允许的事实表。旧的 `[deps.<repo>]` 分组表一律拒绝。
 
 理由:仓库是消费方的配置;预算规则只有一份(消费方);scripts 只属于应用。**发布物里只有事实,规则只有一份。**
 

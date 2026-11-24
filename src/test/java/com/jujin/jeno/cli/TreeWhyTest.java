@@ -73,9 +73,9 @@ class TreeWhyTest {
             [repos]
             fix = "local:%s"
 
-            [deps.fix]
-            "com.example:lib-a" = "1.0.0"
-            "com.example:lib-d" = "1.0.0"
+            [deps]
+            "com.example:lib-a" = "fix:1.0.0"
+            "com.example:lib-d" = "fix:1.0.0"
             """.formatted(fixRepo));
 
         writeLock();
@@ -185,8 +185,8 @@ class TreeWhyTest {
             [repos]
             fix = "local:%s"
 
-            [deps.fix]
-            "com.example:lib-a" = "1.0.0"
+            [deps]
+            "com.example:lib-a" = "fix:1.0.0"
             """.formatted(repo));
         writeLock();
         // bump the declaration without re-locking: the lock still pins 1.0.0
@@ -198,8 +198,8 @@ class TreeWhyTest {
             [repos]
             fix = "local:%s"
 
-            [deps.fix]
-            "com.example:lib-a" = "1.1.0"
+            [deps]
+            "com.example:lib-a" = "fix:1.1.0"
             """.formatted(repo));
 
         TreeCommand tree = new TreeCommand(new ArtifactStore(dir.resolve("store")),
@@ -406,10 +406,10 @@ class TreeWhyTest {
             [repos]
             fix = "local:%s"
 
-            [deps.fix]
-            "com.example:root-a" = "1.0.0"
-            "com.example:root-b" = "1.0.0"
-            "com.example:root-c" = "1.0.0"
+            [deps]
+            "com.example:root-a" = "fix:1.0.0"
+            "com.example:root-b" = "fix:1.0.0"
+            "com.example:root-c" = "fix:1.0.0"
             """.formatted(repo));
 
         writeLock();
@@ -472,9 +472,9 @@ class TreeWhyTest {
             [repos]
             fix = "local:%s"
 
-            [deps.fix]
-            "com.example:lib-a" = "1.0.0"
-            "com.example:lib-d" = "1.0.0"
+            [deps]
+            "com.example:lib-a" = "fix:1.0.0"
+            "com.example:lib-d" = "fix:1.0.0"
             """.formatted(repo));
 
         writeLock();
@@ -532,8 +532,8 @@ class TreeWhyTest {
             [repos]
             fix = "local:%s"
 
-            [deps-dev.fix]
-            "com.example:lib-b" = "1.1.0"
+            [deps-dev]
+            "com.example:lib-b" = "fix:1.1.0"
             """.formatted(repo));
 
         writeLock();

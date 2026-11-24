@@ -214,8 +214,8 @@ class AddCommandTest {
             [repos]
             vendor = "local:%s"
 
-            [deps.vendor]
-            "com.example:lib-a" = "1.0.0"
+            [deps]
+            "com.example:lib-a" = "vendor:1.0.0"
             """.formatted(project.resolve("vendor").toAbsolutePath()));
     }
 
@@ -603,7 +603,7 @@ class AddCommandTest {
     }
 
     @Test
-    void appendsIntoTheDepsTableNotItsSubTables() {
+    void appendsIntoDepsBeforeItsSiblingSections() {
         String text = """
             [project]
             name = "demo"
@@ -612,16 +612,16 @@ class AddCommandTest {
             [deps]
             "com.example:lib-a" = "1.0.0"
 
-            [deps.corp]
-            "com.corp:internal" = "2.1.0"
+            [deps-dev]
+            "com.example:test-kit" = "2.0.0"
             """;
         String updated = AddCommand.appendToDeps(text, "com.example:new", "9.9.9");
 
-        int depsEnd = updated.indexOf("[deps.corp]");
-        assertTrue(updated.indexOf("com.example:new") < depsEnd,
-                "the new line belongs to [deps] proper, not the corp group");
-        assertTrue(updated.contains("\"com.corp:internal\" = \"2.1.0\""),
-                "the group survives untouched");
+        int devSection = updated.indexOf("[deps-dev]");
+        assertTrue(updated.indexOf("com.example:new") < devSection,
+                "the new line belongs to [deps], before the deps-dev sibling");
+        assertTrue(updated.contains("\"com.example:test-kit\" = \"2.0.0\""),
+                "the sibling section survives untouched");
     }
 
     @Test

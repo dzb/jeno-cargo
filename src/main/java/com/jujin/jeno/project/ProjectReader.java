@@ -273,7 +273,7 @@ public final class ProjectReader {
             String processorId = coordinate.substring(0, second);
             String processorVersion = coordinate.substring(second + 1);
             processorRequirements.add(
-                    requirement(processorId, processorVersion, null, "build.processors",
+                    requirement(processorId, processorVersion, "build.processors",
                             Map.of(), false));
         }
 
@@ -322,8 +322,8 @@ public final class ProjectReader {
         for (Map.Entry<String, Object> entry : apiSection.entrySet()) {
             if (entry.getValue() instanceof Map<?, ?>) {
                 throw new ProjectException("[deps-api]." + entry.getKey()
-                        + " must be a direct id = value marker; nested repository groups "
-                        + "belong in [deps]");
+                        + " is not a direct id = value marker; dependency values carry their "
+                        + "repository as repo:version");
             }
         }
         List<Requirement> marked = extractDependencies(apiSection, repos, where, sibling);
@@ -356,7 +356,7 @@ public final class ProjectReader {
     public static Requirement parseRequirement(String key, String value) {
         // add validates the shape here; whether the named repository is declared
         // is checked when the edited manifest is parsed for real
-        return requirement(key, value, null, "jeno add", Map.of(), false);
+        return requirement(key, value, "jeno add", Map.of(), false);
     }
 
     // ------------------------------------------------------------------
@@ -364,10 +364,9 @@ public final class ProjectReader {
     // ------------------------------------------------------------------
 
     /**
-     * Extracts the requirements of one {@code [deps]} table. A nested table is
-     * a named-repository group ({@code [deps.corp]}), which only exists in
-     * jeno.toml — descriptors pass {@code repos == null} and get an error
-     * instead (SPEC.md §3.2).
+     * Extracts the requirements of one dependency table. Repository selection
+     * is a value fact ({@code repo:version}); nested {@code [deps.repo]} and
+     * {@code [deps-dev.repo]} tables are deliberately rejected.
      */
     static List<Requirement> extractDependencies(
             Map<String, Object> deps, Map<String, Repository> repos, String where) {
@@ -389,23 +388,13 @@ public final class ProjectReader {
         Set<String> ids = new LinkedHashSet<>();
         for (Map.Entry<String, Object> entry : deps.entrySet()) {
             String key = entry.getKey();
-            if (entry.getValue() instanceof Map<?, ?> group) {
-                if (repos == null) {
-                    throw new ProjectException("[" + where + "] [" + dependencySection + "."
-                            + key + "] — descriptors cannot declare repositories; rules live "
-                            + "only in the consumer's jeno.toml (SPEC.md §3.2)");
-                }
-                if (!repos.containsKey(key)) {
-                    throw new ProjectException("[" + dependencySection + "." + key
-                            + "] names repository '" + key + "' which is not declared in [repos]");
-                }
-                for (Map.Entry<String, Object> grouped : asStringKeyed(group).entrySet()) {
-                    add(requirements, ids, requirement(grouped.getKey(), grouped.getValue(),
-                            key, where, repos, true, sibling), where, dependencySection);
-                }
-                continue;
+            if (entry.getValue() instanceof Map<?, ?>) {
+                throw new ProjectException("[" + where + "] [" + dependencySection + "." + key
+                        + "] — repository-group dependency tables were removed; declare the "
+                        + "dependency inside [" + dependencySection + "] with a value like "
+                        + "\"repo:version\"");
             }
-            add(requirements, ids, requirement(key, entry.getValue(), null, where, repos, true,
+            add(requirements, ids, requirement(key, entry.getValue(), where, repos, true,
                     sibling), where, dependencySection);
         }
         return List.copyOf(requirements);
@@ -469,9 +458,9 @@ public final class ProjectReader {
     }
 
     /** One {@code key = value} entry, classified by the value's shape. */
-    static Requirement requirement(String key, Object value, String repository, String where,
+    static Requirement requirement(String key, Object value, String where,
                                    Map<String, Repository> repos, boolean checkRepos) {
-        return requirement(key, value, repository, where, repos, checkRepos, null);
+        return requirement(key, value, where, repos, checkRepos, null);
     }
 
     /**
@@ -480,18 +469,13 @@ public final class ProjectReader {
      * repository — a descriptor cannot name repositories (they are rules), but it
      * can say "the sibling called gadget, version 0.9.0".
      */
-    static Requirement requirement(String key, Object value, String repository, String where,
-                                   Map<String, Repository> repos, boolean checkRepos, String sibling) {
-        if (repository == null && sibling != null && value instanceof String raw
+    static Requirement requirement(String key, Object value, String where,
+                                   Map<String, Repository> repos, boolean checkRepos,
+                                   String sibling) {
+        if (sibling != null && value instanceof String raw
                 && !raw.isBlank() && !raw.startsWith("gh:") && !raw.startsWith("https://")
                 && !raw.contains(":") && !key.contains(":")) {
             return nativeInNamedRepository(key, raw, sibling, where);
-        }
-        // [deps.mine] where mine is an jeno: repository: the native layout, no group
-        if (repository != null && repos != null
-                && repos.get(repository) != null
-                && repos.get(repository).layout() == Repository.Layout.JENO) {
-            return nativeInNamedRepository(key, (String) value, repository, where);
         }
         if (key.isBlank() || key.contains(" ") || key.contains("\t")) {
             throw new ProjectException("[" + where + "] dependency name '" + key
@@ -594,7 +578,7 @@ public final class ProjectReader {
         requireConcreteVersion(key, raw, where);
         int colon = key.indexOf(':');
         return new Requirement(key, Species.CENTRAL, key.substring(0, colon),
-                key.substring(colon + 1), raw, repository, null, null, null, null);
+                key.substring(colon + 1), raw, null, null, null, null, null);
     }
 
     /**
@@ -654,11 +638,6 @@ public final class ProjectReader {
     private static Map<String, Object> optionalSection(Map<String, Object> root, String name) {
         Object value = root.get(name);
         return value == null ? null : (Map<String, Object>) value;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> asStringKeyed(Map<?, ?> group) {
-        return (Map<String, Object>) group;
     }
 
     /** A non-empty array of non-blank strings — {@code [build]} keys share this shape. */

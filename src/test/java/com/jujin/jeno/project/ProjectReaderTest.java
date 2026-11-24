@@ -285,9 +285,7 @@ class ProjectReaderTest {
 
             [deps]
             "widget" = "mine:1.2.3"
-
-            [deps.mine]
-            "gadget" = "0.9.0"
+            "gadget" = "mine:0.9.0"
             """);
 
         Requirement widget = project.requirements().get(0);
@@ -298,7 +296,7 @@ class ProjectReaderTest {
 
         Requirement gadget = project.requirements().get(1);
         assertEquals(Species.NAMED, gadget.species());
-        assertEquals("gadget", gadget.id(), "the table form is addressed by name too");
+        assertEquals("gadget", gadget.id(), "the value form is addressed by name too");
     }
 
     @Test
@@ -364,7 +362,7 @@ class ProjectReaderTest {
     }
 
     @Test
-    void theTwoSpellingsOfOneDependencyCollide() {
+    void repositoryGroupTablesAreRemoved() {
         ProjectException error = assertThrows(ProjectException.class,
             () -> ProjectReader.parse("""
                 [project]
@@ -374,14 +372,14 @@ class ProjectReaderTest {
                 [repos]
                 corp = "https://nexus.corp.internal/repository/maven/"
 
-                [deps]
-                "com.corp:lib" = "corp:2.1.0"
-
                 [deps.corp]
                 "com.corp:lib" = "2.1.0"
                 """));
 
-        assertTrue(error.getMessage().contains("declared twice"), error.getMessage());
+        assertTrue(error.getMessage().contains(
+                        "repository-group dependency tables were removed"),
+                error.getMessage());
+        assertTrue(error.getMessage().contains("repo:version"), error.getMessage());
     }
 
     @Test
@@ -564,9 +562,7 @@ class ProjectReaderTest {
             mylib = "gh:acme/mylib@v1.2.0"
             other = "gh:acme/other@1.2.3-rc1"
             vendored = "https://cdn.example.com/vendored-0.9.jar"
-
-            [deps.corp]
-            "com.corp:internal" = "2.1.0"
+            "com.corp:internal" = "corp:2.1.0"
             """);
 
         assertEquals(5, project.requirements().size());
@@ -594,7 +590,7 @@ class ProjectReaderTest {
                 .filter(r -> r.repository() != null)
                 .findFirst()
                 .orElseThrow();
-        assertEquals("corp", corp.repository(), "the [deps.corp] group carries its repository");
+        assertEquals("corp", corp.repository(), "the value carries its repository");
         assertEquals("2.1.0", corp.version());
     }
 
@@ -682,51 +678,17 @@ class ProjectReaderTest {
     }
 
     @Test
-    void aRepoGroupMustNameADeclaredRepository() {
+    void aValueNamingAnUndeclaredRepositoryIsStillAnError() {
         ProjectException ex = assertThrows(ProjectException.class,
             () -> ProjectReader.parse("""
                 [project]
                 name = "demo"
                 version = "0.1.0"
-
-                [deps.corp]
-                "com.corp:internal" = "2.1.0"
-                """));
-        assertTrue(ex.getMessage().contains("not declared in [repos]"), "got: " + ex.getMessage());
-
-        ProjectException https = assertThrows(ProjectException.class,
-            () -> ProjectReader.parse("""
-                [project]
-                name = "demo"
-                version = "0.1.0"
-
-                [repos]
-                corp = "http://nexus.corp.internal/repository/maven/"
-
-                [deps.corp]
-                "com.corp:internal" = "2.1.0"
-                """));
-        assertTrue(https.getMessage().contains("https"), "got: " + https.getMessage());
-    }
-
-    @Test
-    void anIdMayAppearOnceAcrossAllDepsSections() {
-        ProjectException ex = assertThrows(ProjectException.class,
-            () -> ProjectReader.parse("""
-                [project]
-                name = "demo"
-                version = "0.1.0"
-
-                [repos]
-                corp = "https://nexus.corp.internal/repository/maven/"
 
                 [deps]
-                "com.example:lib-a" = "1.0.0"
-
-                [deps.corp]
-                "com.example:lib-a" = "1.0.0"
+                "com.corp:internal" = "corp:2.1.0"
                 """));
-        assertTrue(ex.getMessage().contains("declared twice"), "got: " + ex.getMessage());
+        assertTrue(ex.getMessage().contains("not declared in [repos]"), "got: " + ex.getMessage());
     }
 
     @Test

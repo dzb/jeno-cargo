@@ -104,25 +104,6 @@ class RemoveCommandTest {
     }
 
     @Test
-    void removesFromARepositoryGroup() {
-        String text = """
-            [project]
-            name = "demo"
-            version = "0.1.0"
-
-            [repos]
-            corp = "https://repo.example.com/maven2/"
-
-            [deps.corp]
-            "com.corp:internal" = "1.0.0"
-            """;
-
-        String updated = RemoveCommand.removeLine(text, "com.corp:internal");
-        assertFalse(updated.contains("com.corp:internal"));
-        assertTrue(updated.contains("[deps.corp]"), "the group header stays");
-    }
-
-    @Test
     void anUndeclaredIdIsAnErrorNamingTheDeclaredSet(@TempDir Path storeDir) throws Exception {
         Files.writeString(dir.resolve("jeno.toml"), """
             [project]
@@ -190,9 +171,9 @@ class RemoveCommandTest {
             [repos]
             vendor = "local:%s"
 
-            [deps.vendor]
-            "com.example:lib-a" = "1.0.0"
-            "com.example:lib-b" = "1.0.0"
+            [deps]
+            "com.example:lib-a" = "vendor:1.0.0"
+            "com.example:lib-b" = "vendor:1.0.0"
             """.formatted(dir.resolve("vendor").toAbsolutePath()));
     }
 

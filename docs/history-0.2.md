@@ -28,7 +28,7 @@
 |---|---|---|
 | **v0.1.1** | 第一轮真跑盘出的十个缺陷 | 36 个提交。`--offline` 对 `add` 不生效、`mjm tree` 不画树、`~/.mj/store` 让用户删错目录、6 处「文档写 `-Dmj.x`、代码读 `-Dmjm.x`」、`[test]` 绕过 schema、descriptor 不吃 `-Dmjm.github.host` |
 | **v0.1.1** | **F1:锁跨目录不可复现** | `local:` 仓库写进锁的是绝对 `file://` 路径。改成相对项目根后,两个克隆锁出**逐字节相同**的文件 |
-| **v0.2.0** | 值形态 + 原子写 + 保留名 | 依赖可以写 `<仓库名>:<版本>`;`add`/`remove` 先解析后落盘;`[deps.<repo>]` 降为 legacy |
+| **v0.2.0** | 值形态 + 原子写 + 保留名 | 依赖可以写 `<仓库名>:<版本>`;`add`/`remove` 先解析后落盘;`[deps.<repo>]` 后来被移除 |
 | **v0.2.1** | 零警告 | 87 条警告的根因是 vendor 漏了 `apiguardian`;顺手发现**改 vendor 里的 pom 后 `mjm lock` 看不到**(store 索引把它当不可变远端) |
 | **v0.2.2** | 写命令共用一把锁 | `package`/`bundle`/`publish` 纳入,关掉「`clean --dist` 与 `bundle` 并发 → 半个发行包」 |
 | **v0.2.3** | `mjm:` 仓库布局 + 删 `gitee:` | 两层布局、不需要 `project.group`;`gitee:` 整族移除(附件需令牌,违背零配置) |

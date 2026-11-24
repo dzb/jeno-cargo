@@ -116,26 +116,22 @@
 - 同样的断言对 `remove` 一条会导致 refresh 失败的声明成立（例如锁里已有工件、store 被清空）；
 - 成功后：jeno.toml 与 jeno.lock 都体现新图，且此时目录里没有 `*.tmp` 残留。
 
-### F6b：`add` 支持 native / repo-bound 物种
+### F6b：`add` 支持 native / repo-bound 物种（已实施）
 
-**现状**：`add <key> <value>` 的形态校验已经认识 `gh:`/`gitee:`/`https://…jar`，但落盘位置
-永远是 `[deps]`（Central 组）。于是：
+**方案**：仓库来源是值形态，不是另一张表：
 
-- 声明属于 `[repos]` 的依赖只能是 `group:artifact` + **Central** 物种，写进 `[deps]` 后
-  解析会去 Central 取，取不到（实测：`add "com.jujin8.freeway:freeway-commons" 2.0.2`
-  → `unable to fetch the pom`，且此时 jeno.toml 已被写坏）；
-- 没有任何方式让 `add` 写进 `[deps.{repo}]`，也没有 native 版本的发现（`versions()` 只查
-  Central 的 `maven-metadata.xml`，`search()` 只查 Central 索引）。
+```bash
+jeno add "com.jujin8.freeway:freeway-commons" "vendor:2.0.2"
+```
 
-**方案（三选一，未定）**：
-1. `add --repo <name>`：把声明写进 `[deps.<name>]`（或 `[deps-dev.<name>]`），物种由值形态决定；
-   无 `--repo` 时保持今天的 Central 行为。改动面：`AddCommand`（参数解析 + 写入位置）、
-   `appendToDeps` 的节选择；`versions()` 对 repo-bound 坐标给出"该仓库无版本列表"的明确错误。
-2. `add` 拒绝 repo-bound 坐标并说明：`group:artifact` 只用于 Central；仓库依赖请手写
-   `[deps.<repo>]` 并给一条示例。改动面最小，只是把 F6a 的失败前置成预检。
-3. native 版本发现：`add <owner>/<repo>@<tag>` 直接写 `[deps]` 的 `gh:`/`gitee:` 形态
-   （今天的值形态校验已支持，缺的是从 tag 推导 group/artifact 的规则与版本列表来源）。
+写入 `[deps]`：
 
-**回归断言**：`add --repo vendor "com.jujin8.freeway:freeway-commons" 2.0.2` 成功，
-`jeno.toml` 里出现在 `[deps.vendor]` 而不是 `[deps]`；`add` 同一坐标不带 `--repo` 时
-（若选方案 2）exit 1 且文件逐字节不变。
+```toml
+"com.jujin8.freeway:freeway-commons" = "vendor:2.0.2"
+```
+
+不再生成 `[deps.<repo>]`、`[deps-dev.<repo>]` 等分组表；这些旧表已移除。
+native release 仍可写成 `gh:owner/repo@tag` 或 `owner/repo@tag` 简写。
+
+**回归断言**：`add` 成功后声明仍在 `[deps]`，仓库由 `vendor:version` 决定；
+不产生任何点号分组子表。

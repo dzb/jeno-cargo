@@ -209,8 +209,8 @@ class PublishTest {
             [repos]
             corp = "https://nexus.corp.internal/repository/maven/"
 
-            [deps.corp]
-            "com.corp:internal" = "2.1.0"
+            [deps]
+            "com.corp:internal" = "corp:2.1.0"
             """);
 
         int exit = new PublishCommand(dir).execute(List.of());

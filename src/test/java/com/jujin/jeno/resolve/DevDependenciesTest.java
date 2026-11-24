@@ -55,9 +55,7 @@ class DevDependenciesTest {
             "com.example:lib-a" = "1.0.0"
             "harness" = "gh:acme/harness@v2.0.0"
             "fixture" = "https://example.com/fixture-1.0.jar"
-
-            [deps-dev.corp]
-            "com.corp:testkit" = "3.1.0"
+            "com.corp:testkit" = "corp:3.1.0"
             """);
 
         List<Requirement> dev = project.devRequirements();
@@ -88,8 +86,8 @@ class DevDependenciesTest {
     }
 
     @Test
-    void devDepsRejectUnknownRepositoryGroups() {
-        assertThrows(ProjectException.class, () ->
+    void devDepsRejectRepositoryGroupTables() {
+        ProjectException error = assertThrows(ProjectException.class, () ->
                 ProjectReader.parse("""
                     [project]
                     name = "demo"
@@ -98,6 +96,10 @@ class DevDependenciesTest {
                     [deps-dev.corp]
                     "com.corp:testkit" = "3.1.0"
                     """));
+
+        assertTrue(error.getMessage().contains(
+                        "repository-group dependency tables were removed"),
+                error.getMessage());
     }
 
     @Test

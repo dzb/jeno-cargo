@@ -163,8 +163,8 @@ class RelativeLockTest {
             [repos]
             vendor = "%s"
 
-            [deps.vendor]
-            "com.example:lib-a" = "1.0.0"
+            [deps]
+            "com.example:lib-a" = "vendor:1.0.0"
             """.formatted(base);
     }
 

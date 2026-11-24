@@ -85,8 +85,9 @@ Dependency sections all name the dependency first, then the qualifier:
 [deps-api]   direct deps whose types are part of this library's exported API
 ```
 
-Dots remain reserved for the legacy repository-group spellings
-(`[deps.<repo>]`, `[deps-dev.<repo>]`); they are not semantic qualifiers.
+Dots are deliberately not used for these semantic qualifiers. The old
+repository tables (`[deps.<repo>]`, `[deps-dev.<repo>]`) have been removed;
+repository selection is a value fact (`repo:version`), not a table shape.
 
 `[deps-dev]` resolves into the same `jeno.lock`, but never reaches the compile
 classpath, `jeno run`, `jeno package`, `jeno bundle`, or a **published
@@ -204,7 +205,8 @@ on either side. A Maven-layout target is **refused**: jeno generates no POM, so
 neither jeno nor Maven could read the triple back. Maven repositories remain
 readable (`[repos] type = "maven"`); publishing into one needs a POM generator,
 which jeno does not have. A dependency names its repository in the value
-(`corp:1.2.3`); the older `[deps.corp]` table form is legacy but still read.
+(`corp:1.2.3`); repository-group tables such as `[deps.corp]` are no longer
+accepted.
 `gh` is a reserved name — the `gh:` prefix wins, so a repository cannot take it.
 `JENO_PUBLISH_TOKEN` adds a bearer token when the jeno-layout host wants one.
 
