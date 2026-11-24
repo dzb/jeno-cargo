@@ -95,13 +95,17 @@ final class ReleaseSigner {
             if (declared != null && !declared.isBlank()) {
                 return publicKeyLine(Path.of(declared));
             }
-            Path derived = Files.createTempFile("jeno-minisign-", ".pub");
+            // minisign -R refuses to overwrite its output path, so create a
+            // directory and give it a path that does not exist yet.
+            Path tempDir = Files.createTempDirectory("jeno-minisign-");
+            Path derived = tempDir.resolve("public-key.pub");
             try {
                 run(List.of(binary, "-R", "-s", keyFile.toString(),
                         "-p", derived.toString()), "could not derive the minisign public key");
                 return publicKeyLine(derived);
             } finally {
                 Files.deleteIfExists(derived);
+                Files.deleteIfExists(tempDir);
             }
         } catch (IOException e) {
             throw new SigningException("cannot read the minisign public key — " + e.getMessage());

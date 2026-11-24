@@ -338,7 +338,7 @@ class ReleaseCommandTest {
             echo "$*" >> "%s"
             case "$*" in
               *"-S "*) for a in "$@"; do case "$prev" in -x) echo fake-signature > "$a";; esac; prev="$a"; done ;;
-              *"-R "*) exit 0 ;;
+              *"-R "*) for a in "$@"; do case "$prev" in -p) if [ -e "$a" ]; then echo "Key generation aborted: $a already exists." >&2; exit 1; fi; printf 'untrusted comment: fake key\\nRWTfakePUBLICkeyLINE\\n' > "$a";; esac; prev="$a"; done ;;
               *"-V "*) exit 0 ;;
             esac
             exit 0
@@ -347,6 +347,21 @@ class ReleaseCommandTest {
         System.setProperty("jeno.minisign.bin", bin.toString());
         System.setProperty("jeno.minisign.key", key.toString());
         System.setProperty("jeno.minisign.pubkey", pub.toString());
+    }
+
+    @Test
+    void aDerivedPublicKeyUsesANonExistingTempPath() throws Exception {
+        fakeSigner();
+        System.clearProperty("jeno.minisign.pubkey");
+        Path repo = dir.resolve("derived-key");
+
+        Result result = runRaw("jeno:local:" + repo);
+
+        assertEquals(0, result.exit(), result.out() + result.err());
+        Path pub = repo.resolve("app/1.0.0/minisign.pub");
+        assertTrue(Files.exists(pub));
+        assertTrue(Files.readString(pub).contains("RWTfakePUBLICkeyLINE"));
+        assertTrue(Files.readString(dir.resolve("fake-minisign.log")).contains("-R "));
     }
 
     @Test
