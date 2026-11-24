@@ -192,7 +192,7 @@ last-access 也钉到同一时刻——只要这两个字段存在,JDK 就会写
 
 | 决定 | 结局 |
 |---|---|
-| `[dev-deps]` 不计入深度预算 | **回退**。SPEC §2.1 的对照表写的是「同等计入」;当初那句 `test-scope 不计` 指的是 Maven pom 的 test scope |
+| `[deps-dev]` 不计入深度预算 | **回退**。SPEC §2.1 的对照表写的是「同等计入」;当初那句 `test-scope 不计` 指的是 Maven pom 的 test scope |
 | `mjm clean` 默认清 `target/` + `dist/` | 改成默认只清 `target/`(产物不该是「清理构建」的副作用) |
 | `package --local` 开关 | **删除**。它唯一的职责是绕过一条已撤销的规则 |
 | `--allow-version-skew` 开关 | **删除**。版本的强制取消后,没有需要放宽的东西 |

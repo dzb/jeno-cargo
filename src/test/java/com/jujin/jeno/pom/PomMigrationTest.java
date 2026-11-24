@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * {@code pom.xml} → {@code jeno.toml}: a translation a human reviews, never a
- * silent import. Test scope becomes {@code [dev-deps]}; properties are
+ * silent import. Test scope becomes {@code [deps-dev]}; properties are
  * resolved because jeno.toml has no interpolation; anything jeno cannot express
  * is reported rather than dropped.
  */
@@ -51,7 +51,7 @@ class PomMigrationTest {
         assertTrue(toml.contains("version = \"1.2.0\""), toml);
         assertTrue(toml.contains("\"com.fasterxml.jackson.core:jackson-databind\" = \"2.17.0\""),
                 "the property was resolved into a literal version: " + toml);
-        assertTrue(toml.contains("[dev-deps]"), "test scope lands in [dev-deps]: " + toml);
+        assertTrue(toml.contains("[deps-dev]"), "test scope lands in [deps-dev]: " + toml);
         assertTrue(toml.contains("\"org.junit.jupiter:junit-jupiter\" = \"5.10.0\""), toml);
         assertTrue(result.notes().isEmpty(), "nothing to report: " + result.notes());
     }

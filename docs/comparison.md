@@ -295,7 +295,7 @@ uv 的 `.python-version` 本质是「工具链版本进仓库」;mjm 的 `[java]
 | # | 缺口 | 对标 | 状态 |
 |---|---|---|---|
 | 0 | `mjm source <id>`(替代 sources jar)+ `mjm publish` 交接指令 | Go tag-archive、pkg.go.dev 可寻址源码;npm 的 `npm pack` 分享 | ✅ 已完成(2026-11-21) |
-| 1 | `[dev-deps]` 依赖分组 | Cargo dev-dependencies、uv PEP 735 dependency-groups | ✅ 已完成:独立顶层节,进同一张锁图,`scope = "dev"`;只进 `mjm test`,MAIN 优先 |
+| 1 | `[deps-dev]` 依赖分组 | Cargo dev-dependencies、uv PEP 735 dependency-groups | ✅ 已完成:独立顶层节,进同一张锁图,`scope = "dev"`;只进 `mjm test`,MAIN 优先 |
 | 2 | `mjm init --pom` / `mjm remove` / `mjm clean` | mvn clean、npm init/uninstall、Maven 迁移 | ✅ 全部完成(clean 含 `[--target] [--dist]`,永不碰 store) |
 | 3 | `mjm info <id> [--source]` | Go/Cargo 源码随 tag 走 | ✅ 已完成:gh: 取 tag archive,Central 回退 sources jar,URL 叶子拒绝 |
 | 4 | JUnit XML 测试报告 | mvn surefire | ✅ 已完成:`target/test-results/TEST-<类名>.xml`,无 timestamp、同一套测试两次跑字节相同 |

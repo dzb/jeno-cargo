@@ -124,7 +124,7 @@ note: parent org.noear:solon-parent:4.2.0-SNAPSHOT is a snapshot — Central loo
 1. 多模块根：`jeno init --ws` 生成 `jeno.ws.toml`，然后对每个要迁移的模块跑 `jeno init --pom`；根 POM 不要生成 jeno.toml。
 2. 子模块：先确认输出里的 `parent … read from …` 是否指向正确的本地文件；远端 parent 贡献的属性必须手工补齐。
 3. 清理 note 列出的 build plugins/exclusions/profiles/repositories；snapshot 依赖改为已发布版本。
-4. 只有 `[deps]`/`[dev-deps]` 的简单模块通常可直接 `jeno lock`；复杂模块先按 note 修 manifest。
+4. 只有 `[deps]`/`[deps-dev]` 的简单模块通常可直接 `jeno lock`；复杂模块先按 note 修 manifest。
 
 ## 复现
 

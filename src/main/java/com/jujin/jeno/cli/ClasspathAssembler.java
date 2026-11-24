@@ -132,7 +132,7 @@ final class ClasspathAssembler {
                 entries.add(projectDir.resolve("target/classes"));
                 for (LockedArtifact artifact : input.locked()) {
                     if (!artifact.isMain()) {
-                        continue;  // [dev-deps] never reaches a production run
+                        continue;  // [deps-dev] never reaches a production run
                     }
                     entries.add(artifactPath(artifact, store, substitutions, false));
                 }

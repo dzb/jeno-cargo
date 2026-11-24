@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code [dev-deps]} — test-only requirements (Cargo's dev-dependencies).
+ * {@code [deps-dev]} — test-only requirements (Cargo's dev-dependencies).
  * They resolve into jeno.lock like any other requirement but carry
  * {@link Scope#DEV}: never compiled against, never run, never packaged,
  * never published — only {@code jeno test} sees them.
@@ -31,7 +31,7 @@ class DevDependenciesTest {
             [deps]
             "com.example:lib-a" = "1.0.0"
 
-            [dev-deps]
+            [deps-dev]
             "org.junit.jupiter:junit-jupiter-api" = "6.1.3"
             """);
 
@@ -51,12 +51,12 @@ class DevDependenciesTest {
             [repos]
             corp = "https://repo.example.com/maven2/"
 
-            [dev-deps]
+            [deps-dev]
             "com.example:lib-a" = "1.0.0"
             "harness" = "gh:acme/harness@v2.0.0"
             "fixture" = "https://example.com/fixture-1.0.jar"
 
-            [dev-deps.corp]
+            [deps-dev.corp]
             "com.corp:testkit" = "3.1.0"
             """);
 
@@ -79,11 +79,11 @@ class DevDependenciesTest {
                     [deps]
                     "com.example:lib-a" = "1.0.0"
 
-                    [dev-deps]
+                    [deps-dev]
                     "com.example:lib-a" = "1.0.0"
                     """));
 
-        assertTrue(error.getMessage().contains("both [deps] and [dev-deps]"),
+        assertTrue(error.getMessage().contains("both [deps] and [deps-dev]"),
                 "the error names both sections: " + error.getMessage());
     }
 
@@ -95,7 +95,7 @@ class DevDependenciesTest {
                     name = "demo"
                     version = "0.1.0"
 
-                    [dev-deps.corp]
+                    [deps-dev.corp]
                     "com.corp:testkit" = "3.1.0"
                     """));
     }
@@ -108,7 +108,7 @@ class DevDependenciesTest {
                     name = "demo"
                     version = "0.1.0"
 
-                    [dev-deps]
+                    [deps-dev]
                     "com.example:lib-a" = "1.0.0"
                     something-else = "x"
                     """));

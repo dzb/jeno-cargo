@@ -3,7 +3,7 @@ package com.jujin.jeno.resolve;
 /**
  * A resolved artifact's reach: {@link #MAIN} artifacts feed the compile
  * visibility, the runtime classpath and the published descriptor;
- * {@link #DEV} artifacts (declared in {@code [dev-deps]}) exist for tests
+ * {@link #DEV} artifacts (declared in {@code [deps-dev]}) exist for tests
  * only — they resolve into the same lockfile, but never leak into a build,
  * a run, a package, a dist or a published descriptor.
  *

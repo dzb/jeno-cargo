@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code [dev-deps]} across the real commands: a dev-only jar is absent from
+ * {@code [deps-dev]} across the real commands: a dev-only jar is absent from
  * the build's compile classpath (strict visibility), absent from
  * {@code jeno package}'s output, absent from the published descriptor — and
  * present on {@code jeno test}'s classpath. The lockfile is the one graph both
@@ -49,7 +49,7 @@ class DevDepsVisibilityTest {
             name = "demo"
             version = "0.1.0"
 
-            [dev-deps]
+            [deps-dev]
             "com.example:test-kit" = "1.0.0"
             """);
         Files.writeString(dir.resolve("src/main/java/demo/App.java"), """
@@ -85,7 +85,7 @@ class DevDepsVisibilityTest {
             [deps]
             "com.example:main-lib" = "1.0.0"
 
-            [dev-deps]
+            [deps-dev]
             "com.example:test-kit" = "1.0.0"
             """);
         Files.writeString(dir.resolve("src/main/java/demo/App.java"), """

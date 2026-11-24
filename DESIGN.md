@@ -89,6 +89,7 @@ jeno 又用严格可见性约束用户项目的依赖边界——**这个工具�
 | D24 | 导出的 API 依赖显式标记,不从传递闭包推断 | Java 库的公开签名可能暴露另一个库的类型;不能自动把所有 compile 依赖放回 classpath,否则 strict visibility 失效。`[deps-api]` 只标注已存在于 `[deps]` 的声明,消费者沿显式 API 边获得编译可见性,Maven POM 不做猜测 |
 | D25 | lockfile 使用版本 marker,`api` 行记录导出闭包 | 版本 marker 用 TOML 注释保存,旧 reader 可忽略;`api = true` 记录消费者需要的显式 API 编译闭包,避免每个命令重读传递描述符 |
 | D26 | 依赖身份的 canonical source 必须一致 | 同一 id 从不同仓库/GitHub/URL 进入是硬冲突;同一来源用两个 alias 也是硬冲突,禁止第一个来源静默获胜 |
+| D27 | 依赖节统一 deps 前缀,限定词后置 | `[deps]`、`[deps-dev]`、`[deps-api]` 的思维链都是“这是依赖,再说明是哪类依赖”; dot 只保留给 legacy 仓库分组,避免 `deps` 后面出现两套修饰语法。旧 `[dev-deps]` 直接给迁移错误,不做双名兼容 |
 
 ---
 
@@ -120,7 +121,7 @@ MVS 收敛:同 id 同 major 取最大(跨 major = 硬冲突)→ 全图单版本
   ↓
 闭包构建(visited set 防环)
   ↓
-深度预算检查(compile/runtime 闭包计入;test-scope = pom 的 test/provided/system scope,解码时即丢弃;[dev-deps] 与 [deps] 同等计入)
+深度预算检查(compile/runtime 闭包计入;test-scope = pom 的 test/provided/system scope,解码时即丢弃;[deps-dev] 与 [deps] 同等计入)
   ↓
 jeno.lock 写出(每个 artifact:来源、resolved-url、sha256、depth)
 ```
@@ -130,7 +131,7 @@ jeno.lock 写出(每个 artifact:来源、resolved-url、sha256、depth)
 - 定义:直接依赖 = 深度 1,依赖的依赖 = 2,……;`max-depth` 限制路径最大深度
 - 在 MVS 收敛后的最终图上取**最长引入路径**(预算的真意是暴露最深的链);**依赖环 = 硬错误**(环让"最深链"无定义)
 - compile/runtime 闭包计入预算;test-scope 排除
-- 这里的 test-scope 指 **Maven pom 的 `<scope>test/provided/system</scope>`**——`Poms` 解码依赖时就丢弃,它们根本不进图。jeno 自己的 `[dev-deps]` 不是 test-scope:**与 `[deps]` 同等计入预算**(SPEC §2.1 对照表),所以项目要为自己的测试依赖付深度
+- 这里的 test-scope 指 **Maven pom 的 `<scope>test/provided/system</scope>`**——`Poms` 解码依赖时就丢弃,它们根本不进图。jeno 自己的 `[deps-dev]` 不是 test-scope:**与 `[deps]` 同等计入预算**(SPEC §2.1 对照表),所以项目要为自己的测试依赖付深度
 - 超限 → **硬错误**,错误信息必须包含:
   - 超限依赖的完整路径(谁把谁带进来的)
   - 当前预算值

@@ -140,7 +140,7 @@ class ResolverTest {
     }
 
     // ------------------------------------------------------------------
-    // [dev-deps] — scope semantics
+    // [deps-dev] — scope semantics
     // ------------------------------------------------------------------
 
     @Test
@@ -150,7 +150,7 @@ class ResolverTest {
             name = "demo"
             version = "0.1.0"
 
-            [dev-deps]
+            [deps-dev]
             "com.example:test-kit" = "1.0.0"
             """), pomSource(
                 "com.example:test-kit:1.0.0", pom("com.example", "test-kit", "1.0.0", "")),
@@ -176,7 +176,7 @@ class ResolverTest {
             [deps]
             "com.example:lib-a" = "1.0.0"
 
-            [dev-deps]
+            [deps-dev]
             "com.example:test-kit" = "1.0.0"
             """), pomSource(
                 "com.example:lib-a:1.0.0", pom("com.example", "lib-a", "1.0.0", ""),
@@ -209,7 +209,7 @@ class ResolverTest {
             [limits]
             max-depth = 3
 
-            [dev-deps]
+            [deps-dev]
             "com.example:test-kit" = "1.0.0"
             """), pomSource(
                 "com.example:test-kit:1.0.0", pom("com.example", "test-kit", "1.0.0", """
@@ -233,7 +233,7 @@ class ResolverTest {
 
     @Test
     void devArtifactsCountAgainstTheDepthBudgetWithTheirFullPath() {
-        // SPEC.md §2.1: the budget treats [deps] and [dev-deps] alike — the
+        // SPEC.md §2.1: the budget treats [deps] and [deps-dev] alike — the
         // "test-scope" SPEC §2.3 excludes is a pom <scope>, dropped at decode.
         ResolveException error = assertThrows(ResolveException.class, () ->
                 Resolver.resolve(project("""
@@ -244,7 +244,7 @@ class ResolverTest {
                     [limits]
                     max-depth = 1
 
-                    [dev-deps]
+                    [deps-dev]
                     "com.example:test-kit" = "1.0.0"
                     """), pomSource(
                     "com.example:test-kit:1.0.0", pom("com.example", "test-kit", "1.0.0", """
@@ -313,7 +313,7 @@ class ResolverTest {
 
     @Test
     void anArtifactReachedFromMainIsMainEvenWhenADevRootReachesItToo() {
-        // lib-a ([deps]) and lib-d ([dev-deps]) both reach common at depth 2;
+        // lib-a ([deps]) and lib-d ([deps-dev]) both reach common at depth 2;
         // main reachability decides the scope.
         PomSource poms = pomSource(
                 "com.example:lib-a:1.0.0", pom("com.example", "lib-a", "1.0.0", """
@@ -344,14 +344,14 @@ class ResolverTest {
             [deps]
             "com.example:lib-a" = "1.0.0"
 
-            [dev-deps]
+            [deps-dev]
             "com.example:lib-d" = "1.0.0"
             """), poms, descriptorSource());
 
         assertEquals(Scope.MAIN, byId(graph.artifacts(), "com.example:common").scope(),
                 "a main root reaches it, so it is main");
 
-        // the same artifact is also reached from [dev-deps]; main reachability
+        // the same artifact is also reached from [deps-dev]; main reachability
         // decides the scope, and with it the budget: budget 1 must reject depth 2
         ResolveException overBudget = assertThrows(ResolveException.class, () ->
                 Resolver.resolve(project("""
@@ -365,7 +365,7 @@ class ResolverTest {
                     [deps]
                     "com.example:lib-a" = "1.0.0"
 
-                    [dev-deps]
+                    [deps-dev]
                     "com.example:lib-d" = "1.0.0"
                     """), poms, descriptorSource()));
 

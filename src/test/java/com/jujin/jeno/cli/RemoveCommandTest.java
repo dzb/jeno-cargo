@@ -50,7 +50,7 @@ class RemoveCommandTest {
             "com.example:lib-a" = "1.0.0"   # keep me
             "com.example:lib-b" = "2.0.0"
 
-            [dev-deps]
+            [deps-dev]
             "com.example:test-kit" = "3.0.0"
             """;
 
@@ -60,7 +60,7 @@ class RemoveCommandTest {
         assertTrue(updated.contains("\"com.example:lib-a\" = \"1.0.0\""),
                 "its neighbour survives with its comment");
         assertTrue(updated.contains("# hand-written comment"), "comments survive");
-        assertTrue(updated.contains("[dev-deps]"), "the other section survives");
+        assertTrue(updated.contains("[deps-dev]"), "the other section survives");
         assertTrue(updated.contains("test-kit"));
     }
 
@@ -93,7 +93,7 @@ class RemoveCommandTest {
             name = "demo"
             version = "0.1.0"
 
-            [dev-deps]
+            [deps-dev]
             "com.example:test-kit" = "3.0.0"
             "com.example:other" = "1.0.0"
             """;

@@ -26,7 +26,7 @@ jeno --version
 Both installers need JDK 25+. Windows appends `%USERPROFILE%\.jeno\bin` to the
 user PATH; `jeno upgrade` verifies sha256 before installing.
 
-**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D26, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
+**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D27, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
 
 ---
 
@@ -77,9 +77,19 @@ depths; `jeno why <id>` shows every path that introduces an artifact.
 
 ### 3. Two scopes, one graph
 
-`[dev-deps]` is the test-only group (Cargo's `dev-dependencies`, uv's
-dependency groups). It resolves into the same `jeno.lock`, but never reaches the
-compile classpath, `jeno run`, `jeno package`, `jeno bundle`, or a **published
+Dependency sections all name the dependency first, then the qualifier:
+
+```text
+[deps]       production
+[deps-dev]   test-only
+[deps-api]   direct deps whose types are part of this library's exported API
+```
+
+Dots remain reserved for the legacy repository-group spellings
+(`[deps.<repo>]`, `[deps-dev.<repo>]`); they are not semantic qualifiers.
+
+`[deps-dev]` resolves into the same `jeno.lock`, but never reaches the compile
+classpath, `jeno run`, `jeno package`, `jeno bundle`, or a **published
 descriptor**. Production use wins: an artifact reachable from both scopes is
 main.
 
@@ -126,7 +136,7 @@ jeno init --pom                # translate pom.xml; local/Central parents and BO
 ```
 
 The translation is a **reviewed migration, not an import**: properties are
-resolved into literal versions, `<scope>test</scope>` lands in `[dev-deps]`,
+resolved into literal versions, `<scope>test</scope>` lands in `[deps-dev]`,
 `dependencyManagement` supplies missing versions, and anything jeno cannot
 express — snapshots, classifiers, `system`/`import` scopes, unresolved
 properties — is **printed as a note instead of silently dropped**. The

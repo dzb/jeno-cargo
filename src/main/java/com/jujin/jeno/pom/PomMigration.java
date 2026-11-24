@@ -461,7 +461,7 @@ public final class PomMigration {
             main.forEach(line -> out.append(line).append('\n'));
         }
         if (!dev.isEmpty()) {
-            out.append("\n[dev-deps]\n");
+            out.append("\n[deps-dev]\n");
             dev.forEach(line -> out.append(line).append('\n'));
         }
         return new Result(out.toString(), notes, modules, packaging);

@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * jeno.lock's {@code scope} field: DEV rows are written as {@code scope = "dev"},
  * MAIN rows carry no scope at all — so every lockfile written before
- * {@code [dev-deps]} existed reads back unchanged.
+ * {@code [deps-dev]} existed reads back unchanged.
  */
 class DevScopeLockTest {
 
@@ -43,7 +43,7 @@ class DevScopeLockTest {
 
     @Test
     void aPreScopeLockfileReadsAsAllMain() {
-        // the shape every lockfile had before [dev-deps]: no scope key anywhere
+        // the shape every lockfile had before [deps-dev]: no scope key anywhere
         List<LockedArtifact> read = LockFileReader.read("""
             [[artifacts]]
             id = "com.example:lib-a"
@@ -102,7 +102,7 @@ class DevScopeLockTest {
             [deps]
             "com.example:lib-a" = "1.0.0"
 
-            [dev-deps]
+            [deps-dev]
             "com.example:test-kit" = "2.0.0"
             """);
         assertEquals(1, project.requirements().size());

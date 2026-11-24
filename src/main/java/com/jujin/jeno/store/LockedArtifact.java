@@ -8,7 +8,7 @@ import com.jujin.jeno.resolve.Scope;
  * URL leaves, which have no metadata; {@code scope} is {@link Scope#MAIN}
  * for production artifacts and {@link Scope#DEV} for test-only ones (the
  * lockfile writes {@code scope = "dev"} only for DEV rows — an absent scope
- * is MAIN, so pre-{@code [dev-deps]} lockfiles read unchanged).
+ * is MAIN, so pre-{@code [deps-dev]} lockfiles read unchanged).
  */
 public record LockedArtifact(
         String id,

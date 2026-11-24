@@ -532,7 +532,7 @@ class TreeWhyTest {
             [repos]
             fix = "local:%s"
 
-            [dev-deps.fix]
+            [deps-dev.fix]
             "com.example:lib-b" = "1.1.0"
             """.formatted(repo));
 

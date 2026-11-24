@@ -91,7 +91,7 @@ class ClasspathAssemblerTest {
             [deps.vendor]
             "com.example:lib-main" = "1.0.0"
 
-            [dev-deps.vendor]
+            [deps-dev.vendor]
             "com.example:lib-dev" = "1.0.0"
 
             [build]

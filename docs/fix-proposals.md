@@ -128,7 +128,7 @@
   Central 的 `maven-metadata.xml`，`search()` 只查 Central 索引）。
 
 **方案（三选一，未定）**：
-1. `add --repo <name>`：把声明写进 `[deps.<name>]`（或 `[dev-deps.<name>]`），物种由值形态决定；
+1. `add --repo <name>`：把声明写进 `[deps.<name>]`（或 `[deps-dev.<name>]`），物种由值形态决定；
    无 `--repo` 时保持今天的 Central 行为。改动面：`AddCommand`（参数解析 + 写入位置）、
    `appendToDeps` 的节选择；`versions()` 对 repo-bound 坐标给出"该仓库无版本列表"的明确错误。
 2. `add` 拒绝 repo-bound 坐标并说明：`group:artifact` 只用于 Central；仓库依赖请手写

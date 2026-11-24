@@ -71,8 +71,14 @@ public final class ProjectReader {
                         + " must be a table — every jeno.toml entry is a [section] (SPEC.md §2)");
             }
             switch (entry.getKey()) {
-                case "project", "java", "deps", "deps-api", "dev-deps", "repos", "limits",
+                case "project", "java", "deps", "deps-dev", "deps-api", "repos", "limits",
                      "overrides", "scripts", "build", "test", "toolchain" -> { }
+
+                case "dev-deps" -> throw new ProjectException(at(file,
+                        source.section(entry.getKey()))
+                        + "[dev-deps] was renamed to [deps-dev] — dependencies come first, "
+                        + "the qualifier after; update this header and every [dev-deps.<repo>] "
+                        + "group");
 
                 default -> throw new ProjectException(at(file, source.section(entry.getKey()))
                         + "unknown section [" + entry.getKey()
@@ -176,14 +182,15 @@ public final class ProjectReader {
                     "jeno.toml", null);
         }
 
-        // [dev-deps] — test-only requirements (Cargo's dev-dependencies). It
-        // is a top-level section, not [deps.dev]: [deps.<name>] already means
-        // "dependencies from repository <name>". Same declaration rules, and
-        // an id may not appear on both sides — one declaration, one scope.
+        // [deps-dev] — test-only requirements. The prefix is the dependency
+        // category and the suffix is its role: deps, deps-dev, deps-api.
+        // Same declaration rules as [deps], and an id may not appear on both
+        // sides — one declaration, one scope.
         List<Requirement> devRequirements = List.of();
-        Map<String, Object> devDepsSection = optionalSection(root, "dev-deps");
+        Map<String, Object> devDepsSection = optionalSection(root, "deps-dev");
         if (devDepsSection != null) {
-            devRequirements = extractDependencies(devDepsSection, repos, "jeno.toml");
+            devRequirements = extractDependencies(devDepsSection, repos, "jeno.toml",
+                    null, "deps-dev");
             Set<String> mainIds = new LinkedHashSet<>();
             for (Requirement requirement : requirements) {
                 mainIds.add(requirement.id());
@@ -191,7 +198,7 @@ public final class ProjectReader {
             for (Requirement requirement : devRequirements) {
                 if (mainIds.contains(requirement.id())) {
                     throw new ProjectException("dependency '" + requirement.id()
-                            + "' is declared in both [deps] and [dev-deps] — pick one scope; "
+                            + "' is declared in both [deps] and [deps-dev] — pick one scope; "
                             + "a main dependency is already on the test classpath");
                 }
                 if (requirement.species() == Species.URL) {
@@ -364,12 +371,19 @@ public final class ProjectReader {
      */
     static List<Requirement> extractDependencies(
             Map<String, Object> deps, Map<String, Repository> repos, String where) {
-        return extractDependencies(deps, repos, where, null);
+        return extractDependencies(deps, repos, where, null, "deps");
     }
 
     /** The full form: {@code sibling} is set when the file came from an jeno: repository. */
     static List<Requirement> extractDependencies(
             Map<String, Object> deps, Map<String, Repository> repos, String where, String sibling) {
+        return extractDependencies(deps, repos, where, sibling, "deps");
+    }
+
+    /** The same extraction under a named dependency root ({@code deps-dev}). */
+    static List<Requirement> extractDependencies(
+            Map<String, Object> deps, Map<String, Repository> repos, String where,
+            String sibling, String dependencySection) {
 
         List<Requirement> requirements = new ArrayList<>();
         Set<String> ids = new LinkedHashSet<>();
@@ -377,30 +391,32 @@ public final class ProjectReader {
             String key = entry.getKey();
             if (entry.getValue() instanceof Map<?, ?> group) {
                 if (repos == null) {
-                    throw new ProjectException("[" + where + "] [deps." + key
-                            + "] — descriptors cannot declare repositories; rules live only "
-                            + "in the consumer's jeno.toml (SPEC.md §3.2)");
+                    throw new ProjectException("[" + where + "] [" + dependencySection + "."
+                            + key + "] — descriptors cannot declare repositories; rules live "
+                            + "only in the consumer's jeno.toml (SPEC.md §3.2)");
                 }
                 if (!repos.containsKey(key)) {
-                    throw new ProjectException("[deps." + key + "] names repository '" + key
-                            + "' which is not declared in [repos]");
+                    throw new ProjectException("[" + dependencySection + "." + key
+                            + "] names repository '" + key + "' which is not declared in [repos]");
                 }
                 for (Map.Entry<String, Object> grouped : asStringKeyed(group).entrySet()) {
                     add(requirements, ids, requirement(grouped.getKey(), grouped.getValue(),
-                            key, where, repos, true, sibling), where);
+                            key, where, repos, true, sibling), where, dependencySection);
                 }
                 continue;
             }
             add(requirements, ids, requirement(key, entry.getValue(), null, where, repos, true,
-                    sibling), where);
+                    sibling), where, dependencySection);
         }
         return List.copyOf(requirements);
     }
 
-    private static void add(List<Requirement> out, Set<String> ids, Requirement requirement, String where) {
+    private static void add(List<Requirement> out, Set<String> ids, Requirement requirement,
+                            String where, String dependencySection) {
         if (!ids.add(requirement.id())) {
             throw new ProjectException("[" + where + "] dependency '" + requirement.id()
-                    + "' is declared twice — an id may appear once across all [deps] sections");
+                    + "' is declared twice — an id may appear once across all ["
+                    + dependencySection + "] sections");
         }
         out.add(requirement);
     }

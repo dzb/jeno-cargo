@@ -18,7 +18,7 @@ import java.util.List;
  *
  * <p>The counterpart of {@code jeno add}: before this command existed, dropping
  * a dependency meant hand-editing jeno.toml and remembering to re-lock. It
- * removes the declaration from {@code [deps]}, {@code [dev-deps]}, or their
+ * removes the declaration from {@code [deps]}, {@code [deps-dev]}, or their
  * {@code .{repo}} groups, plus any matching {@code [deps-api]} marker —
  * comments, layout and every other line survive — then refreshes jeno.lock so
  * the artifact leaves the graph immediately.
@@ -255,9 +255,8 @@ public final class RemoveCommand implements Command {
 
     private static boolean isDepsSection(String header) {
         return header.equals("[deps]") || header.equals("[deps-api]")
-                || header.equals("[dev-deps]")
-                || header.startsWith("[deps.") || header.startsWith("[deps-api.")
-                || header.startsWith("[dev-deps.");
+                || header.equals("[deps-dev]")
+                || header.startsWith("[deps.") || header.startsWith("[deps-dev.");
     }
 
     /** Whether one line is {@code <key> = <value>} for this id. */

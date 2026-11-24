@@ -138,7 +138,7 @@ public final class Resolver {
             for (Requirement requirement : project.devRequirements()) {
                 if (project.overrides().containsKey(requirement.id())) {
                     throw new ResolveException("'" + requirement.id()
-                            + "' is declared in [dev-deps] and pinned in [overrides] — change the "
+                            + "' is declared in [deps-dev] and pinned in [overrides] — change the "
                             + "declaration or drop the override, never both");
                 }
                 queue.add(constraint(requirement.id(), requirement.version(),
@@ -489,7 +489,7 @@ public final class Resolver {
             }
 
             // Scope: an artifact reachable from any MAIN root is MAIN; only
-            // artifacts exclusively reachable from [dev-deps] are DEV. The
+            // artifacts exclusively reachable from [deps-dev] are DEV. The
             // walk runs over the walked edges — the same graph the lockfile
             // records.
             Set<String> mainReachable = reachable(children, project.requirements());

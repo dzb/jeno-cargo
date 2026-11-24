@@ -75,6 +75,18 @@ string-array  = "[" ws basic-string *( "," ws basic-string ) [","] ws "]"
 
 **[deps] 与 [deps.{repo}]**
 
+依赖节统一使用 **deps 前缀 + 后置限定词**:
+
+```text
+[deps]       生产依赖(主语)
+[deps-dev]   测试依赖(限定词在后)
+[deps-api]   导出 API 的直接依赖(限定词在后)
+```
+
+这是命名规则,不是嵌套关系。点号 `.` 仍只用于 legacy 的 `[deps.<repo>]`
+分组;新写法用值形态 `repo:version`。旧 `[dev-deps]` 已不再接受,解析器会给
+出改名到 `[deps-dev]` 的迁移错误。
+
 key = 坐标,value 形态决定物种:
 
 | 值形态 | 物种 | 要求 |
@@ -122,19 +134,19 @@ store 索引与 `--offline` 行为不变。
 
 - 每个条目必须与 `[deps]` 中的同 id 声明逐字段完全一致(相同 source/species/version/tag)
 - `[deps]` 必须在源文件中物理地出现在 `[deps-api]` 之前;没有前置 `[deps]` 直接报错
-- 不允许把 `[dev-deps]` 或 processor 标成 API;API 只表达消费者编译可见性
+- 不允许把 `[deps-dev]` 或 processor 标成 API;API 只表达消费者编译可见性
 - 发布的描述符携带同样的 `[deps-api]` 标记
 - 消费者编译 classpath = 自己的 MAIN 声明 + 沿显式 API 边可达的闭包;
   普通 transitive implementation 依赖仍只进 runtime classpath
 - Maven POM 没有 API/implementation 区分,不会自动推断;需要导出的 POM 依赖由作者
   在自己的 jeno manifest/描述符中显式声明
 
-**[dev-deps] 与 [dev-deps.{repo}]** — 仅测试可见的依赖(Cargo `dev-dependencies`、uv `[dependency-groups]` 先例)
+**[deps-dev] 与 [deps-dev.{repo}]** — 仅测试可见的依赖(Cargo `dev-dependencies`、uv `[dependency-groups]` 先例)
 
 独立顶层节,不是 `[deps.dev]`——后者已是"来自仓库 dev 的依赖"。声明规则与 `[deps]` **完全一致**
 (同样的物种形态、同样的 `{repo}` 分组、同样的精确版本约束),差别只在可见性:
 
-| 面 | `[deps]` | `[dev-deps]` |
+| 面 | `[deps]` | `[deps-dev]` |
 |---|---|---|
 | 编译可见性(strict visibility) | ✅ | ❌ 从不出现在 javac 参数 |
 | `jeno run` 运行时 classpath | ✅ | ❌ |
@@ -144,10 +156,10 @@ store 索引与 `--offline` 行为不变。
 | jeno.lock | ✅ 行无 scope | ✅ 行带 `scope = "dev"` |
 | 深度预算 / 跨 major 冲突检测 | ✅ | ✅ 同等对待 |
 
-- 同一个 id 同时出现在 `[deps]` 与 `[dev-deps]` → 报错(一个声明一个作用域)
-- 传递性作用域:仅从 `[dev-deps]` 可达的工件一律 `dev`;既能从 `[deps]` 也能从 `[dev-deps]` 可达的
+- 同一个 id 同时出现在 `[deps]` 与 `[deps-dev]` → 报错(一个声明一个作用域)
+- 传递性作用域:仅从 `[deps-dev]` 可达的工件一律 `dev`;既能从 `[deps]` 也能从 `[deps-dev]` 可达的
   工件为 `main`(**生产用途胜过测试用途**——同 Cargo 规则)
-- 读兼容:jeno.lock 中缺省 `scope` 即 `main`,所有 `[dev-deps]` 之前的锁文件原样可读
+- 读兼容:jeno.lock 中缺省 `scope` 即 `main`,所有 `[deps-dev]` 之前的锁文件原样可读
 
 **[repos]**
 
@@ -245,7 +257,7 @@ url = "vendor"
 
 这是**packaging metadata,不是依赖作用域**:
 
-- 不参与 `Resolver`,不改变 strict visibility、`[dev-deps]` 语义或 lock 解析;
+- 不参与 `Resolver`,不改变 strict visibility、`[deps-dev]` 语义或 lock 解析;
 - `jeno bundle` 永不把这些 id 合并进 launcher jar;
 - `jeno bundle --toolchain` 把它们原样复制到 `lib/toolchain/`(本地 workspace 替换时打包对应 classes),默认不带;
 - `jeno lock` 后发现 id 不在锁图 → `bundle` 报错并提示重新 `jeno lock`;
@@ -269,7 +281,7 @@ gh:{owner}/{repo}@{tag}
 ### 2.3 深度预算(语义,细节见 DESIGN.md §4.2)
 
 - compile/runtime 闭包计入预算；`test-scope` 指 **Maven pom 的 test/provided/system scope**(解码时即丢弃,不进图)
-  jeno 自己的 `[dev-deps]` **同等计入预算**(它就是 `[deps]` 的另一个可见性分组,不是 scope 豁免)——见 §2.1 对照表
+  jeno 自己的 `[deps-dev]` **同等计入预算**(它就是 `[deps]` 的另一个可见性分组,不是 scope 豁免)——见 §2.1 对照表
 - MVS 收敛后的最终图上计数;**深度 = 从声明根出发的最长引入路径**(预算的真意是暴露最深的链——最短路径会被旁路掩盖);**依赖环 = 硬错误**(环让"最深链"无定义,与根治依赖地狱同向)
 - 超限 → 硬错误;出口 = 替换库 / exclude / 调大 max-depth;**无豁免机制**
 
@@ -314,7 +326,7 @@ version = 21              # 可选;语义同 §2.1 [java]
 
 ### 3.2 禁止项(出现即报错)
 
-`[repos]`、`[deps.{repo}]`、`[dev-deps]`、`[limits]`、`[scripts]`、`[overrides]`、`[toolchain]`、任何未知节;
+`[repos]`、`[deps.{repo}]`、`[deps-dev]`、`[limits]`、`[scripts]`、`[overrides]`、`[toolchain]`、任何未知节;
 `[deps]` 与 `[deps-api]` 是允许的事实表。
 
 理由:仓库是消费方的配置;预算规则只有一份(消费方);scripts 只属于应用。**发布物里只有事实,规则只有一份。**
@@ -362,7 +374,7 @@ url = "https://…"         # 实际下载 URL。local: 仓库写为相对项目
 sha256 = "…"              # artifact 字节(jar),64 位十六进制,必填
 meta-sha256 = "…"         # 元数据字节(pom.xml 或描述符);URL 叶子无元数据,省略该字段
 depth = 1                 # 实际深度,>= 1
-scope = "dev"             # 可选:[dev-deps] 可达的工件。缺省 = main
+scope = "dev"             # 可选:[deps-dev] 可达的工件。缺省 = main
                           #       另一取值 "processor"(§2.1 [build].processors)
 api = true                # 可选;通过 [deps-api] 进入编译可见性的 API 闭包
 ```
@@ -632,7 +644,7 @@ noTests,reportFiles[],durationMs}`。测试失败仍是有效结果:module exit 
 |---|---|
 | `project` | `{name, version}` |
 | `budget` | 整数(`max-depth`) |
-| `roots[]` | 声明根 id:`[deps]` → `[dev-deps]` → processors,按各自声明顺序 |
+| `roots[]` | 声明根 id:`[deps]` → `[deps-dev]` → processors,按各自声明顺序 |
 | `artifacts[]` | `{id, version, depth, declared, dev, scope, local?, children[]}`;按 id 排序,`children` 排序。`scope` 为 `main`/`dev`/`processor`;workspace 本地替换时 `local` 为相对工作区根的路径(否则省略) |
 
 **outdated**

@@ -152,7 +152,7 @@ public final class LockFileReader {
 
     /**
      * An absent {@code scope} is MAIN — every lockfile written before
-     * {@code [dev-deps]} existed pins no scope and must read unchanged.
+     * {@code [deps-dev]} existed pins no scope and must read unchanged.
      */
     private static Scope scope(Map<String, Object> fields) {
         Object value = fields.get("scope");

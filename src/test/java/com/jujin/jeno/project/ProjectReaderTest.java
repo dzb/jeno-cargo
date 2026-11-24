@@ -112,6 +112,24 @@ class ProjectReaderTest {
     }
 
     @Test
+    void theOldDevDepsHeaderGetsAnActionableRenameError() {
+        ProjectException error = assertThrows(ProjectException.class,
+            () -> ProjectReader.parse("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+
+                [dev-deps]
+                "com.example:test-kit" = "1.0.0"
+                """));
+
+        assertTrue(error.getMessage().contains("[dev-deps] was renamed to [deps-dev]"),
+                error.getMessage());
+        assertTrue(error.getMessage().contains("jeno.toml:5:1"),
+                "the old header's position is reported: " + error.getMessage());
+    }
+
+    @Test
     void rejectsUnknownSectionsAndNonTables() {
         ProjectException unknown = assertThrows(ProjectException.class,
             () -> ProjectReader.parse("""

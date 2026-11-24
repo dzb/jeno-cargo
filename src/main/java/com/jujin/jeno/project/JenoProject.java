@@ -30,10 +30,10 @@ import java.util.Set;
  *                        consumers get them on the compile classpath through
  *                        an explicit API edge, never by leaking all transitive
  *                        dependencies.
- * @param devRequirements {@code [dev-deps]} — test-only requirements; they
+ * @param devRequirements {@code [deps-dev]} — test-only requirements; they
  *                        resolve into jeno.lock but never reach the compile
  *                        visibility, the runtime classpath or a published
- *                        descriptor (Cargo's dev-dependencies)
+ *                        descriptor (Cargo-style test-only dependencies)
  * @param toolchain       {@code [toolchain].jars} — artifact ids that are
  *                        build/test machinery, not part of the running
  *                        program. They are excluded from the merged uber-jar
