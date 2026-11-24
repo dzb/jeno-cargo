@@ -862,12 +862,12 @@ public final class ReleaseCommand implements Command {
                 }
                 $Hash = (Get-FileHash -Algorithm SHA256 -Path $Tar).Hash.ToLowerInvariant()
                 if ($Hash -ne $Sha.ToLowerInvariant()) {
-                    throw "$Name: sha256 mismatch — expected $Sha, got $Hash"
+                    throw "${Name}: sha256 mismatch — expected $Sha, got $Hash"
                 }
                 $TarExe = (Get-Command tar.exe -ErrorAction Stop).Source
                 & $TarExe -xzf $Tar -C $Tmp
                 if ($LASTEXITCODE -ne 0) {
-                    throw "$Name: tar.exe could not extract the installer"
+                    throw "${Name}: tar.exe could not extract the installer"
                 }
 
                 $Src = Join-Path $Tmp "$Name-$Version"

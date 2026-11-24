@@ -88,6 +88,9 @@ class ReleaseCommandTest {
         assertTrue(ps1.contains("tar.exe"), ps1);
         assertTrue(ps1.contains("$env:USERPROFILE\\.app"), ps1);
         assertTrue(ps1.contains("SetEnvironmentVariable(\"Path\", $UserPath, \"User\")"), ps1);
+        assertTrue(ps1.contains("${Name}:"), ps1);
+        assertFalse(ps1.contains("$Name:"), ps1);
+        assertPowerShellScopes(ps1);
         assertTrue(Files.exists(release.resolve("app-1.0.0.tar.gz.sha256")));
         var json = JsonUtils.parseObject(
                 Files.readString(release.resolve("release.json")).strip());
@@ -428,6 +431,19 @@ class ReleaseCommandTest {
         }
         return new Result(exit, out.toString(StandardCharsets.UTF_8),
                 err.toString(StandardCharsets.UTF_8));
+    }
+
+    private static void assertPowerShellScopes(String script) {
+        java.util.Set<String> allowed = java.util.Set.of(
+                "env", "global", "script", "local", "private", "variable",
+                "function", "alias", "drive");
+        var matcher = java.util.regex.Pattern
+                .compile("\\$([A-Za-z_][A-Za-z0-9_]*):").matcher(script);
+        while (matcher.find()) {
+            String scope = matcher.group(1);
+            assertTrue(allowed.contains(scope),
+                    "PowerShell variable reference needs a known scope: $" + scope + ":");
+        }
     }
 
     private static void respond(com.sun.net.httpserver.HttpExchange exchange, int status,
