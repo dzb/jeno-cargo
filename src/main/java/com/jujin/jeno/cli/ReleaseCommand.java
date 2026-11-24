@@ -302,8 +302,8 @@ public final class ReleaseCommand implements Command {
         }
 
         if (plan.target == null) {
-            System.out.println("upload these four files together, then share the install.sh;");
-            System.out.println("  bootstrap installer URL: " + plan.installerUrl);
+            System.out.println("upload these files together, then share install.sh;");
+            System.out.println("  bootstrap installer URL: " + plan.bootstrapUrl);
             return 0;
         }
 
@@ -553,8 +553,10 @@ public final class ReleaseCommand implements Command {
     private Plan plan(String target, String name, String version, String tag, JenoProject project) {
         if (target == null) {
             Path tar = projectDir.resolve(DIST).resolve(name + "-" + version + ".tar.gz");
-            return new Plan(null, null, name, version, tar.toUri().toString(), null, null,
-                    List.of());
+            Path install = projectDir.resolve(RELEASE).resolve("install.sh");
+            Path windows = projectDir.resolve(RELEASE).resolve("install.ps1");
+            return new Plan(null, null, name, version, tar.toUri().toString(),
+                    install.toUri().toString(), windows.toUri().toString(), List.of());
         }
         if (target.startsWith("gh:")) {
             String origin = target.substring("gh:".length());

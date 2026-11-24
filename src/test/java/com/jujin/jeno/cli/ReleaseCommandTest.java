@@ -100,7 +100,9 @@ class ReleaseCommandTest {
         String bootstrap = Files.readString(release.resolve("install.sh"));
         assertTrue(bootstrap.contains("file://" + dir.resolve("target/dist/app-1.0.0.tar.gz")),
                 bootstrap);
-        assertTrue(result.out().contains("upload these four files"), result.out());
+        assertTrue(result.out().contains("upload these files together"), result.out());
+        assertTrue(result.out().contains("bootstrap installer URL: "), result.out());
+        assertTrue(result.out().contains("release/install.sh"), result.out());
     }
 
     @Test

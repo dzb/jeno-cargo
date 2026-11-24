@@ -372,3 +372,16 @@ manifest 可以使用值形态；旧二进制不能 lock 新形态”，并在 C
 
 **何时重看**:若 annotation processor 退出 JDK 的 `-processorpath` 机制，或者测试运行期确实需要
 processor 自身的类（而不是它生成的东西）。
+
+
+---
+
+## 15. Windows `install.ps1` 的后续项（2026-11-24）
+
+**位置**：`ReleaseCommand` 生成的 `install.ps1`。
+
+**当前状态**：安装后保留 `lib` 里的旧主 jar；User PATH 以原字符串比较，不做尾随 `\`/大小写规范化。
+这不会影响启动器（它指向精确的新 jar），但会让重复安装留下旧字节、PATH 去重不完整。
+
+**为什么暂不改**：Windows 真机正在用当前字节验证安装/升级链路；先锁住被测内容。真机通过后再单独
+调整清理与 PATH 规范化，并重跑一次。

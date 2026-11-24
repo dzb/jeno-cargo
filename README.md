@@ -271,6 +271,7 @@ jeno-<version>/
 │   ├── jeno-<version>.jar         jeno + freeway + slf4j, one uber-jar
 │   └── toolchain/               junit — loaded only by the forked test JVM
 ├── install.sh
+├── uninstall.sh
 └── SHA256SUMS
 ```
 

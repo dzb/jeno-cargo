@@ -114,11 +114,10 @@ jobs:
           fi
           sudo apt-get update
           sudo apt-get install -y minisign
-          KEY_DIR="$RUNNER_TEMP/minisign"
+          KEY_DIR="${{ runner.temp }}/minisign"
           mkdir -p "$KEY_DIR"
           printf '%s' "$MINISIGN_KEY_B64" | base64 -d > "$KEY_DIR/jeno.key"
           chmod 600 "$KEY_DIR/jeno.key"
-          echo "KEY_DIR=$KEY_DIR" >> "$GITHUB_ENV"
 
       - name: recreate the release before uploading
         if: startsWith(github.ref, 'refs/tags/v')
@@ -132,7 +131,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           JENO_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          JENO_MINISIGN_KEY: ${{ env.KEY_DIR }}/jeno.key
+          JENO_MINISIGN_KEY: ${{ runner.temp }}/minisign/jeno.key
         run: |
           CP="target/classes:$(find vendor -name '*.jar' | tr '\n' ':')"
           java -cp "$CP" com.jujin.jeno.cli.Jeno release gh:dzb/jeno-cargo \
@@ -143,9 +142,28 @@ jobs:
         run: |
           set -euo pipefail
           SMOKE_HOME=$(mktemp -d)
-          curl -fsSL https://github.com/dzb/jeno-cargo/releases/latest/download/install.sh \
-            -o "$SMOKE_HOME/install.sh"
+          URL="https://github.com/dzb/jeno-cargo/releases/latest/download/install.sh"
+          status=000
+          for attempt in $(seq 1 12); do
+            status=$(curl -sSL -o "$SMOKE_HOME/install.sh" -w '%{http_code}' "$URL" || true)
+            if [ "$status" = "200" ]; then
+              break
+            fi
+            echo "installer not visible yet (HTTP $status, attempt $attempt/12) — waiting for CDN propagation"
+            sleep 5
+          done
+          if [ "$status" != "200" ]; then
+            echo "installer did not become available at $URL after 12 attempts; this is CDN propagation" >&2
+            exit 1
+          fi
           HOME="$SMOKE_HOME" bash "$SMOKE_HOME/install.sh"
           "$SMOKE_HOME/.jeno/bin/jeno" --version \
             | grep -q "jeno ${GITHUB_REF_NAME#v} "
           echo "smoke install from the release URL passed"
+
+      - name: remove the release if smoke failed
+        if: failure() && startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete "$GITHUB_REF_NAME" --yes || true

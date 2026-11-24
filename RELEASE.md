@@ -127,4 +127,6 @@ JENO_GITHUB_TOKEN=... JENO_MINISIGN_KEY="$HOME/.jeno-signing/jeno.key" \
 - `jeno publish` 与本管线无关：它是“把库发布给消费方”的三件套命令；
   jeno 自身的工具发行走 `jeno release`，两个语义不混用。
 - `jeno upgrade` 与 Windows 安装器只校验 sha256；不验 minisign（Windows 无 minisign）。
+- Windows `install.ps1` 的后续项：安装后清理 `lib` 中不属于本次版本的主 jar；User PATH 的读取、
+  去重与卸载改为规范化比较（去尾随 `\`、忽略大小写）。本轮为保持 Windows 真机验证字节一致，暂不改。
 - Central 仍是 Maven 通道；GitHub Pages 是 jeno 通道，二者字节可能不同。
