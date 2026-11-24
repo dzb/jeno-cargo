@@ -68,8 +68,8 @@ public final class ReleaseCommand implements Command {
                targets: gh:<owner>/<repo>, jeno:https://host/, jeno:http://<private-ip>/
                (literal LAN address only; public hosts need https), jeno:local:<dir>,
                or the name of a declared [repos.<name>] with type = "jeno".
-               A named private-network http repository may set insecure = true
-               to explicitly permit JENO_PUBLISH_TOKEN on cleartext.
+               """ + "\n" + RepositoryHelp.INSECURE_TOKEN + """
+
                no target prepares target/dist/release/ and prints the upload list.
                --notes-file <path> supplies the gh: release body (gh: target only).
                --dry-run prepares the same files and shows the URLs without uploading.""";

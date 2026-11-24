@@ -78,8 +78,7 @@ public final class PublishCommand implements Command {
                (LAN); public hosts need https.
                a Maven-layout target (https://host/, local:<dir>) is refused:
                jeno writes no POM, so neither jeno nor Maven could consume it.
-               A named private-network http repository may set insecure = true
-               to explicitly permit JENO_PUBLISH_TOKEN on cleartext.""";
+               """ + "\n" + RepositoryHelp.INSECURE_TOKEN;
     }
     @Override
     public String usage() {
