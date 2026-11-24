@@ -98,7 +98,7 @@ final class JsonWorkspace {
             if (!moduleResult.ok()) {
                 failed++;
                 usage |= moduleResult.exitCode() == 2;
-                result.diagnostic(moduleResult.exitCode() == 2 ? "error" : "error",
+                result.diagnostic("error",
                         moduleResult.code() == null ? "MODULE_FAILED" : moduleResult.code(),
                         moduleResult.message() == null ? "module failed" : moduleResult.message(),
                         List.of());

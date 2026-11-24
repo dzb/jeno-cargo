@@ -8,6 +8,8 @@ package com.jujin.jeno.pom;
  * surface it as the next action, not a stack trace.
  */
 public final class PomException extends RuntimeException {
+    @java.io.Serial
+    private static final long serialVersionUID = 1L;
 
     public PomException(String message) {
         super(message);

@@ -255,13 +255,6 @@ public final class BuildCommand implements Command {
         return exit;
     }
 
-    /**
-     * Writes {@code META-INF/jeno/version.properties} from jeno.toml — the one
-     * declaration becomes a resource the running binary can read from a
-     * classes directory, a jar, or an installed dist alike. This is why jeno's
-     * version is not a source constant: a resource survives every layout,
-     * while {@code Package.getImplementationVersion()} is null off a jar.
-     */
     /** Whether {@code src/main/resources} holds any file at all. */
     private boolean hasResources() {
         Path root = projectDir.resolve(RESOURCES);
@@ -305,6 +298,13 @@ public final class BuildCommand implements Command {
         }
     }
 
+    /**
+     * Writes {@code META-INF/jeno/version.properties} from jeno.toml — the one
+     * declaration becomes a resource the running binary can read from a
+     * classes directory, a jar, or an installed dist alike. This is why jeno's
+     * version is not a source constant: a resource survives every layout,
+     * while {@code Package.getImplementationVersion()} is null off a jar.
+     */
     private void writeVersionResource(JenoProject project, Path output) {
         Path target = output.resolve("META-INF/jeno/version.properties");
         try {

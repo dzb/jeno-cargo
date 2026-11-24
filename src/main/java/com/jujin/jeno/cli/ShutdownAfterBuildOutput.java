@@ -21,6 +21,8 @@ package com.jujin.jeno.cli;
  * teardown against deleted files is the only thing left to skip.
  */
 final class ShutdownAfterBuildOutput extends RuntimeException {
+    @java.io.Serial
+    private static final long serialVersionUID = 1L;
 
     final int exitCode;
 

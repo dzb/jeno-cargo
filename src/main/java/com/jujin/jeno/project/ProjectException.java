@@ -7,6 +7,8 @@ package com.jujin.jeno.project;
  * prepend.
  */
 public final class ProjectException extends RuntimeException {
+    @java.io.Serial
+    private static final long serialVersionUID = 1L;
 
     public ProjectException(String message) {
         super(message);

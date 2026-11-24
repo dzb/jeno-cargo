@@ -33,6 +33,8 @@ final class CommandCatalog {
                 "request machine-readable JSON for help or a command that declares supportsJson");
         addFlag(globalFlags, "--format=json",
                 "long-form alias of --json");
+        addFlag(globalFlags, "--format=text",
+                "human-readable output (the default)");
         addFlag(globalFlags, "--help, -h",
                 "print human help, or the JSON catalog when combined with --json");
         addFlag(globalFlags, "--version, -v",

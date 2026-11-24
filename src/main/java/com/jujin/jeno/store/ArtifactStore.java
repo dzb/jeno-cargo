@@ -1,6 +1,7 @@
 package com.jujin.jeno.store;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -175,7 +176,10 @@ public final class ArtifactStore {
             try (FileChannel channel = FileChannel.open(lockFile,
                     StandardOpenOption.CREATE, StandardOpenOption.WRITE,
                     StandardOpenOption.READ);
-                 var ignored = channel.lock()) {
+                 java.nio.channels.FileLock lock = channel.lock()) {
+                if (!lock.isValid()) {
+                    throw new IOException("cannot acquire store lock " + lockFile);
+                }
                 if (!Files.exists(target)) {
                     Path temp = Files.createTempFile(root, "part-", ".tmp");
                     Files.write(temp, bytes);
@@ -243,6 +247,17 @@ public final class ArtifactStore {
         return digestByUrl.get(cacheKey(url));
     }
 
+    /** Whether the file a relative {@code file:} row names still has this digest. */
+    private static boolean indexMatchesLocal(String url, String sha) {
+        try {
+            Path source = com.jujin.jeno.resolve.ArtifactLocations.localPath(
+                    url, com.jujin.jeno.resolve.ArtifactLocations.projectRoot());
+            return Files.isRegularFile(source) && sha256(source).equals(sha);
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
     /**
      * The identity of a URL for the session cache and the durable index. A
      * relative {@code file:vendor/…} row means "this path inside <em>the</em>
@@ -251,17 +266,6 @@ public final class ArtifactStore {
      * module would silently receive the first one's artifact. Absolute URLs are
      * already unique and stay as written.
      */
-    /** Whether the file a relative {@code file:} row names still has this digest. */
-    private static boolean indexMatchesLocal(String url, String sha) {
-        try {
-            Path source = com.jujin.jeno.resolve.ArtifactLocations.localPath(
-                    url, com.jujin.jeno.resolve.ArtifactLocations.projectRoot());
-            return Files.isRegularFile(source) && sha256(Files.readAllBytes(source)).equals(sha);
-        } catch (IOException | RuntimeException e) {
-            return false;
-        }
-    }
-
     private static String cacheKey(String url) {
         if (!url.startsWith("file:") || url.startsWith("file://")) {
             return url;
@@ -331,10 +335,18 @@ public final class ArtifactStore {
 
     /** The sha256 of a file's bytes, as 64 lowercase hex characters. */
     public static String sha256(Path file) {
-        try {
-            return sha256(Files.readAllBytes(file));
+        try (InputStream input = Files.newInputStream(file)) {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                digest.update(buffer, 0, read);
+            }
+            return HexFormat.of().formatHex(digest.digest());
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is always available on a JDK", e);
         }
     }
 }

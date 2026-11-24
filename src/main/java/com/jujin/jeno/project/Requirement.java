@@ -19,7 +19,7 @@ package com.jujin.jeno.project;
  * <p>{@code id} is the graph identity: {@code group:artifact} for Central
  * ({@code group:artifact:classifier} when a classifier is present, so a base
  * jar and its {@code -sources}/{@code -native} sibling never collide), the
- * repo name for jeno-native, the declared name for URLs.
+ * declared key for named jeno, GitHub native, and URL requirements.
  *
  * @param classifier null for a plain jar; e.g. {@code linux-x86_64},
  *                   {@code sources}. It is part of the artifact's identity and

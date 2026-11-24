@@ -18,8 +18,8 @@ import java.util.List;
  *
  * <p>The counterpart of {@code jeno add}: before this command existed, dropping
  * a dependency meant hand-editing jeno.toml and remembering to re-lock. It
- * removes the declaration from {@code [deps]}, {@code [deps-dev]}, or their
- * {@code .{repo}} groups, plus any matching {@code [deps-api]} marker —
+ * removes the declaration from {@code [deps]}, {@code [deps-dev]}, or
+ * {@code [deps-api]} without touching any other section —
  * comments, layout and every other line survive — then refreshes jeno.lock so
  * the artifact leaves the graph immediately.
  *

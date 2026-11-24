@@ -8,6 +8,8 @@ package com.jujin.jeno.resolve;
  * (DESIGN.md §4.2), not a stack trace.
  */
 public final class ResolveException extends RuntimeException {
+    @java.io.Serial
+    private static final long serialVersionUID = 1L;
 
     public ResolveException(String message) {
         super(message);

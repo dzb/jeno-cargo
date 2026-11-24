@@ -28,6 +28,8 @@ public final class LegacyNames {
 
     /** Dedicated failure so the CLI can emit one structured JSON error in JSON mode. */
     public static final class LegacyException extends RuntimeException {
+    @java.io.Serial
+    private static final long serialVersionUID = 1L;
         public LegacyException(String message) {
             super(message);
         }

@@ -207,7 +207,7 @@ url = "vendor"
 
 **[overrides]**
 
-- key = 依赖 id(引号字符串:`group:artifact` 或 jeno 原生 repo 名),value = 版本字符串
+- key = 依赖 id(引号字符串:`group:artifact`、jeno 原生 artifact name、GH/repo name 或 URL name),value = 版本字符串
 - central 物种:任意 Maven 版本字符串;jeno 原生物种:必须 semver;URL 物种无版本概念 → 其 id 出现在此 → 报错
 - 语义:MVS 之上的显式钉定——收敛时该 id 直接取 override 版本,忽略其他来源的版本约束;跨 major 硬冲突在 override 应用**之后**检查(它是合法出口)
 - 解析后闭包中不存在该 id → 告警(提示清理残留声明)
@@ -362,7 +362,7 @@ descriptor 依赖仍只进 runtime classpath。
 # 旧的无 marker 文件按 version 1 读取;未来 > 当前支持的版本直接拒绝
 # api = true 只在通过显式 [deps-api] 边可达时出现
 [[artifacts]]
-id = "com.example:foo"    # central: "group:artifact";jeno 原生: repo 名
+id = "com.example:foo"    # central: "group:artifact";jeno native: artifact name
 version = "1.2.3"
 source = "central"        # "central" / "gh:owner/repo" / "url"
                           # / 命名仓库的声明原文(如 "local:vendor"、"jeno:https://repo.example/"、"jeno:local:../vendor")

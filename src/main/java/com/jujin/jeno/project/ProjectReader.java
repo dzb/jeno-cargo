@@ -77,8 +77,8 @@ public final class ProjectReader {
                 case "dev-deps" -> throw new ProjectException(at(file,
                         source.section(entry.getKey()))
                         + "[dev-deps] was renamed to [deps-dev] — dependencies come first, "
-                        + "the qualifier after; update this header and every [dev-deps.<repo>] "
-                        + "group");
+                        + "the qualifier after; repository-group tables are removed, so move "
+                        + "each declaration to [deps-dev] with a repo:version value");
 
                 default -> throw new ProjectException(at(file, source.section(entry.getKey()))
                         + "unknown section [" + entry.getKey()

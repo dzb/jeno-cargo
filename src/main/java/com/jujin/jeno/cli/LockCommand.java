@@ -54,8 +54,9 @@ public final class LockCommand implements Command {
         return CommandCapabilities.builder()
                 .json()
                 .network(CommandCapabilities.NetworkMode.OPTIONAL)
-                .writes(CommandCapabilities.WriteScope.LOCKS,
-                        CommandCapabilities.WriteScope.CACHE)
+                .writes(CommandCapabilities.WriteScope.PROJECT,
+                        CommandCapabilities.WriteScope.CACHE,
+                        CommandCapabilities.WriteScope.LOCKS)
                 .workspace(CommandCapabilities.WorkspaceMode.AGGREGATE)
                 .build();
     }

@@ -209,6 +209,8 @@ final class Substitutions {
 
     /** A local checkout that cannot stand in for the locked jar. */
     static final class LocalException extends RuntimeException {
+    @java.io.Serial
+    private static final long serialVersionUID = 1L;
         LocalException(String message) {
             super(message);
         }

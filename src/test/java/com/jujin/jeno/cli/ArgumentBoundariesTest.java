@@ -105,6 +105,16 @@ class ArgumentBoundariesTest {
     }
 
     @Test
+    void commandHelpAcceptsTheOtherGlobalOutputFlag() {
+        CommandRunner runner = new CommandRunner(List.of(new BuildCommand(store, project)));
+
+        Result result = run(runner, "build", "--format=text", "--help");
+
+        assertEquals(0, result.exit(), result.err());
+        assertTrue(result.out().contains("usage: jeno build"), result.out());
+    }
+
+    @Test
     void topLevelHelpGroupsCommandsByRole() {
         CommandRunner runner = new CommandRunner(List.of(
                 stub("init", "start a project", Command.Category.PROJECT),

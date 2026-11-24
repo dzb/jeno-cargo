@@ -216,7 +216,9 @@ public final class CommandRunner {
         for (String arg : rest) {
             if (arg.equals("--help") || arg.equals("-h")) {
                 seen = true;
-            } else if (!arg.equals("--json") && !arg.equals("--format=json")) {
+            } else if (!arg.equals("--json") && !arg.equals("--format=json")
+                    && !arg.equals("--format=text") && !arg.equals("--offline")
+                    && !arg.equals("-o")) {
                 return false;
             }
         }
@@ -296,6 +298,12 @@ public final class CommandRunner {
                 + Ui.dim("machine-readable output; with --help it prints the command catalog"));
         System.out.println("  " + pad("--format=json", column)
                 + Ui.dim("long-form alias of --json"));
+        System.out.println("  " + pad("--format=text", column)
+                + Ui.dim("human-readable output (the default)"));
+        System.out.println("  " + pad("-h, --help", column)
+                + Ui.dim("print this help, or one command's help"));
+        System.out.println("  " + pad("-v, --version", column)
+                + Ui.dim("print the jeno version"));
         System.out.println("  " + pad("-o, --offline", column)
                 + Ui.dim("refuse all network access; remote publish/release targets, "
                 + "update/outdated/audit are rejected; local targets remain allowed"));

@@ -110,11 +110,26 @@ public final class LockFileReader {
      * guessing. A lock written before the marker existed is version 1.
      */
     private static void lockfileVersion(String text) {
+        boolean sawArtifacts = false;
+        boolean sawVersion = false;
         for (String line : text.split("\n", -1)) {
-            var matcher = VERSION_MARKER.matcher(line.strip());
+            String stripped = line.strip();
+            if (stripped.equals("[[artifacts]]")) {
+                sawArtifacts = true;
+                continue;
+            }
+            var matcher = VERSION_MARKER.matcher(stripped);
             if (!matcher.matches()) {
                 continue;
             }
+            if (sawArtifacts) {
+                throw new StoreException("jeno.lock: lockfile version marker must precede "
+                        + "[[artifacts]]");
+            }
+            if (sawVersion) {
+                throw new StoreException("jeno.lock: duplicate lockfile version marker");
+            }
+            sawVersion = true;
             int version;
             try {
                 version = Integer.parseInt(matcher.group(1));
@@ -130,7 +145,6 @@ public final class LockFileReader {
                         + com.jujin.jeno.resolve.LockFile.VERSION
                         + ") — upgrade jeno before using this lock");
             }
-            return;
         }
     }
 

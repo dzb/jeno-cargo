@@ -81,6 +81,9 @@ class CommandCatalogTest {
         assertEquals(true, tree.get("supportsJson"));
         assertEquals("optional", tree.get("network"));
 
+        Map<String, Object> lock = commands.get("lock");
+        assertEquals(List.of("project", "cache", "locks"), asList(lock.get("writes")),
+                "lock writes jeno.lock as well as the cache and state lock");
         Map<String, Object> cache = commands.get("cache");
         assertEquals(true, cache.get("destructive"));
         assertEquals(true, cache.get("supportsDryRun"));
@@ -266,6 +269,7 @@ class CommandCatalogTest {
 
         assertEquals(0, result.exit(), result.err());
         assertTrue(result.out().contains("--format=json"), result.out());
+        assertTrue(result.out().contains("--format=text"), result.out());
     }
 
     @Test

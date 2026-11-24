@@ -37,6 +37,8 @@ final class LockedGraphView {
 
     /** A lock that cannot answer: missing, unreadable, or a different graph. */
     static final class OutOfDateException extends RuntimeException {
+    @java.io.Serial
+    private static final long serialVersionUID = 1L;
         OutOfDateException(String message) {
             super(message);
         }

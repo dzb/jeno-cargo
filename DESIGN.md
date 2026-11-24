@@ -89,7 +89,7 @@ jeno 又用严格可见性约束用户项目的依赖边界——**这个工具�
 | D24 | 导出的 API 依赖显式标记,不从传递闭包推断 | Java 库的公开签名可能暴露另一个库的类型;不能自动把所有 compile 依赖放回 classpath,否则 strict visibility 失效。`[deps-api]` 只标注已存在于 `[deps]` 的声明,消费者沿显式 API 边获得编译可见性,Maven POM 不做猜测 |
 | D25 | lockfile 使用版本 marker,`api` 行记录导出闭包 | 版本 marker 用 TOML 注释保存,旧 reader 可忽略;`api = true` 记录消费者需要的显式 API 编译闭包,避免每个命令重读传递描述符 |
 | D26 | 依赖身份的 canonical source 必须一致 | 同一 id 从不同仓库/GitHub/URL 进入是硬冲突;同一来源用两个 alias 也是硬冲突,禁止第一个来源静默获胜 |
-| D27 | 依赖节统一 deps 前缀,限定词后置 | `[deps]`、`[deps-dev]`、`[deps-api]` 的思维链都是“这是依赖,再说明是哪类依赖”; dot 只保留给 legacy 仓库分组,避免 `deps` 后面出现两套修饰语法。旧 `[dev-deps]` 直接给迁移错误,不做双名兼容 |
+| D27 | 依赖节统一 deps 前缀,限定词后置 | `[deps]`、`[deps-dev]`、`[deps-api]` 的思维链都是“这是依赖,再说明是哪类依赖”; dot 不再用于依赖节,旧 `[deps.<repo>]` / `[deps-dev.<repo>]` 分组表已移除,避免 `deps` 后面出现两套修饰语法。旧 `[dev-deps]` 直接给迁移错误,不做双名兼容 |
 
 ---
 

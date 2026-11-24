@@ -146,12 +146,6 @@ public final class ArtifactLocations {
     }
 
     /**
-     * A repository base normalized for <em>comparison</em>: scheme and host
-     * lowercased, the scheme's default port dropped, the path closed with a
-     * slash. No redirects, no DNS — two spellings of one base compare equal,
-     * anything that could reach a different server does not.
-     */
-    /**
      * Where a repository actually is, comparable across spellings: HTTPS keeps
      * {@link #canonicalBase}'s normalization; a local directory becomes its
      * real path, so {@code ../vendor} from one module and an absolute
@@ -180,6 +174,12 @@ public final class ArtifactLocations {
         }
     }
 
+    /**
+     * A repository base normalized for <em>comparison</em>: scheme and host
+     * lowercased, the scheme's default port dropped, the path closed with a
+     * slash. No redirects, no DNS — two spellings of one base compare equal,
+     * anything that could reach a different server does not.
+     */
     public static String canonicalBase(Repository repository) {
         return canonicalBaseOf(repository.networkBase());
     }
@@ -218,9 +218,8 @@ public final class ArtifactLocations {
      * The jeno repository layout: {@code <base>/<name>/<version>/<name>-<version>.<ext>} —
      * two levels, no group. {@code base} is the declaration — {@code jeno:https://…}
      * or a private-network {@code jeno:http://<literal-ip>…} — whose prefix is
-     * stripped here.
+     * stripped here. Used for both local and remote repositories.
      */
-    /** The jeno two-level layout under a repository, local or remote. */
     public static String jenoFile(Repository repository, String name, String version,
                                  String extension) {
         String path = name + "/" + version + "/" + name + "-" + version + "." + extension;
