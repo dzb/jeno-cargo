@@ -126,6 +126,16 @@ class DistLayoutTest {
             assertTrue(zip.getEntry("com/acme/TestKit.class") == null,
                     "toolchain classes never merge into the running jar");
         }
+        Path cmd = lib.getParent().resolve("bin/demo.cmd");
+        assertTrue(Files.exists(cmd), "the Windows launcher ships beside the POSIX one");
+        String cmdText = Files.readString(cmd);
+        assertTrue(cmdText.contains("set \"JENO_HOME=%~dp0..\""), cmdText);
+        assertTrue(cmdText.contains("lib\\demo-1.0.0.jar"), cmdText);
+        assertTrue(cmdText.contains(" demo.App "), cmdText);
+        String sums = Files.readString(dir.resolve("target/dist/demo-1.0.0/SHA256SUMS"));
+        assertTrue(sums.contains("  bin/demo\n"), sums);
+        assertTrue(sums.contains("  bin/demo.cmd\n"), sums);
+
         String labels = labels(uber);
         assertTrue(labels.contains("com.acme:skeleton@1.0.0"), labels);
         assertFalse(labels.contains("com.acme:test-kit"), labels);
@@ -343,7 +353,7 @@ class DistLayoutTest {
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
         assertEquals(0, new BundleCommand(store, dir).execute(List.of()));
 
-        String setup = Files.readString(dir.resolve("target/dist/demo-2.0.0/setup.sh"));
+        String setup = Files.readString(dir.resolve("target/dist/demo-2.0.0/install.sh"));
         assertTrue(setup.contains("requires JDK 17+"), setup);
         assertTrue(setup.contains("\"$JAVA_MAJOR\" -lt 17"), setup);
         assertTrue(setup.contains("sha256sum -c"), setup);
@@ -376,7 +386,7 @@ class DistLayoutTest {
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
         assertEquals(0, new BundleCommand(store, dir).execute(List.of()));
 
-        String setup = Files.readString(dir.resolve("target/dist/demo-1.0.0/setup.sh"));
+        String setup = Files.readString(dir.resolve("target/dist/demo-1.0.0/install.sh"));
         assertTrue(setup.contains("requires JDK " + Runtime.version().feature() + "+"), setup);
     }
 }

@@ -34,10 +34,10 @@ class VerifyCommandTest {
         Files.writeString(dist.resolve("demo-0.1.0.sha256"),
                 ArtifactStore.sha256(jar) + "\n");
         Path bundle = Files.createDirectories(dist.resolve("demo-0.1.0"));
-        Path setup = bundle.resolve("setup.sh");
+        Path setup = bundle.resolve("install.sh");
         Files.writeString(setup, "#!/bin/sh\n");
         Files.writeString(bundle.resolve("SHA256SUMS"),
-                ArtifactStore.sha256(setup) + "  setup.sh\n");
+                ArtifactStore.sha256(setup) + "  install.sh\n");
 
         Result result = verify(fixture);
 

@@ -38,7 +38,7 @@ import java.util.stream.Stream;
  *   ├── lib/
  *   │   ├── {name}-{version}.jar  one jar: project + skeleton merged
  *   │   └── toolchain/            lifecycle toolchain (test-only jars)
- *   ├── setup.sh                  self-installing script
+ *   ├── install.sh                  self-installing script
  *   └── SHA256SUMS                integrity manifest
  * </pre>
  *
@@ -48,7 +48,7 @@ import java.util.stream.Stream;
  * <p><b>What this command does not decide.</b> Whether a project wants a
  * bundle, what to name it, where to upload it — all of that is the project's
  * CI. jeno provides the packaging mechanics (merge the skeleton, place the
- * launcher, write setup.sh, checksum it) and nothing else.
+ * launcher, write install.sh, checksum it) and nothing else.
  */
 public final class BundleCommand implements Command {
 
@@ -84,9 +84,17 @@ public final class BundleCommand implements Command {
         exec "$JAVA" -cp "$JENO_HOME/lib/*" %3$s "$@"
         """;
 
+    private static final String CMD_LAUNCHER_TEMPLATE = """
+        @echo off
+        setlocal
+        set "JENO_HOME=%%~dp0.."
+        if defined JAVA_HOME (set "JAVA=%%JAVA_HOME%%\\bin\\java.exe") else (set "JAVA=java")
+        "%%JAVA%%" -cp "%%JENO_HOME%%\\lib\\%1$s-%2$s.jar" %3$s %%*
+        """;
+
     private static final String SETUP_TEMPLATE = """
         #!/bin/bash
-        # setup.sh — installs %1$s %2$s to $HOME/.%1$s/
+        # install.sh — installs %1$s %2$s to $HOME/.%1$s/
         # Verifies SHA256SUMS, then swaps lib/bin through a staging directory.
         # The content-addressed store and any other files under
         # $HOME/.%1$s are left alone.
@@ -261,7 +269,7 @@ public final class BundleCommand implements Command {
             JsonObject files = JsonUtils.object();
             files.put("launcher", bundleDir.resolve("bin")
                     .resolve(project.name()).toString());
-            files.put("setupScript", bundleDir.resolve("setup.sh").toString());
+            files.put("setupScript", bundleDir.resolve("install.sh").toString());
             files.put("uninstallScript", bundleDir.resolve("uninstall.sh").toString());
             files.put("checksums", bundleDir.resolve("SHA256SUMS").toString());
             data.put("files", files);
@@ -456,17 +464,22 @@ public final class BundleCommand implements Command {
             Files.writeString(bin.resolve(name), launcherBody, StandardCharsets.UTF_8);
             Files.setPosixFilePermissions(bin.resolve(name),
                     PosixFilePermissions.fromString("r-xr-xr-x"));
+            // The Windows launcher uses this bundle's exact jar name, never
+            // lib\*: an upgrade may leave the previous jar beside it.
+            Files.writeString(bin.resolve(name + ".cmd"),
+                    CMD_LAUNCHER_TEMPLATE.formatted(name, version, launcherMain),
+                    StandardCharsets.UTF_8);
 
             // A runnable module has a target major even without [java].version:
             // without --release, javac emits the running JDK's bytecode.
             int jdkMajor = project.javaVersion() != null
                     ? project.javaVersion() : Runtime.version().feature();
 
-            // setup.sh — verifies, stages, swaps; the embedded launcher is the
+            // install.sh — verifies, stages, swaps; the embedded launcher is the
             // same launcher the dist ships, spliced verbatim into the heredoc
             String setupScript = SETUP_TEMPLATE.formatted(name, version, launcherBody, jdkMajor);
-            Files.writeString(dist.resolve("setup.sh"), setupScript, StandardCharsets.UTF_8);
-            Files.setPosixFilePermissions(dist.resolve("setup.sh"),
+            Files.writeString(dist.resolve("install.sh"), setupScript, StandardCharsets.UTF_8);
+            Files.setPosixFilePermissions(dist.resolve("install.sh"),
                     PosixFilePermissions.fromString("r-xr-xr-x"));
 
             Files.writeString(dist.resolve("uninstall.sh"),
@@ -496,7 +509,7 @@ public final class BundleCommand implements Command {
 
             System.out.println(Ui.ok("dist " + dist));
             System.out.println("  " + Ui.dim(bin.resolve(name) + " — the launcher"));
-            System.out.println("  " + Ui.dim(dist.resolve("setup.sh") + " — self-installing"));
+            System.out.println("  " + Ui.dim(dist.resolve("install.sh") + " — self-installing"));
             System.out.println("  " + Ui.dim(tarGz + " — the release artifact"));
             return 0;
         } catch (IOException | InterruptedException e) {
