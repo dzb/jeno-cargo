@@ -70,7 +70,7 @@ class DistCommandsLockTest {
 
         assertWaitsThenRuns(() -> new ReleaseCommand(dir)
                 .execute(List.of("--allow-unsigned")));
-        assertTrue(Files.exists(dir.resolve("target/dist/release/setup.sh")),
+        assertTrue(Files.exists(dir.resolve("target/dist/release/install.sh")),
                 "release prepared its files after the wait");
     }
 

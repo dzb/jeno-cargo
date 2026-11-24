@@ -28,7 +28,7 @@ import java.util.List;
  * <p>Without a target it prepares {@code target/dist/release/} and prints the
  * upload checklist. With {@code gh:}, {@code jeno:https://…},
  * {@code jeno:http://<private-ip>/} (LAN only) or {@code jeno:local:<dir>} it
- * uploads the installer, a bootstrap {@code setup.sh},
+ * uploads the installer, a bootstrap {@code install.sh},
  * a checksum and {@code release.json}, then reads the installer back and
  * compares its sha256 — a publish that cannot be verified is not done.
  */
@@ -50,7 +50,7 @@ public final class ReleaseCommand implements Command {
 
     @Override
     public String usage() {
-        return "[target] [--dry-run] [--allow-unsigned]";
+        return "[target] [--dry-run] [--allow-unsigned] [--notes-file <path>]";
     }
 
     @Override
@@ -68,6 +68,7 @@ public final class ReleaseCommand implements Command {
                targets: gh:<owner>/<repo>, jeno:https://host/, jeno:http://<private-ip>/
                (literal LAN address only; public hosts need https), jeno:local:<dir>.
                no target prepares target/dist/release/ and prints the upload list.
+               --notes-file <path> supplies the gh: release body (gh: target only).
                --dry-run prepares the same files and shows the URLs without uploading.""";
     }
 
@@ -257,25 +258,30 @@ public final class ReleaseCommand implements Command {
             Files.createDirectories(releaseDir);
             String tarName = tar.getFileName().toString();
             Path shaFile = releaseDir.resolve(tarName + ".sha256");
-            Path setup = releaseDir.resolve("setup.sh");
+            Path setup = releaseDir.resolve("install.sh");
+            Path install = releaseDir.resolve("install.ps1");
             Path jsonFile = releaseDir.resolve("release.json");
             List<String> signatureNames = signing.signed()
-                    ? List.of("setup.sh.minisig", "release.json.minisig", tarName + ".minisig")
+                    ? List.of("install.sh.minisig", "install.ps1.minisig",
+                            "release.json.minisig", tarName + ".minisig")
                     : List.of();
             Files.writeString(shaFile, sha + "\n");
             Files.writeString(setup, bootstrap(name, version, plan.installerUrl, sha,
                     signing));
+            Files.writeString(install, windowsInstaller(name, version, jdk,
+                    plan.installerUrl, sha));
             Files.writeString(jsonFile, releaseJson(name, version, tarName, sha, jdk,
                     signing, signatureNames));
 
             List<Path> signatures;
             try {
-                signatures = ReleaseSigner.sign(releaseDir, List.of(setup, jsonFile, tar), signing);
+                signatures = ReleaseSigner.sign(releaseDir,
+                        List.of(setup, install, jsonFile, tar), signing);
             } catch (ReleaseSigner.SigningException e) {
                 System.err.println(Ui.errPrefix() + e.getMessage());
                 return 1;
             }
-            List<Path> all = new ArrayList<>(List.of(setup, shaFile, jsonFile));
+            List<Path> all = new ArrayList<>(List.of(setup, install, shaFile, jsonFile));
             all.addAll(signatures);
             if (signing.signed()) {
                 Path pub = releaseDir.resolve("minisign.pub");
@@ -296,17 +302,26 @@ public final class ReleaseCommand implements Command {
         }
 
         if (plan.target == null) {
-            System.out.println("upload these four files together, then share the setup.sh;");
+            System.out.println("upload these four files together, then share the install.sh;");
             System.out.println("  bootstrap installer URL: " + plan.installerUrl);
             return 0;
         }
 
+        String notes;
+        try {
+            notes = parsed.notesFile() == null ? null
+                    : Files.readString(parsed.notesFile());
+        } catch (IOException e) {
+            System.err.println(Ui.errPrefix() + "cannot read notes file "
+                    + parsed.notesFile() + " — " + e.getMessage());
+            return 1;
+        }
         return plan.repository == null
-                ? publishToGitHub(plan, tar, files, name, version, tag, sha, signing)
+                ? publishToGitHub(plan, tar, files, name, version, tag, sha, signing, notes)
                 : publishToRepository(plan, tar, files, sha, signing);
     }
 
-    private record Parsed(String target, boolean allowUnsigned) {
+    private record Parsed(String target, boolean allowUnsigned, Path notesFile) {
         boolean offlineConflict(ReleasePlan plan) {
             if (!ArtifactStore.isOffline() || plan.plan().target == null) {
                 return false;
@@ -318,21 +333,42 @@ public final class ReleaseCommand implements Command {
     private static Parsed parse(List<String> args) {
         boolean allowUnsigned = false;
         String target = null;
-        for (String arg : args) {
+        Path notesFile = null;
+        for (int i = 0; i < args.size(); i++) {
+            String arg = args.get(i);
             if (arg.equals("--dry-run")) {
                 // accepted here for the wrapper; planning already knows
             } else if (arg.equals("--allow-unsigned")) {
                 allowUnsigned = true;
+            } else if (arg.equals("--notes-file")) {
+                if (++i >= args.size() || args.get(i).isBlank()) {
+                    throw new IllegalArgumentException("--notes-file needs a path");
+                }
+                notesFile = Path.of(args.get(i));
             } else if (arg.startsWith("-")) {
-                throw new IllegalArgumentException("release takes [target], --dry-run and"
-                        + " --allow-unsigned — got '" + arg + "'");
+                throw new IllegalArgumentException("release takes [target], --dry-run,"
+                        + " --allow-unsigned and --notes-file — got '" + arg + "'");
             } else if (target == null) {
                 target = arg;
             } else {
                 throw new IllegalArgumentException("release takes at most one target — got '" + arg + "'");
             }
         }
-        return new Parsed(target, allowUnsigned);
+        Parsed parsed = new Parsed(target, allowUnsigned, notesFile);
+        validateNotes(parsed);
+        return parsed;
+    }
+
+    private static void validateNotes(Parsed parsed) {
+        if (parsed.notesFile() == null) {
+            return;
+        }
+        if (parsed.target() == null || !parsed.target().startsWith("gh:")) {
+            throw new IllegalArgumentException("--notes-file is only used with a gh: target");
+        }
+        if (!Files.isRegularFile(parsed.notesFile())) {
+            throw new IllegalArgumentException("notes file not found: " + parsed.notesFile());
+        }
     }
 
     private int error(boolean json, boolean dryRun, int exit, String code, String message) {
@@ -397,10 +433,12 @@ public final class ReleaseCommand implements Command {
         List<PlannedReleaseFile> files = new ArrayList<>();
         files.add(planned("tar.gz", tar, false, sha));
         files.add(planned("sha256", releaseDir.resolve(tarName + ".sha256"), true, null));
-        files.add(planned("setup", releaseDir.resolve("setup.sh"), true, null));
+        files.add(planned("setup", releaseDir.resolve("install.sh"), true, null));
+        files.add(planned("windows-installer", releaseDir.resolve("install.ps1"), true, null));
         files.add(planned("release-json", releaseDir.resolve("release.json"), true, null));
         if (signing.signed()) {
-            files.add(planned("signature", releaseDir.resolve("setup.sh.minisig"), true, null));
+            files.add(planned("signature", releaseDir.resolve("install.sh.minisig"), true, null));
+            files.add(planned("signature", releaseDir.resolve("install.ps1.minisig"), true, null));
             files.add(planned("signature", releaseDir.resolve("release.json.minisig"), true, null));
             files.add(planned("signature", releaseDir.resolve(tarName + ".minisig"), true, null));
             files.add(planned("public-key", releaseDir.resolve("minisign.pub"), true, null));
@@ -491,6 +529,7 @@ public final class ReleaseCommand implements Command {
                 .put("signing", signing)
                 .put("installerUrl", plan.plan().installerUrl)
                 .put("bootstrapUrl", plan.plan().bootstrapUrl)
+                .put("windowsUrl", plan.plan().windowsUrl)
                 .put("files", files)
                 .put("wouldUpload", wouldUpload)
                 .put("uploaded", uploaded)
@@ -508,12 +547,14 @@ public final class ReleaseCommand implements Command {
     // ------------------------------------------------------------------
 
     private record Plan(Repository repository, String target, String name, String version,
-                        String installerUrl, String bootstrapUrl, List<String> auxiliaryUrls) {}
+                        String installerUrl, String bootstrapUrl, String windowsUrl,
+                        List<String> auxiliaryUrls) {}
 
     private Plan plan(String target, String name, String version, String tag, JenoProject project) {
         if (target == null) {
             Path tar = projectDir.resolve(DIST).resolve(name + "-" + version + ".tar.gz");
-            return new Plan(null, null, name, version, tar.toUri().toString(), null, List.of());
+            return new Plan(null, null, name, version, tar.toUri().toString(), null, null,
+                    List.of());
         }
         if (target.startsWith("gh:")) {
             String origin = target.substring("gh:".length());
@@ -527,11 +568,13 @@ public final class ReleaseCommand implements Command {
             String base = ArtifactLocations.githubHost() + "/" + owner + "/" + repo
                     + "/releases/download/" + tag;
             String stable = ArtifactLocations.githubHost() + "/" + owner + "/" + repo
-                    + "/releases/latest/download/setup.sh";
+                    + "/releases/latest/download/install.sh";
+            String windows = ArtifactLocations.githubHost() + "/" + owner + "/" + repo
+                    + "/releases/latest/download/install.ps1";
             String tar = base + "/" + name + "-" + version + ".tar.gz";
-            List<String> urls = List.of(base + "/setup.sh", tar + ".sha256",
-                    base + "/release.json");
-            return new Plan(null, target, name, version, tar, stable, urls);
+            List<String> urls = List.of(base + "/install.sh", tar + ".sha256",
+                    base + "/release.json", base + "/install.ps1");
+            return new Plan(null, target, name, version, tar, stable, windows, urls);
         }
 
         Repository repository = Repository.parse(target);
@@ -547,12 +590,14 @@ public final class ReleaseCommand implements Command {
             root = root + "/";
         }
         String versioned = root + name + "/" + version + "/";
-        String stable = root + name + "/setup.sh";
+        String stable = root + name + "/install.sh";
+        String windows = root + name + "/install.ps1";
         String tar = versioned + "release/" + name + "-" + version + ".tar.gz";
-        List<String> urls = List.of(versioned + "release/setup.sh", tar + ".sha256",
-                versioned + "release/release.json", versioned + "setup.sh", stable,
-                versioned + "minisign.pub", root + name + "/minisign.pub");
-        return new Plan(repository, target, name, version, tar, stable, urls);
+        List<String> urls = List.of(versioned + "release/install.sh", tar + ".sha256",
+                versioned + "release/release.json", versioned + "install.sh", stable,
+                versioned + "minisign.pub", root + name + "/minisign.pub",
+                versioned + "release/install.ps1", windows);
+        return new Plan(repository, target, name, version, tar, stable, windows, urls);
     }
 
     // ------------------------------------------------------------------
@@ -573,10 +618,18 @@ public final class ReleaseCommand implements Command {
                     writeAtomically(versioned.resolve(file.getFileName()),
                             Files.readAllBytes(file));
                 }
-                writeAtomically(localDirectory(plan).resolve("setup.sh"),
-                        Files.readAllBytes(files.getFirst()));
-                Path stable = localDirectory(plan).getParent().resolve("setup.sh");
-                writeAtomically(stable, Files.readAllBytes(files.getFirst()));
+                Path setupFile = files.stream().filter(path -> path.getFileName().toString()
+                        .equals("install.sh")).findFirst().orElseThrow();
+                Path installFile = files.stream().filter(path -> path.getFileName().toString()
+                        .equals("install.ps1")).findFirst().orElseThrow();
+                writeAtomically(localDirectory(plan).resolve("install.sh"),
+                        Files.readAllBytes(setupFile));
+                writeAtomically(localDirectory(plan).getParent().resolve("install.sh"),
+                        Files.readAllBytes(setupFile));
+                writeAtomically(localDirectory(plan).resolve("install.ps1"),
+                        Files.readAllBytes(installFile));
+                writeAtomically(localDirectory(plan).getParent().resolve("install.ps1"),
+                        Files.readAllBytes(installFile));
                 if (signing.signed()) {
                     Path pub = files.stream().filter(path -> path.getFileName().toString()
                             .equals("minisign.pub")).findFirst().orElseThrow();
@@ -593,8 +646,12 @@ public final class ReleaseCommand implements Command {
                     JenoUploads.put(url, Files.readAllBytes(file));
                     System.out.println("  PUT " + url);
                 }
-                JenoUploads.put(plan.auxiliaryUrls.get(3), Files.readAllBytes(files.getFirst()));
-                JenoUploads.put(plan.auxiliaryUrls.get(4), Files.readAllBytes(files.getFirst()));
+                Path setupFile = files.stream().filter(path -> path.getFileName().toString()
+                        .equals("install.sh")).findFirst().orElseThrow();
+                Path installFile = files.stream().filter(path -> path.getFileName().toString()
+                        .equals("install.ps1")).findFirst().orElseThrow();
+                JenoUploads.put(plan.bootstrapUrl, Files.readAllBytes(setupFile));
+                JenoUploads.put(plan.windowsUrl, Files.readAllBytes(installFile));
                 if (signing.signed()) {
                     Path pub = files.stream().filter(path -> path.getFileName().toString()
                             .equals("minisign.pub")).findFirst().orElseThrow();
@@ -636,6 +693,8 @@ public final class ReleaseCommand implements Command {
             if (!plan.repository.isLocal()) {
                 JenoUploads.get(plan.auxiliaryUrls.get(0));
                 JenoUploads.get(plan.auxiliaryUrls.get(2));
+                JenoUploads.get(plan.auxiliaryUrls.get(7));
+                JenoUploads.get(plan.windowsUrl);
             }
         } catch (IOException | InterruptedException e) {
             System.err.println(Ui.errPrefix() + "release verification failed — " + e.getMessage());
@@ -649,7 +708,7 @@ public final class ReleaseCommand implements Command {
 
     private int publishToGitHub(Plan plan, Path tar, List<Path> files,
                                 String name, String version, String tag, String sha,
-                                ReleaseSigner.Preview signing) {
+                                ReleaseSigner.Preview signing, String notes) {
         String token = GitHubReleases.token();
         if (token == null || token.isBlank()) {
             System.err.println(Ui.errPrefix() + "JENO_GITHUB_TOKEN environment variable is not set — "
@@ -663,9 +722,12 @@ public final class ReleaseCommand implements Command {
         String releaseId;
         String tarDownload;
         try {
+            var body = JsonUtils.object();
+            body.put("tag_name", tag);
+            body.put("name", tag);
+            body.put("body", notes == null ? "released with jeno release" : notes);
             releaseId = GitHubReleases.create(origin, owner, repo, tag, token,
-                    "{\"tag_name\":\"" + tag + "\",\"name\":\"" + tag
-                            + "\",\"body\":\"released with jeno release\"}");
+                    body.toString());
             tarDownload = null;
             for (Path file : concat(tar, files)) {
                 String download = GitHubReleases.upload(owner, repo, releaseId, file, token);
@@ -760,6 +822,94 @@ public final class ReleaseCommand implements Command {
     // generated files
     // ------------------------------------------------------------------
 
+    private static String windowsInstaller(String name, String version, int jdk,
+                                           String url, String sha) {
+        return """
+            # jeno %1$s %2$s Windows installer (PowerShell 5+).
+            # This script verifies sha256 only; Windows has no minisign dependency.
+            $ErrorActionPreference = "Stop"
+            $Name = "%1$s"
+            $Version = "%2$s"
+            $Jdk = %3$d
+            $Url = "%4$s"
+            $Sha = "%5$s"
+
+            $Java = if ($env:JAVA_HOME) {
+                Join-Path $env:JAVA_HOME "bin\\java.exe"
+            } else {
+                (Get-Command java.exe -ErrorAction Stop).Source
+            }
+            $VersionText = & $Java -version 2>&1 | Select-Object -First 1
+            if ($VersionText -match '"([0-9]+)') {
+                $Major = [int]$Matches[1]
+            } else {
+                throw "$Name needs JDK $Jdk or newer; cannot read the Java version"
+            }
+            if ($Major -lt $Jdk) {
+                throw "$Name needs JDK $Jdk or newer (found $Major)"
+            }
+
+            $Tmp = Join-Path ([IO.Path]::GetTempPath()) ("jeno-install-" + [guid]::NewGuid())
+            New-Item -ItemType Directory -Force -Path $Tmp | Out-Null
+            try {
+                $Tar = Join-Path $Tmp "pkg.tar.gz"
+                if ($Url -like "file:*") {
+                    Copy-Item ([Uri]$Url).LocalPath $Tar -Force
+                } else {
+                    Invoke-WebRequest -Uri $Url -OutFile $Tar -UseBasicParsing
+                }
+                $Hash = (Get-FileHash -Algorithm SHA256 -Path $Tar).Hash.ToLowerInvariant()
+                if ($Hash -ne $Sha.ToLowerInvariant()) {
+                    throw "$Name: sha256 mismatch — expected $Sha, got $Hash"
+                }
+                $TarExe = (Get-Command tar.exe -ErrorAction Stop).Source
+                & $TarExe -xzf $Tar -C $Tmp
+                if ($LASTEXITCODE -ne 0) {
+                    throw "$Name: tar.exe could not extract the installer"
+                }
+
+                $Src = Join-Path $Tmp "$Name-$Version"
+                $Install = "$env:USERPROFILE\\.$Name"
+                $Lib = Join-Path $Install "lib"
+                $Bin = Join-Path $Install "bin"
+                New-Item -ItemType Directory -Force -Path $Lib, $Bin | Out-Null
+                $OldToolchain = Join-Path $Lib "toolchain"
+                if (Test-Path $OldToolchain) {
+                    Remove-Item -Recurse -Force $OldToolchain
+                }
+                $SrcLib = Join-Path $Src "lib"
+                Get-ChildItem $SrcLib -Force | Copy-Item -Destination $Lib -Recurse -Force
+                $SrcBin = Join-Path $Src "bin"
+                Copy-Item (Join-Path $SrcBin "$Name.cmd") (Join-Path $Bin "$Name.cmd") -Force
+
+                $Uninstall = Join-Path $Install "uninstall.ps1"
+                @'
+            $InstallDir = "$env:USERPROFILE\\.%1$s"
+            Remove-Item -Recurse -Force $InstallDir -ErrorAction SilentlyContinue
+            $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+            if ($UserPath) {
+                $Bin = Join-Path $InstallDir "bin"
+                $Next = (($UserPath -split ";") | Where-Object { $_ -and $_ -ne $Bin }) -join ";"
+                [Environment]::SetEnvironmentVariable("Path", $Next, "User")
+            }
+            '@ | Set-Content -Path $Uninstall -Encoding ASCII
+
+                $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+                if ([string]::IsNullOrWhiteSpace($UserPath)) {
+                    $UserPath = $Bin
+                } elseif (($UserPath -split ";") -notcontains $Bin) {
+                    $UserPath = "$UserPath;$Bin"
+                }
+                [Environment]::SetEnvironmentVariable("Path", $UserPath, "User")
+                Write-Host "installed $Name $Version to $Install"
+            } catch {
+                throw
+            } finally {
+                Remove-Item -Recurse -Force $Tmp -ErrorAction SilentlyContinue
+            }
+            """.formatted(name, version, jdk, url, sha);
+    }
+
     private static String bootstrap(String name, String version, String url, String sha,
                                     ReleaseSigner.Preview signing) {
         return """
@@ -792,7 +942,7 @@ public final class ReleaseCommand implements Command {
 
             %5$s
             tar -xzf "$TMP/pkg.tar.gz" -C "$TMP"
-            "$TMP/%1$s-%2$s/setup.sh"
+            "$TMP/%1$s-%2$s/install.sh"
             """.formatted(name, version, url, sha,
                 signing.signed() ? """
             MINISIGN="$(command -v minisign || true)"
@@ -823,6 +973,10 @@ public final class ReleaseCommand implements Command {
         root.put("jdk", jdk);
         root.put("jeno", Jeno.VERSION);
         root.put("platform", "any");
+        var installers = JsonUtils.object();
+        installers.put("unix", "install.sh");
+        installers.put("windows", "install.ps1");
+        root.put("installers", installers);
         root.put("signed", signing.signed());
         if (signing.signed()) {
             root.put("minisign.publicKey", signing.publicKey());

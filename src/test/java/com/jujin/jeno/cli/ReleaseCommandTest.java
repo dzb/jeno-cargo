@@ -81,15 +81,23 @@ class ReleaseCommandTest {
 
         assertEquals(0, result.exit(), result.out() + result.err());
         Path release = dir.resolve("target/dist/release");
-        assertTrue(Files.exists(release.resolve("setup.sh")));
+        assertTrue(Files.exists(release.resolve("install.sh")));
+        assertTrue(Files.exists(release.resolve("install.ps1")));
+        String ps1 = Files.readString(release.resolve("install.ps1"));
+        assertTrue(ps1.contains("Get-FileHash -Algorithm SHA256"), ps1);
+        assertTrue(ps1.contains("tar.exe"), ps1);
+        assertTrue(ps1.contains("$env:USERPROFILE\\.app"), ps1);
+        assertTrue(ps1.contains("SetEnvironmentVariable(\"Path\", $UserPath, \"User\")"), ps1);
         assertTrue(Files.exists(release.resolve("app-1.0.0.tar.gz.sha256")));
         var json = JsonUtils.parseObject(
                 Files.readString(release.resolve("release.json")).strip());
         assertEquals("app", json.getString("name"));
         assertEquals("1.0.0", json.getString("version"));
         assertEquals(17, json.getInt("jdk"));
+        assertEquals("install.sh", json.getObject("installers").getString("unix"));
+        assertEquals("install.ps1", json.getObject("installers").getString("windows"));
         assertEquals("app-1.0.0.tar.gz", json.getString("artifact"));
-        String bootstrap = Files.readString(release.resolve("setup.sh"));
+        String bootstrap = Files.readString(release.resolve("install.sh"));
         assertTrue(bootstrap.contains("file://" + dir.resolve("target/dist/app-1.0.0.tar.gz")),
                 bootstrap);
         assertTrue(result.out().contains("upload these four files"), result.out());
@@ -104,10 +112,12 @@ class ReleaseCommandTest {
         assertEquals(0, result.exit(), result.out() + result.err());
         Path versioned = repo.resolve("app/1.0.0");
         assertTrue(Files.exists(versioned.resolve("release/app-1.0.0.tar.gz")));
-        assertTrue(Files.exists(versioned.resolve("release/setup.sh")));
+        assertTrue(Files.exists(versioned.resolve("release/install.sh")));
         assertTrue(Files.exists(versioned.resolve("release/release.json")));
-        assertTrue(Files.exists(versioned.resolve("setup.sh")));
-        assertTrue(Files.exists(repo.resolve("app/setup.sh")), "a stable entry exists");
+        assertTrue(Files.exists(versioned.resolve("install.sh")));
+        assertTrue(Files.exists(repo.resolve("app/install.sh")), "a stable entry exists");
+        assertTrue(Files.exists(repo.resolve("app/install.ps1")),
+                "the stable Windows entry exists");
     }
 
     @Test
@@ -174,7 +184,7 @@ class ReleaseCommandTest {
         Result result = runRaw("--json", "--allow-unsigned");
 
         assertEquals(0, result.exit(), result.err());
-        assertTrue(Files.exists(dir.resolve("target/dist/release/setup.sh")));
+        assertTrue(Files.exists(dir.resolve("target/dist/release/install.sh")));
         var json = JsonUtils.parseObject(result.out());
         assertEquals(false, json.getBoolean("dryRun"));
         assertEquals(false, json.getBoolean("uploaded"));
@@ -225,8 +235,8 @@ class ReleaseCommandTest {
 
         assertEquals(0, result.exit(), result.out() + result.err());
         assertTrue(files.containsKey("/repo/app/1.0.0/release/app-1.0.0.tar.gz"));
-        assertTrue(files.containsKey("/repo/app/1.0.0/release/setup.sh"));
-        assertTrue(files.containsKey("/repo/app/setup.sh"), "the stable entry is uploaded");
+        assertTrue(files.containsKey("/repo/app/1.0.0/release/install.sh"));
+        assertTrue(files.containsKey("/repo/app/install.sh"), "the stable entry is uploaded");
         assertTrue(files.containsKey("/repo/app/1.0.0/release/app-1.0.0.tar.gz.minisig"),
                 "the installer signature is uploaded");
         assertTrue(files.containsKey("/repo/app/1.0.0/release/minisign.pub"),
@@ -236,10 +246,13 @@ class ReleaseCommandTest {
     @Test
     void aGitHubTargetUploadsAndVerifies() throws Exception {
         Map<String, byte[]> assets = new ConcurrentHashMap<>();
+        StringBuilder createBody = new StringBuilder();
         server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         server.createContext("/", exchange -> {
             String path = exchange.getRequestURI().getPath();
             if (path.endsWith("/releases") && "POST".equals(exchange.getRequestMethod())) {
+                createBody.append(new String(exchange.getRequestBody().readAllBytes(),
+                        StandardCharsets.UTF_8));
                 respond(exchange, 201, "{\"id\":7}");
                 return;
             }
@@ -267,14 +280,26 @@ class ReleaseCommandTest {
         System.setProperty("jeno.github.token", "test-token");
         fakeSigner();
 
-        Result result = runRaw("gh:owner/repo");
+        Path notes = dir.resolve("notes.md");
+        Files.writeString(notes, "# notes from the tag\n\nrelease notes text\n");
+        Result result = runRaw("gh:owner/repo", "--notes-file", notes.toString());
 
         assertEquals(0, result.exit(), result.out() + result.err());
+        assertTrue(createBody.toString().contains("release notes text"), createBody.toString());
         assertTrue(assets.containsKey("app-1.0.0.tar.gz"));
-        assertTrue(assets.containsKey("setup.sh"));
+        assertTrue(assets.containsKey("install.sh"));
+        assertTrue(assets.containsKey("install.ps1"));
         assertTrue(assets.containsKey("release.json"));
         assertTrue(assets.containsKey("app-1.0.0.tar.gz.minisig"));
         assertTrue(assets.containsKey("minisign.pub"));
+    }
+
+    @Test
+    void notesFileRequiresGhAndMustExist() throws Exception {
+        assertEquals(2, run("jeno:local:" + dir.resolve("repo"),
+                "--notes-file", dir.resolve("missing.md").toString()).exit());
+        assertEquals(2, run("gh:owner/repo",
+                "--notes-file", dir.resolve("missing.md").toString()).exit());
     }
 
     @Test
@@ -323,12 +348,13 @@ class ReleaseCommandTest {
         assertEquals(0, result.exit(), result.out() + result.err());
         Path release = repo.resolve("app/1.0.0/release");
         assertTrue(Files.exists(release.resolve("app-1.0.0.tar.gz.minisig")));
-        assertTrue(Files.exists(release.resolve("setup.sh.minisig")));
+        assertTrue(Files.exists(release.resolve("install.sh.minisig")));
+        assertTrue(Files.exists(release.resolve("install.ps1.minisig")));
         assertTrue(Files.exists(release.resolve("release.json.minisig")));
         assertTrue(Files.exists(release.resolve("minisign.pub")));
         assertTrue(Files.exists(repo.resolve("app/1.0.0/minisign.pub")));
         assertTrue(Files.exists(repo.resolve("app/minisign.pub")));
-        String bootstrap = Files.readString(release.resolve("setup.sh"));
+        String bootstrap = Files.readString(release.resolve("install.sh"));
         assertTrue(bootstrap.contains("minisign -V") || bootstrap.contains("\"$MINISIGN\" -V"),
                 bootstrap);
         assertTrue(bootstrap.contains("RWTfakePUBLICkeyLINE"), bootstrap);
@@ -347,7 +373,7 @@ class ReleaseCommandTest {
 
         Result allowed = run("--allow-unsigned");
         assertEquals(0, allowed.exit(), allowed.out() + allowed.err());
-        String bootstrap = Files.readString(dir.resolve("target/dist/release/setup.sh"));
+        String bootstrap = Files.readString(dir.resolve("target/dist/release/install.sh"));
         assertTrue(bootstrap.contains("unsigned"), bootstrap);
         assertFalse(Files.exists(dir.resolve("target/dist/release/minisign.pub")));
     }
@@ -423,7 +449,7 @@ class ReleaseCommandTest {
         assertEquals(0, run().exit());
         Path home = Files.createDirectories(dir.resolve("home"));
         ProcessBuilder installer = new ProcessBuilder(shell,
-                dir.resolve("target/dist/release/setup.sh").toString())
+                dir.resolve("target/dist/release/install.sh").toString())
                 .directory(dir.resolve("target/dist").toFile())
                 .redirectErrorStream(true)
                 .redirectOutput(dir.resolve("install.log").toFile());
