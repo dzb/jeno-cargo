@@ -125,19 +125,33 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            PREV="$RUNNER_TEMP/previous-release"
-            mkdir -p "$PREV/assets"
-            gh release view "$GITHUB_REF_NAME" --json name -q .name > "$PREV/title.txt" \
-              || echo "::warning::could not save the previous release title"
-            gh release view "$GITHUB_REF_NAME" --json body -q .body > "$PREV/body.md" \
-              || echo "::warning::could not save the previous release notes"
-            gh release download "$GITHUB_REF_NAME" --dir "$PREV/assets" --clobber \
-              || echo "::warning::could not save every previous release asset"
-            echo "PREVIOUS_RELEASE=1" >> "$GITHUB_ENV"
-            gh release delete "$GITHUB_REF_NAME" --yes \
-              || echo "::warning::could not remove the previous release before upload"
+          API_JSON="$(mktemp)"
+          API_ERR="$(mktemp)"
+          if ! gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" \
+              > "$API_JSON" 2> "$API_ERR"; then
+            if grep -q "HTTP 404" "$API_ERR"; then
+              echo "no previous release for $GITHUB_REF_NAME — starting fresh"
+              exit 0
+            fi
+            cat "$API_ERR" >&2
+            echo "::error::could not read the previous release — refusing to delete or replace it"
+            exit 1
           fi
+          PREV="$RUNNER_TEMP/previous-release"
+          mkdir -p "$PREV/assets"
+          jq -r '.name // ""' "$API_JSON" > "$PREV/title.txt"
+          jq -r '.body // ""' "$API_JSON" > "$PREV/body.md"
+          jq -r '.prerelease // false' "$API_JSON" > "$PREV/prerelease.txt"
+          if ! gh release download "$GITHUB_REF_NAME" --dir "$PREV/assets" --clobber; then
+            echo "::error::could not save every asset of the previous release — leaving it untouched"
+            exit 1
+          fi
+          echo "PREVIOUS_RELEASE=1" >> "$GITHUB_ENV"
+          if ! gh release delete "$GITHUB_REF_NAME" --yes; then
+            echo "::error::could not remove the previous release before upload"
+            exit 1
+          fi
+          echo "PRESERVED_RELEASE=1" >> "$GITHUB_ENV"
 
       - name: jeno releases itself
         id: release_cmd
@@ -146,6 +160,7 @@ jobs:
           JENO_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JENO_MINISIGN_KEY: ${{ runner.temp }}/minisign/jeno.key
         run: |
+          echo "RELEASE_ATTEMPTED=1" >> "$GITHUB_ENV"
           CP="target/classes:$(find vendor -name '*.jar' | tr '\n' ':')"
           java -cp "$CP" com.jujin.jeno.cli.Jeno release gh:dzb/jeno-cargo \
             --notes-file "$RUNNER_TEMP/notes.md"
@@ -178,14 +193,16 @@ jobs:
       - name: remove or restore the release after a failed publish
         if: >-
           always() && startsWith(github.ref, 'refs/tags/v') &&
-          (steps.release_cmd.outcome == 'failure' || steps.smoke.outcome == 'failure' ||
-           steps.release_cmd.outcome == 'cancelled' || steps.smoke.outcome == 'cancelled')
+          (env.RELEASE_ATTEMPTED == '1' || env.PRESERVED_RELEASE == '1') &&
+          (failure() || cancelled())
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -u
-          gh release delete "$GITHUB_REF_NAME" --yes \
-            || echo "::warning::could not delete $GITHUB_REF_NAME — continuing"
+          if [ "${RELEASE_ATTEMPTED:-0}" = "1" ]; then
+            gh release delete "$GITHUB_REF_NAME" --yes \
+              || echo "::warning::could not delete $GITHUB_REF_NAME — continuing"
+          fi
           if [ "${PREVIOUS_RELEASE:-0}" = "1" ]; then
             PREV="$RUNNER_TEMP/previous-release"
             TITLE=$(cat "$PREV/title.txt" 2>/dev/null || true)
@@ -194,8 +211,11 @@ jobs:
             [ -f "$BODY" ] || : > "$BODY"
             shopt -s nullglob
             assets=("$PREV/assets/"*)
-            if gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
-                --title "$TITLE" --notes-file "$BODY"; then
+            args=(--title "$TITLE" --notes-file "$BODY")
+            if [ "$(cat "$PREV/prerelease.txt" 2>/dev/null || echo false)" = "true" ]; then
+              args+=(--prerelease)
+            fi
+            if gh release create "$GITHUB_REF_NAME" "${assets[@]}" "${args[@]}"; then
               echo "restored the previous release $GITHUB_REF_NAME"
             else
               echo "::warning::could not restore $GITHUB_REF_NAME — restore it from $PREV by hand"
