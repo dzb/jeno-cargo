@@ -9,10 +9,22 @@ jeno is **self-hosting**: the previous release builds the next one. Every
 release you download was compiled, tested, packaged and published by the
 release before it. That is not a slogan; it is the only way jeno is ever built.
 
+**Linux/macOS**
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dzb/jeno-cargo/master/setup.sh | bash
-jeno --version          # jeno <version> — modern java manager
+curl -fsSL https://github.com/dzb/jeno-cargo/releases/latest/download/install.sh | bash
+jeno --version
 ```
+
+**Windows** (PowerShell; Windows 10 1803+ provides `tar.exe`)
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/dzb/jeno-cargo/releases/latest/download/install.ps1 | iex"
+jeno --version
+```
+
+Both installers need JDK 25+. Windows appends `%USERPROFILE%\.jeno\bin` to the
+user PATH; `jeno upgrade` verifies sha256 before installing.
 
 **Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D23, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
 
@@ -253,11 +265,12 @@ the resource. No version string is hand-maintained in source.
 
 ```
 jeno-<version>/
-├── bin/jeno                       launcher
+├── bin/jeno                       POSIX launcher
+├── bin/jeno.cmd                   Windows launcher
 ├── lib/
 │   ├── jeno-<version>.jar         jeno + freeway + slf4j, one uber-jar
 │   └── toolchain/               junit — loaded only by the forked test JVM
-├── setup.sh
+├── install.sh
 └── SHA256SUMS
 ```
 
@@ -267,25 +280,27 @@ production run never loads a single byte of it.
 
 `jeno bundle` assembles that directory and a `tar.gz` for `curl | bash`; it needs
 `[project].main` and targets the JDK from `[java].version` (or the build JDK).
-`setup.sh` verifies `SHA256SUMS`, swaps `lib/` and `bin/` through a staging
-directory, and leaves `${XDG_CACHE_HOME:-~/.cache}/jeno/store` (your entire
-dependency cache) untouched; `uninstall.sh` removes the install. Artifacts named
+`install.sh` verifies `SHA256SUMS` and swaps `lib/` and `bin/` through a staging
+directory; `install.ps1` is the Windows equivalent. Both leave
+`${XDG_CACHE_HOME:-~/.cache}/jeno/store` (your entire dependency cache) untouched;
+`uninstall.sh` removes the install. Artifacts named
 in `[toolchain].jars` ship only with `bundle --toolchain`, under
 `lib/toolchain/`. `jeno upgrade` (alias `jeno update`) upgrades in place and
 takes effect on the next invocation.
 
 jeno's own release tarball is signed: each release carries
-`jeno-bin-{version}.tar.gz.minisig` and `minisign.pub`. Verify manually before
+`jeno-{version}.tar.gz.minisig`, `install.sh.minisig`, `install.ps1.minisig`
+and `minisign.pub`. Verify manually before
 installing:
 
 ```bash
 minisign -V -P "$(tail -1 minisign.pub)" \
-  -m jeno-bin-{version}.tar.gz -x jeno-bin-{version}.tar.gz.minisig
+  -m jeno-{version}.tar.gz -x jeno-{version}.tar.gz.minisig
 ```
 
 The key id is documented in [RELEASE.md](RELEASE.md); compare the fingerprint
-out of band. `jeno update` currently checks download integrity only — it does
-not verify the minisign signature yet.
+out of band. `jeno upgrade` and the Windows installer verify sha256 only; they
+do not verify the minisign signature (Windows has no minisign dependency).
 
 ## Commands
 
@@ -312,7 +327,7 @@ jeno bundle
 jeno release --dry-run                  # show the URLs it would upload
 jeno release jeno:local:../releases      # or gh:owner/repo / jeno:https://host/
 jeno release jeno:http://192.168.1.39:8080/upload/  # literal private IP only
-curl -fsSL https://host/app/setup.sh | bash
+curl -fsSL https://host/app/install.sh | bash
 ```
 
 ### Signing a release
@@ -331,11 +346,11 @@ jeno release jeno:https://my.host/
 ```
 
 `JENO_MINISIGN` points at the binary (default `minisign`). Every release carries
-`<tar>.minisig`, `setup.sh.minisig`, `release.json.minisig` and `minisign.pub`;
+`<tar>.minisig`, `install.sh.minisig`, `install.ps1.minisig`, `release.json.minisig` and `minisign.pub`;
 the bootstrap embeds the public key, verifies the tar's signature after the
 sha256 check, and refuses to install if minisign is missing or the signature is
 wrong. Unsigned releases need `--allow-unsigned`, print a warning, and their
-bootstrap only checks sha256. A host can still alter the setup and key together:
+bootstrap only checks sha256. A host can still alter the installer and key together:
 check the key fingerprint from this README or the release tag out of band — a
 signature proves the artifact came from that key, not that the host is honest.
 

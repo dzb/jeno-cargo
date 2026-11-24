@@ -29,7 +29,7 @@ import java.util.stream.Stream;
  *
  * <ul>
  *   <li><b>default (dist)</b> — a distribution directory with a launcher,
- *       separate jars, setup.sh, and a tar.gz. Readable, inspectable,
+ *       separate jars, install.sh, and a tar.gz. Readable, inspectable,
  *       updatable jar-by-jar.</li>
  *   <li><b>--uber</b> — a single fat jar with all closure classes merged,
  *       services combined, signatures dropped. One file, easy to share.</li>
@@ -39,7 +39,7 @@ import java.util.stream.Stream;
  * deliverables. {@code target/} keeps only disposable build intermediates
  * ({@code classes}, {@code test-classes}), so {@code rm -rf target} stays the
  * safe, familiar gesture. The dist directory additionally produces
- * a tar.gz (the release artifact) and a setup.sh (self-installing).
+ * a tar.gz (the release artifact) and a install.sh (self-installing).
  */
 public final class PackageCommand implements Command {
 

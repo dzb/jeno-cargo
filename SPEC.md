@@ -415,7 +415,7 @@ modules = ["libs/core", "apps/web"]
 | `jeno info <id> [--source]` | 身份/来源/依赖/源码地址;`--source` 取源码树。标题按 scope 标记:`[dev]`、`[processor]`,MAIN 无标记 |
 | `jeno classpath [--test] [--file <path>]` | IDE 用 classpath;默认编译可见性;`--test` 为测试闭包(MAIN + dev,**排除 processor**——与 `jeno test` 的差异见 REMINDS §14);路径指向 store 内容寻址 jar,不拷贝 |
 | `jeno package [--uber] [--main <class>]` | `target/dist/<name>-<version>.jar`;`--uber` 合并闭包输出 `...-uber.jar`;`--main` 只影响本 jar 的 MANIFEST,不影响 `bundle`/`run` 的 `[project].main` |
-| `jeno bundle [--toolchain]` | `target/dist/<name>-<version>/`(bin/lib/setup.sh/uninstall.sh/SHA256SUMS)+ `.tar.gz`。需要 `[project].main`(缺失即报错);setup.sh 的 JDK 要求取 `[java].version`,未声明则取构建 JDK major;安装前用 `sha256sum -c`/`shasum -a 256 -c` 校验 SHA256SUMS,lib/bin 经 staging 交换并保留 store/config;默认不带 toolchain,`--toolchain` 才把 `[toolchain].jars` 对应的锁工件写入 `lib/toolchain`;未在锁图中出现的 toolchain id 是错误 |
+| `jeno bundle [--toolchain]` | `target/dist/<name>-<version>/`(bin/<name>、bin/<name>.cmd、lib/、install.sh、uninstall.sh、SHA256SUMS)+ `.tar.gz`。需要 `[project].main`(缺失即报错);install.sh 的 JDK 要求取 `[java].version`,未声明则取构建 JDK major;安装前用 `sha256sum -c`/`shasum -a 256 -c` 校验 SHA256SUMS,lib/bin 经 staging 交换并保留 store/config;默认不带 toolchain,`--toolchain` 才把 `[toolchain].jars` 对应的锁工件写入 `lib/toolchain`;未在锁图中出现的 toolchain id 是错误 |
 | `jeno clean [--target (default) \| --dist]` | 默认整棵删 `target/`;`--dist` 只删 `target/dist/` 保留 classes;永不触碰 store |
 | `jeno cache dir \| size \| prune \| purge [--dry-run] [--yes]` | `dir`/`size` 只读;`prune` 删可证明无用之物,无需确认;`purge` 删 store 与 sources,是**破坏性**命令——无 `--yes` 时打印路径/大小并 exit 2,`--dry-run` 只展示不删除(exit 0),`--yes` 才执行;`clean` 是兼容 alias,支持同样 flags |
 | `jeno outdated [--json] [--dev]` | **只读 `jeno.lock`**(不需要 `jeno.toml`);已钉版本 vs 仓库可用版本;默认只查 MAIN,`--dev` 含 dev/processor;`gh:`/`url`/`local:`/`jeno:` 列为未检查;跨 major 单列;完成即 exit 0(有更新也是 0) |
@@ -423,8 +423,8 @@ modules = ["libs/core", "apps/web"]
 | `jeno audit [--json] [--dev]` | OSV 漏洞查询;默认只查 MAIN,`--dev` 才含 dev/processor;只查 Central 坐标,其余列 `notChecked` 并给原因;漏洞或查询失败 exit 1 |
 | `jeno verify` | **只读本地发布预检**:解析 `jeno.toml`/`jeno.lock`,核对每一条直接声明与锁定行的 id/version/source/MAIN scope;按 sha256 校验 store 中每个 jar 与元数据(workspace 本地替换则校验 classes 与版本戳);若 `target/dist/` 已有完整发布三件套,校验其内部一致性与 bundle `SHA256SUMS`;只有 package 产物(仅 jar)视为未准备(skipped),部分三件套仍失败;bundle 目录存在但缺 `SHA256SUMS` 也失败(`artifacts.bundle-incomplete`)。不解析依赖、不下载、不修改项目文件、不访问网络。通过 exit 0,失败 exit 1,带参数 exit 2 |
 | `jeno publish [target] [--json] [--dry-run]` | 写三件套;目标只接受 `gh:`、`jeno:https:`、私有网络 `jeno:http://<literal-ip>…`、`jeno:local:`(§6.6)。jeno 布局逐文件 PUT 后立即 GET 回读,三个文件的字节必须完全一致,否则 exit 1;`--dry-run` 不写 descriptor/sha256、不创建目标、不上传 |
-| `jeno upgrade` / `jeno update`(alias) | 自升级(同一实现) |
-| `jeno release [target] [--json] [--dry-run] [--allow-unsigned]` | 发布 `jeno bundle` 产生的安装包(默认用 minisign 签名,`--allow-unsigned` 才允许无签名):`gh:<owner>/<repo>`、`jeno:https://host/`、私有网络 `jeno:http://<literal-ip>…`、`jeno:local:<dir>`;无 target 只准备 `target/dist/release/` 并打印上传清单。**不隐式 build/test/bundle**;发布后回读并校验 tar 的 sha256(§7.3) |
+| `jeno upgrade` / `jeno update`(alias) | 自升级(同一实现):只认 `jeno-<version>.tar.gz` + `.sha256`,下载后先校验 sha256;Windows 执行 release 的 `install.ps1`,POSIX 解压后执行包内 `install.sh` |
+| `jeno release [target] [--json] [--dry-run] [--allow-unsigned] [--notes-file <path>]` | 发布 `jeno bundle` 产生的安装包(默认用 minisign 签名,`--allow-unsigned` 才允许无签名):`gh:<owner>/<repo>`、`jeno:https://host/`、私有网络 `jeno:http://<literal-ip>…`、`jeno:local:<dir>`;无 target 只准备 `target/dist/release/` 并打印上传清单。**不隐式 build/test/bundle**;发布后回读并校验 tar 的 sha256(§7.3) |
 
 ### 6.2 参数约定
 
@@ -575,7 +575,7 @@ manifest,lock,artifactCount,lockUpdated}`;无 value 的远程发现模式以
 artifactCount,lockUpdated}`。
 `upgrade --json [--check]` 输出 `{checkOnly,currentVersion,latestVersion,
 updateAvailable,upgraded,takesEffectNextInvocation}`;`--check` 不下载、不执行
-setup.sh、不修改安装目录。
+install.sh、不修改安装目录。
 
 `publish --json [target] [--dry-run]` 输出 `{dryRun,target?,project,
 artifacts[],uploaded,verified}`。artifact 为
@@ -697,10 +697,11 @@ HTTP jeno-layout 发布固定使用 **PUT**,不是 POST:
 
 ```
 target/dist/<name>-<version>/
-  bin/<name>          # launcher(注释写明 <name> <version>)
+  bin/<name>          # POSIX launcher(注释写明 <name> <version>)
+  bin/<name>.cmd      # Windows launcher(精确 jar 名,不用 lib\*)
   lib/<name>-<version>.jar
   lib/toolchain/      # 仅 jeno bundle --toolchain
-  setup.sh            # JDK 检查 + SHA256SUMS 校验 + staging 交换
+  install.sh            # JDK 检查 + SHA256SUMS 校验 + staging 交换
   uninstall.sh        # 同时装到 $HOME/.<name>/uninstall.sh;提示手动清 PATH 行
   SHA256SUMS
 target/dist/<name>-<version>.tar.gz
@@ -720,7 +721,7 @@ target/dist/<name>-<version>.tar.gz
 
 **已记录的 known gap(行为修复各自独立成单)**:
 
-- `jeno upgrade` 下载 release 资产时只校验完整性（sha256），不验 minisign 签名；升级链的信任来自下载源。
+- `jeno upgrade` 与 Windows `install.ps1` 只校验 sha256,不验 minisign 签名;升级链的信任来自下载源。
 
 **其他**:
 
@@ -752,31 +753,39 @@ jeno 只把 pom 当作 Central 的**线路格式**读取,不追求 Maven 语义�
 ### 7.3 release 布局与 bootstrap
 
 `jeno release` 的输入是 `target/dist/<name>-<version>.tar.gz`(已由 `jeno bundle` 产生),产物在
-`target/dist/release/`:`setup.sh`(bootstrap)、`<tar>.sha256`、`release.json`。
+`target/dist/release/`:`install.sh`、`install.ps1`、`<tar>.sha256`、`release.json`。
 
-`release.json` 至少:`name`、`version`、`artifact`、`sha256`、`jdk`、`jeno`、`platform`(当前 `any`)。
+`release.json` 至少:`name`、`version`、`artifact`、`sha256`、`jdk`、`jeno`、`platform`(当前 `any`)、
+`installers`(`{"unix":"install.sh","windows":"install.ps1"}`)。
 
 **目标布局**(三种目标同构):
 
 ```
 gh:<owner>/<repo>      https://github.com/<owner>/<repo>/releases/download/<tag>/
-                         <name>-<version>.tar.gz | setup.sh | <tar>.sha256 | release.json
-                       稳定入口: .../releases/latest/download/setup.sh
+                         <name>-<version>.tar.gz | install.sh | install.ps1
+                         <tar>.sha256 | release.json
+                       稳定入口: .../releases/latest/download/install.sh
+                                 .../releases/latest/download/install.ps1
 jeno:https://host/      <base>/<name>/<version>/release/
-                         <name>-<version>.tar.gz | setup.sh | <tar>.sha256 | release.json
-                       <base>/<name>/<version>/setup.sh      (本版本)
-                       <base>/<name>/setup.sh                 (稳定,每次 release 覆盖)
+                         <name>-<version>.tar.gz | install.sh | install.ps1
+                         <tar>.sha256 | release.json
+                       <base>/<name>/<version>/install.sh      (本版本)
+                       <base>/<name>/<version>/install.ps1
+                       <base>/<name>/install.sh                 (稳定,每次 release 覆盖)
+                       <base>/<name>/install.ps1
 jeno:local:<dir>        同一目录结构,file: 写入,无网络
 ```
 
 **签名**:`JENO_MINISIGN_KEY`(secret key,必需除非 `--allow-unsigned`)、`JENO_MINISIGN_PUBKEY`(可选,
-缺失时用 `minisign -R` 派生)、`JENO_MINISIGN`(二进制)。tar、`setup.sh`、`release.json` 各生成
+缺失时用 `minisign -R` 派生)、`JENO_MINISIGN`(二进制)。tar、`install.sh`、`install.ps1`、`release.json` 各生成
 `<file>.minisig`,并上传 `minisign.pub`;`release.json` 增加 `signed`、`minisign.publicKey`、
 `signatures`。签名失败 → exit 1,不上传。无签名只能显式 `--allow-unsigned`。
 
-bootstrap `setup.sh` 下载 tar(curl,缺则 wget)→ 校验 sha256(`sha256sum` 或 `shasum -a 256`)→
+POSIX bootstrap `install.sh` 下载 tar(curl,缺则 wget)→ 校验 sha256(`sha256sum` 或 `shasum -a 256`)→
 (签名 release)要求 `minisign`,下载 `<tar>.minisig` 并用内嵌公钥 `minisign -V` 验签,缺失/失败即退出 →
-解压到临时目录 → 执行包内 `setup.sh`。unsigned release 只校验 sha256 并打印警告。
+解压到临时目录 → 执行包内 `install.sh`。Windows bootstrap `install.ps1` 用 `Invoke-WebRequest`/`Copy-Item`
+下载 tar,`Get-FileHash` 校验 sha256,`tar.exe -xzf` 解压,安装到 `$env:USERPROFILE\.<name>`、
+复制 `bin\<name>.cmd`、写 `uninstall.ps1` 并把 bin 加入 User PATH;它不依赖 minisign。unsigned release 只校验 sha256 并打印警告。
 bootstrap 必须带内嵌公钥;host 可同时篡改 setup 与公钥,用户需从 README/tag 带外核对 fingerprint。
 失败即退出并清理临时目录。URL 写入 bootstrap 时必须是最终可用地址。
 

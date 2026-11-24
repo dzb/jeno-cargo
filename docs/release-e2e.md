@@ -31,7 +31,7 @@ JENO_GITHUB_TOKEN="$(gh auth token)" jeno release gh:dzb/jeno-release-demo
 |---|---:|
 | `release-demo-0.1.0.tar.gz` | 2,857 |
 | `release-demo-0.1.0.tar.gz.sha256` | 65 |
-| `setup.sh` | 913 |
+| `install.sh` | 913 |
 | `release.json` | 197 |
 
 `jeno release` 在发完后回读 tar 并校验 sha256；这一轮通过。
@@ -41,7 +41,7 @@ JENO_GITHUB_TOKEN="$(gh auth token)" jeno release gh:dzb/jeno-release-demo
 目标命令就是 release 打印的那条：
 
 ```bash
-curl -fsSL https://github.com/dzb/jeno-release-demo/releases/latest/download/setup.sh | bash
+curl -fsSL https://github.com/dzb/jeno-release-demo/releases/latest/download/install.sh | bash
 ```
 
 本轮结果：
@@ -72,7 +72,7 @@ release-demo 0.1.0 ok
 exec /usr/bin/curl --resolve github.com:443:140.82.113.3 --http1.1 -4 "$@"
 ```
 
-发布资产和 `setup.sh` 都没有被修改；在正常解析 GitHub 的网络里直接跑上面的
+发布资产和 `install.sh` 都没有被修改；在正常解析 GitHub 的网络里直接跑上面的
 `curl | bash` 即可。这个网络现象也解释了为什么 `jeno release` 自身的 Java HTTP/1.1
 回读校验能通过，而普通 curl 会卡住。
 
@@ -81,7 +81,7 @@ exec /usr/bin/curl --resolve github.com:443:140.82.113.3 --http1.1 -4 "$@"
 - 真实 `gh:` 发布、4 个 asset、回读校验：通过。
 - 干净 HOME 的 `curl | bash` 安装、运行、uninstaller 落盘：通过。
 - 未发现 release command 的功能缺口；本机 GitHub 公共下载的路由问题属于网络环境。
-- `releases/latest/download/setup.sh` 是稳定入口；版本化 `releases/download/v0.1.0/setup.sh`
+- `releases/latest/download/install.sh` 是稳定入口；版本化 `releases/download/v0.1.0/install.sh`
   等价可用，可作为网络排查时的备选。
 
 ## Signed releases（minisign，2026-11-23）
@@ -92,10 +92,10 @@ exec /usr/bin/curl --resolve github.com:443:140.82.113.3 --http1.1 -4 "$@"
 ```text
 $ JENO_MINISIGN_KEY=/tmp/jeno-sig/minisign.key   JENO_MINISIGN_PUBKEY=/tmp/jeno-sig/minisign.pub   JENO_MINISIGN=/tmp/minisign-pkg/root/usr/bin/minisign   jeno release jeno:local:/tmp/jeno-sig/repo
 released jeno:local:/tmp/jeno-sig/repo; installer:
-  curl -fsSL file:///tmp/jeno-sig/repo/sigapp/setup.sh | bash
+  curl -fsSL file:///tmp/jeno-sig/repo/sigapp/install.sh | bash
 ```
 
-产物包含 tar、`setup.sh`、`release.json`、三个 `.minisig` 与 `minisign.pub`（版本级与稳定入口各一份）。
+产物包含 tar、`install.sh`、`release.json`、三个 `.minisig` 与 `minisign.pub`（版本级与稳定入口各一份）。
 `release.json` 的 `signed=true`、`minisign.publicKey`、`signatures` 与实际文件一致。
 clean HOME 安装（PATH 含 minisign）成功，launcher 输出 `signed-app-ok`；篡改 `.minisig` 后 bootstrap
 在 `minisign -V` 处退出 2，未创建安装目录。
@@ -116,8 +116,8 @@ release-demo-0.1.1.tar.gz.minisig
 release-demo-0.1.1.tar.gz.sha256
 release.json
 release.json.minisig
-setup.sh
-setup.sh.minisig
+install.sh
+install.sh.minisig
 ```
 
 发布时使用 `/tmp/minisign-pkg/root/usr/bin/minisign` 和临时 `-W` 密钥；发布后
@@ -125,7 +125,7 @@ setup.sh.minisig
 curl DNS 修正 wrapper：
 
 ```text
-$ curl -fsSL https://github.com/dzb/jeno-release-demo/releases/latest/download/setup.sh | bash
+$ curl -fsSL https://github.com/dzb/jeno-release-demo/releases/latest/download/install.sh | bash
 installing release-demo 0.1.1 ...
 release-demo 0.1.1 installed
 $ .release-demo/bin/release-demo

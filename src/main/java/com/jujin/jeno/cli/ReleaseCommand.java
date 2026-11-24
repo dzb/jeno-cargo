@@ -914,7 +914,7 @@ public final class ReleaseCommand implements Command {
                                     ReleaseSigner.Preview signing) {
         return """
             #!/bin/sh
-            # %1$s %2$s installer: download, verify, unpack, then run the bundled setup.
+            # %1$s %2$s installer: download, verify, unpack, then run the bundled install.sh.
             set -e
 
             URL="%3$s"

@@ -22,9 +22,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * {@code jeno update} end to end — against a loopback releases API, never the
  * real GitHub. The served release carries a minimal dist tar.gz whose
- * setup.sh drops a marker into the redirected HOME; the marker's presence
+ * install.sh drops a marker into the redirected HOME; the marker's presence
  * proves the full path: detect → download → extract → run the packaged
- * setup.sh. CI has already exercised the same chain for real (it installs
+ * install.sh. CI has already exercised the same chain for real (it installs
  * the previous release to build the next); this test pins the logic.
  */
 class UpdateTest {
@@ -45,7 +45,7 @@ class UpdateTest {
             int exit = new UpdateCommand().execute(List.of());
             assertEquals(0, exit, "the upgrade completed");
             assertTrue(Files.exists(home.resolve(".jeno/marker")),
-                    "the packaged setup.sh ran under the redirected HOME");
+                    "the packaged install.sh ran under the redirected HOME");
         } finally {
             server.stop(0);
             System.clearProperty("jeno.update.api");

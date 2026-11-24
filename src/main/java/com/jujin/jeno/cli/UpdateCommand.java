@@ -17,7 +17,7 @@ import java.util.stream.Stream;
 
 /**
  * {@code jeno upgrade} ({@code jeno update} is an alias): checks GitHub Releases for a newer version and
- * self-upgrades — download the tar.gz, extract, run the setup.sh inside.
+ * self-upgrades — download the tar.gz, extract, run the install.sh inside.
  * The same install mechanism as the one-liner, so the upgrade is atomic
  * (fresh install to $HOME/.jeno/, launcher regenerated, old version replaced).
  *
@@ -290,7 +290,7 @@ public final class UpdateCommand implements Command {
             }
 
             // The new package calls its POSIX installer install.sh. A package
-            // with only setup.sh predates the jeno layout and needs one manual
+            // with only install.sh predates the jeno layout and needs one manual
             // install (documented in RELEASE.md).
             Path installScript = tempDir.resolve("jeno-" + latestVersion + "/install.sh");
             try (Stream<Path> stream = Files.walk(tempDir, 2)) {
@@ -407,7 +407,7 @@ public final class UpdateCommand implements Command {
 
     /**
      * The installer subprocess. {@code -Djeno.update.home=<dir>} redirects the
-     * packaged setup.sh's {@code $HOME} — the hermetic-update-test seam
+     * packaged install.sh's {@code $HOME} — the hermetic-update-test seam
      * (and an off-home install root, should one ever be wanted).
      */
     private static Process installProcess(Path installScript) throws IOException {
