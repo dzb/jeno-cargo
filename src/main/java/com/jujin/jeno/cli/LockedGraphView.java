@@ -122,6 +122,10 @@ final class LockedGraphView {
                 add(differences, id + ": lock depth " + row.depth() + ", manifest "
                         + artifact.depth());
             }
+            if (row.api() != artifact.api()) {
+                add(differences, id + ": lock api " + row.api()
+                        + ", manifest " + artifact.api());
+            }
         }
         return differences;
     }

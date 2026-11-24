@@ -19,6 +19,7 @@ class OfflineFlagTest {
 
     @AfterEach
     void resetOffline() {
+        Substitutions.useLocalOverrides(true);
         try {
             var field = ArtifactStore.class.getDeclaredField("offline");
             field.setAccessible(true);
@@ -26,6 +27,46 @@ class OfflineFlagTest {
         } catch (ReflectiveOperationException e) {
             throw new AssertionError("cannot reset the offline flag", e);
         }
+    }
+
+    @Test
+    void lockedFlagIsConsumedAndDisablesWorkspaceOverrides() {
+        AtomicBoolean localOverrides = new AtomicBoolean();
+        AtomicBoolean forwarded = new AtomicBoolean();
+        Command probe = new Command() {
+            @Override
+            public String name() {
+                return "probe";
+            }
+
+            @Override
+            public String summary() {
+                return "a test command";
+            }
+
+            @Override
+            public CommandCapabilities capabilities() {
+                return CommandCapabilities.builder().build();
+            }
+
+            @Override
+            public int execute(List<String> args) {
+                localOverrides.set(Substitutions.localOverridesEnabled());
+                forwarded.set(args.contains("--locked"));
+                return 0;
+            }
+        };
+        CommandRunner runner = new CommandRunner(List.of(probe));
+
+        assertEquals(0, runner.run("--locked", "probe"));
+        assertFalse(localOverrides.get(), "global --locked disables local substitutions");
+        assertFalse(forwarded.get(), "the runner consumes --locked");
+
+        assertEquals(0, runner.run("probe", "--locked"));
+        assertFalse(localOverrides.get(), "the command-local spelling works too");
+
+        assertEquals(0, runner.run("probe"));
+        assertTrue(localOverrides.get(), "a later invocation starts in normal mode again");
     }
 
     @Test

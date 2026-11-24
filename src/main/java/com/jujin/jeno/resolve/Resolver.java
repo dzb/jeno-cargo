@@ -495,8 +495,10 @@ public final class Resolver {
             Set<String> mainReachable = reachable(children, project.requirements());
             Set<String> processorReachable =
                     reachable(children, project.processorRequirements());
-            Set<String> apiExported = apiReachable(selected);
-            apiExported.removeAll(declaredIds);
+            Set<String> apiReachable = apiReachable(selected);
+            Set<String> apiExported = new HashSet<>(apiReachable);
+            apiExported.removeIf(id -> declaredIds.contains(id)
+                    && !project.apiRequirements().contains(id));
 
 
             Depths depths = new Depths(selected, children, declaredIds);

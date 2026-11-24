@@ -147,6 +147,75 @@ class TreeWhyTest {
     }
 
     @Test
+    void treeAndWhyMarkExportedApiArtifacts() throws Exception {
+        Path repo = dir.resolve("api-repo");
+        pom(repo, "com/example/lib-a/1.0.0", "lib-a", "1.0.0", """
+            <dependencies>
+              <dependency>
+                <groupId>com.example</groupId>
+                <artifactId>lib-b</artifactId>
+                <version>1.1.0</version>
+              </dependency>
+            </dependencies>
+            """);
+        pom(repo, "com/example/lib-b/1.1.0", "lib-b", "1.1.0", "");
+        Files.writeString(dir.resolve("jeno.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [repos]
+            fix = "local:%s"
+
+            [deps]
+            "com.example:lib-a" = "fix:1.0.0"
+
+            [deps-api]
+            "com.example:lib-a" = "fix:1.0.0"
+            """.formatted(repo));
+
+        writeLock();
+        TreeCommand tree = new TreeCommand(new ArtifactStore(dir.resolve("store")),
+                localPomSource(), text -> { throw new IllegalStateException("no natives here"); },
+                dir);
+        assertEquals(0, tree.execute(List.of()));
+        String treeOut = readConsole();
+        assertTrue(treeOut.contains("com.example:lib-a@1.0.0  [depth 1, declared, api]"),
+                "the direct API dependency is marked, got: " + treeOut);
+        assertFalse(treeOut.contains("lib-b@1.1.0  [depth 2, api]"),
+                "the POM dependency is implementation-only, got: " + treeOut);
+
+        buffer.reset();
+        assertEquals(0, tree.execute(List.of("--json")));
+        var treeJson = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                readConsole());
+        var artifacts = treeJson.getArray("artifacts");
+        boolean libAApi = false;
+        for (int i = 0; i < artifacts.size(); i++) {
+            var entry = artifacts.getObject(i);
+            if (entry.getString("id").equals("com.example:lib-a")) {
+                libAApi = entry.getBoolean("api");
+            }
+        }
+        assertTrue(libAApi, "tree JSON carries the API flag");
+
+        buffer.reset();
+        WhyCommand why = new WhyCommand(new ArtifactStore(dir.resolve("store")),
+                localPomSource(), text -> { throw new IllegalStateException("no natives here"); },
+                dir);
+        assertEquals(0, why.execute(List.of("com.example:lib-a")));
+        assertTrue(readConsole().contains("declared directly, api"),
+                "why marks the direct API artifact");
+
+        buffer.reset();
+        assertEquals(0, why.execute(List.of("--json", "com.example:lib-a")));
+        var whyJson = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                readConsole());
+        assertTrue(whyJson.getObject("artifact").getBoolean("api"),
+                "why JSON carries the API flag");
+    }
+
+    @Test
     void treeWithoutALockSaysWhatToRunAndDrawsNothing() throws Exception {
         Files.writeString(dir.resolve("jeno.toml"), """
             [project]

@@ -26,7 +26,7 @@ jeno --version
 Both installers need JDK 25+. Windows appends `%USERPROFILE%\.jeno\bin` to the
 user PATH; `jeno upgrade` verifies sha256 before installing.
 
-**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D28, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
+**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D29, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
 
 ---
 
@@ -73,7 +73,9 @@ exemptions are how budgets die.
 
 The intended answer to a breach is structural: swap the library for a smaller
 one, exclude a subtree, or consciously raise the budget. `jeno tree` renders the
-depths; `jeno why <id>` shows every path that introduces an artifact.
+depths; `jeno why <id>` shows every path that introduces an artifact. Both mark
+artifacts whose classes are part of the explicit `[deps-api]` closure with
+`, api` in human output and `"api": true` in JSON.
 
 ### 3. Two scopes, one graph
 
@@ -425,6 +427,18 @@ Unknown arguments are usage errors (exit 2), never silently ignored. `--` ends
 jeno's own options: after it, arguments belong to the command — for `run`, to the
 program (`jeno run app.Main -- --offline` passes `--offline` through).
 
+`--locked` is a run-level release switch: it disables workspace
+`target/classes` substitution and requires every artifact on the classpath,
+verify, package or bundle to come from `jeno.lock` + the store. Put it before or
+after the command:
+
+```bash
+jeno --locked verify
+jeno --locked build
+jeno --locked package
+```
+
+
 ### Output and colour
 
 Human output adapts to the destination. A terminal gets colour, check marks and
@@ -678,8 +692,10 @@ that act on one project — `add`, `remove`, `run`, `info`, `tree`, `why`,
 
 The substitution happens where the classpath is assembled, so it is visible to
 `jeno build`, `jeno test`, `jeno run` and `jeno classpath`; the lockfile itself is
-unchanged. The file format is [SPEC.md](SPEC.md) §5; the design record, including
-why `publish` is unaffected, is in [docs/workspace-design.md](docs/workspace-design.md).
+unchanged. For CI/release checks, `--locked` turns substitution off for the whole
+invocation, so a stale local module cannot hide a missing published artifact.
+The file format is [SPEC.md](SPEC.md) §5; the design record, including why
+`publish` is unaffected, is in [docs/workspace-design.md](docs/workspace-design.md).
 
 ## Where the truth lives
 

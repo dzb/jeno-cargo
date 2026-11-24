@@ -80,6 +80,7 @@ class WorkspaceSubstitutionTest {
 
     @AfterEach
     void tearDown() {
+        Substitutions.useLocalOverrides(true);
         ProjectLock.useUserRoot();
         com.jujin.jeno.store.Paths.resetForTesting();
         com.jujin.jeno.resolve.ArtifactLocations.useProjectRoot(Path.of("").toAbsolutePath());
@@ -133,6 +134,30 @@ class WorkspaceSubstitutionTest {
         String errors = run(web, new BuildCommand(store, web));
 
         assertTrue(errors.contains("com.example:core: local 1.2.1, locked 1.0.0"), errors);
+    }
+
+    @Test
+    void lockedModeUsesStoreArtifactsInsteadOfTheLocalModule() throws Exception {
+        byte[] bytes = "published-core-jar".getBytes(StandardCharsets.UTF_8);
+        Path jar = root.resolve(".cache/store").resolve(digest(bytes) + ".jar");
+        Files.createDirectories(jar.getParent());
+        Files.write(jar, bytes);
+        writeLock(web, """
+            [[artifacts]]
+            id = "com.example:core"
+            version = "1.0.0"
+            source = "central"
+            url = "https://repo.maven.apache.org/maven2/core/core/1.0.0/core-1.0.0.jar"
+            sha256 = "%s"
+            depth = 1
+            """.formatted(digest(bytes)));
+
+        Substitutions.useLocalOverrides(false);
+        List<String> entries = classpath(web);
+
+        assertTrue(entries.contains(jar.toString()), entries.toString());
+        assertFalse(entries.contains(core.toRealPath().resolve("target/classes").toString()),
+                "the workspace checkout must not replace the locked artifact: " + entries);
     }
 
     @Test

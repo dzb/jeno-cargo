@@ -91,6 +91,7 @@ jeno 又用严格可见性约束用户项目的依赖边界——**这个工具�
 | D26 | 依赖身份的 canonical source 必须一致 | 同一 id 从不同仓库/GitHub/URL 进入是硬冲突;同一来源用两个 alias 也是硬冲突,禁止第一个来源静默获胜 |
 | D27 | 依赖节统一 deps 前缀,限定词后置 | `[deps]`、`[deps-dev]`、`[deps-api]` 的思维链都是“这是依赖,再说明是哪类依赖”; dot 不再用于依赖节,旧 `[deps.<repo>]` / `[deps-dev.<repo>]` 分组表已移除,避免 `deps` 后面出现两套修饰语法。旧 `[dev-deps]` 直接给迁移错误,不做双名兼容 |
 | D28 | named jeno repository 使用 per-artifact `index.jeno.toml` | index 只做 add/outdated 的版本发现,由发布流程更新;它不进入 lock、不存 jar/sha、索引缺失时 build/lock 不受影响。全局跨仓库搜索仍是独立 catalog |
+| D29 | `--locked` 关闭 workspace 本地替换 | workspace 的本地 classes 是开发态便利,不能作为发布证据。`--locked` 让 classpath/verify/package/bundle 只消费 `jeno.lock` + store,但仍保留 workspace 的拓扑编排;不改变 lock,不引入第二套发布模型 |
 
 ---
 

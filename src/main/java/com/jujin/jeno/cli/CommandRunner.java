@@ -42,6 +42,7 @@ public final class CommandRunner {
         boolean json = false;
         boolean help = false;
         boolean offline = false;
+        boolean locked = false;
         boolean version = false;
         for (int i = 0; i < commandLine.size(); ) {
             String arg = commandLine.get(i);
@@ -56,6 +57,9 @@ public final class CommandRunner {
                 commandLine.remove(i);
             } else if (arg.equals("--offline") || arg.equals("-o")) {
                 offline = true;
+                commandLine.remove(i);
+            } else if (arg.equals("--locked")) {
+                locked = true;
                 commandLine.remove(i);
             } else if (arg.equals("--version") || arg.equals("-v")) {
                 version = true;
@@ -153,6 +157,13 @@ public final class CommandRunner {
             }
         }
         offline |= localOffline;
+        for (int i = flagsEnd - 1; i >= 0; i--) {
+            if (rest.get(i).equals("--locked")) {
+                locked = true;
+                rest.remove(i);
+            }
+        }
+        Substitutions.useLocalOverrides(!locked);
         if (offline) {
             if (!command.supportsOffline()) {
                 String message = command.name() + " needs the network by design — "
@@ -218,7 +229,7 @@ public final class CommandRunner {
                 seen = true;
             } else if (!arg.equals("--json") && !arg.equals("--format=json")
                     && !arg.equals("--format=text") && !arg.equals("--offline")
-                    && !arg.equals("-o")) {
+                    && !arg.equals("-o") && !arg.equals("--locked")) {
                 return false;
             }
         }
@@ -307,6 +318,9 @@ public final class CommandRunner {
         System.out.println("  " + pad("-o, --offline", column)
                 + Ui.dim("refuse all network access; remote publish/release targets, "
                 + "update/outdated/audit are rejected; local targets remain allowed"));
+        System.out.println("  " + pad("--locked", column)
+                + Ui.dim("use only jeno.lock + store artifacts; disable workspace "
+                + "local target/classes substitution"));
         System.out.println("  " + pad("--", column)
                 + Ui.dim("end jeno's options; the rest goes to the command"));
         System.out.println();

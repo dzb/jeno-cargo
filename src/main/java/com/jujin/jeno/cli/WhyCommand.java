@@ -171,6 +171,7 @@ public final class WhyCommand implements Command {
             identity.put("declared", artifact.declared());
             identity.put("scope", artifact.scope().name()
                     .toLowerCase(java.util.Locale.ROOT));
+            identity.put("api", artifact.api());
             identity.put("marker", substitutions.marker(artifact.id()));
             JsonArray pathsJson = JsonUtils.array();
             for (List<String> path : paths) {
@@ -190,6 +191,7 @@ public final class WhyCommand implements Command {
 
         System.out.println(target + "@" + artifact.version() + " — depth " + artifact.depth()
                 + (artifact.declared() ? ", declared directly" : "")
+                + (artifact.api() ? ", api" : "")
                 + substitutions.marker(artifact.id()));
         if (paths.isEmpty()) {
             System.out.println("  (declared: the root of its own path)");

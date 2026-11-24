@@ -43,6 +43,14 @@ final class Substitutions {
         }
     }
 
+    /**
+     * {@code --locked} switches off workspace replacement process-wide for one
+     * invocation. It is deliberately a run-level switch: the resolver still
+     * sees a workspace for orchestration, but every classpath/packaging lookup
+     * uses only the lock and store.
+     */
+    private static volatile boolean localOverrides = true;
+
     private final Path root;
     private final Map<String, Module> byId;
     private final Set<String> noted = new HashSet<>();
@@ -57,8 +65,21 @@ final class Substitutions {
         return new Substitutions(null, Map.of());
     }
 
+    /** Enables/disables local workspace replacement for this process. */
+    static void useLocalOverrides(boolean enabled) {
+        localOverrides = enabled;
+    }
+
+    /** Whether local workspace replacement is enabled in this process. */
+    static boolean localOverridesEnabled() {
+        return localOverrides;
+    }
+
     /** The workspace the project sits in, or {@link #none()} when there is none. */
     static Substitutions forProject(Path projectDir) {
+        if (!localOverrides) {
+            return none();
+        }
         return Workspaces.read(projectDir)
                 .map(workspace -> of(workspace.root(), workspace.modules()))
                 .orElseGet(Substitutions::none);

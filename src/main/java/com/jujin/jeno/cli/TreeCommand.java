@@ -234,6 +234,7 @@ public final class TreeCommand implements Command {
                             .toLowerCase(java.util.Locale.ROOT));
                     entry.put("dev", artifact.scope()
                             == com.jujin.jeno.resolve.Scope.DEV);
+                    entry.put("api", artifact.api());
                     String local = substitutions.localPath(artifact.id());
                     if (local != null) {
                         entry.put("local", local);
@@ -258,6 +259,7 @@ public final class TreeCommand implements Command {
                 + Ui.dim("  [depth " + artifact.depth()
                 + (artifact.declared() ? ", declared" : "")
                 + scopeSuffix(artifact.scope())
+                + (artifact.api() ? ", api" : "")
                 + "]" + suffix);
     }
 

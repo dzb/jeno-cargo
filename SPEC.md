@@ -385,7 +385,7 @@ api = true                # 可选;通过 [deps-api] 进入编译可见性的 AP
 3. url 必须 https;明文 http 仅限字面私有网络地址(localhost、127/8、10/8、172.16-31、192.168/16、169.254/16、IPv6 ::1/fc00::/7/fe80::/10),公网 http 与主机名拒绝
 4. depth ≥ 1
 5. 按 id 字典序输出(稳定 diff)
-6. 一致性:lock 的依赖集合与 jeno.toml + 描述符闭包一致;不一致 → 拒绝 build/run,提示 `jeno lock`。`tree`/`why` 也以锁为权威:二者先读锁、再解析 manifest 只为补父子边,id/version/source/depth/scope 任一不一致即 exit 1(至多 10 行差异,不输出图);无锁 → exit 1
+6. 一致性:lock 的依赖集合与 jeno.toml + 描述符闭包一致;不一致 → 拒绝 build/run,提示 `jeno lock`。`tree`/`why` 也以锁为权威:二者先读锁、再解析 manifest 只为补父子边,id/version/source/depth/scope/api 任一不一致即 exit 1(至多 10 行差异,不输出图);无锁 → exit 1
 7. 命中策略:lock 有效 → 直接采用(sha256 权威,不重新解析);`jeno lock` **总是重解**并重写锁,
    `--check` 只比较
 8. 兼容性:旧锁里 `source` 以 `gitee:` 开头的行,**读锁即报**可执行的迁移错误(gitee: 物种已移除),而不是留给下游命令各自报 URI 错误;`source` 以 `jeno:` 开头的行照常读
@@ -446,8 +446,8 @@ modules = ["libs/core", "apps/web"]
 | `jeno build` | javac 编译 `src/main/java`,严格可见性 classpath(只含 MAIN 声明);`--release` 取 `[java].version`;processor 走 `-processorpath`。至少一个 Java 源或 `src/main/resources` 下的文件必须存在:有源则编译并拷资源;无源但有资源则只创建 `target/classes` 并拷资源、exit 0;两者都没有则报错 |
 | `jeno test` | fork JVM:`@JenoTest` + JUnit Platform;classpath 含 MAIN + dev,processor 只走 javac 的 `-processorpath`;每次运行先清空 `target/test-results/`(空测试/编译失败也会清空),XML 报告写该目录 |
 | `jeno run [<main>] [args…]` | 在 runtime classpath(排除 dev)上运行;无参数时用 `[project].main`;`[scripts]` 优先于同名主类。target 在 `--` 之前(可省略);jeno 旗标只在 target 之前生效;`--` 之后**全部**是程序参数(§6.2) |
-| `jeno tree [--json]` | 依赖树 + 深度(processor 根也会列出并标 `, processor`);**以 `jeno.lock` 为准**:先读锁,再解析 manifest 只为补父子边;id/version/source/depth/scope 任一不一致 → exit 1、至多 10 行差异、不输出图 |
-| `jeno why <id>` | 每个引入路径与深度;同样以锁为准,漂移拒绝画图 |
+| `jeno tree [--json]` | 依赖树 + 深度(processor 根也会列出并标 `, processor`);显式 `[deps-api]` 闭包标 `, api`;**以 `jeno.lock` 为准**:先读锁,再解析 manifest 只为补父子边;id/version/source/depth/scope/api 任一不一致 → exit 1、至多 10 行差异、不输出图 |
+| `jeno why <id>` | 每个引入路径与深度;API 闭包中的 artifact 标 `, api`;同样以锁为准,漂移拒绝画图 |
 | `jeno info <id> [--source]` | 身份/来源/依赖/源码地址;`--source` 取源码树。标题按 scope 标记:`[dev]`、`[processor]`,MAIN 无标记 |
 | `jeno classpath [--test] [--file <path>]` | IDE 用 classpath;默认编译可见性;`--test` 为测试闭包(MAIN + dev,**排除 processor**——与 `jeno test` 的差异见 REMINDS §14);路径指向 store 内容寻址 jar,不拷贝 |
 | `jeno package [--uber] [--main <class>]` | `target/dist/<name>-<version>.jar`;`--uber` 合并闭包输出 `...-uber.jar`;`--main` 只影响本 jar 的 MANIFEST,不影响 `bundle`/`run` 的 `[project].main` |
@@ -468,7 +468,8 @@ modules = ["libs/core", "apps/web"]
 - **`--` 结束 jeno 的选项**:之后的内容作为位置参数交给命令(`run` 交给程序)。
 - **项目锁**：写 `target/`/`jeno.lock` 的命令 `lock`、`build`、`test`、`clean`、`add`、`remove`、`package`、`bundle`、`publish`、`release` 共用一把项目锁；`publish`/`release` 的上传阶段也在锁内。
 - **`--help` / `-h`**:只在 `--` 之前、且是唯一剩余参数时生效;`jeno --help` 打印清单 exit 0。
-- **`run` 的旗标边界**:jeno 的 `--module`/`--offline` 只在 target 之前生效;target 之后(或 `--` 之后)全部是程序参数。
+- **`run` 的旗标边界**:jeno 的 `--module`/`--offline`/`--locked` 只在 target 之前生效;target 之后(或 `--` 之后)全部是程序参数。
+- **`--locked`**:命令前后均可;关闭 workspace 的本地 `target/classes` 替换,classpath/verify/package/bundle 只消费 `jeno.lock` + store。
 
 ### 6.3 退出码
 
@@ -564,7 +565,8 @@ summary:    {modules, passedModules, failedModules, checks, ...}
 `lockFile`, `check`, `upToDate`, `artifacts`, `differences[]`。check 漂移时
 诊断码为 `LOCK_STALE`,并通过 `nextActions` 给出 `["jeno","lock"]`。
 
-`why --json` 输出 `{found, target?, artifact?, paths[][], introductionPaths}`;
+`why --json` 输出 `{found, target?, artifact?, paths[][], introductionPaths}`,
+`artifact` 含 `api` 标记;
 不在图中时 `found=false` 且 exit 0。`classpath --json` 输出
 `{mode: compile|test, classpath, entries[], file?, written?}`。
 
@@ -649,7 +651,7 @@ noTests,reportFiles[],durationMs}`。测试失败仍是有效结果:module exit 
 | `project` | `{name, version}` |
 | `budget` | 整数(`max-depth`) |
 | `roots[]` | 声明根 id:`[deps]` → `[deps-dev]` → processors,按各自声明顺序 |
-| `artifacts[]` | `{id, version, depth, declared, dev, scope, local?, children[]}`;按 id 排序,`children` 排序。`scope` 为 `main`/`dev`/`processor`;workspace 本地替换时 `local` 为相对工作区根的路径(否则省略) |
+| `artifacts[]` | `{id, version, depth, declared, dev, scope, api, local?, children[]}`;按 id 排序,`children` 排序。`scope` 为 `main`/`dev`/`processor`;`api` 表示显式 `[deps-api]` 闭包;workspace 本地替换时 `local` 为相对工作区根的路径(否则省略) |
 
 **outdated**
 
@@ -718,6 +720,14 @@ HTTP jeno-layout 发布固定使用 **PUT**,不是 POST:
 **`add` 的 discover 形态**：不带显式版本时（列举 Central 版本、Central 裸名搜索，或 named jeno repository 的 `index.jeno.toml`）是联网操作，`--offline` 下报用法错误（退出码 2）——要离线就带上显式版本：`jeno add "<id>" <version>` 只读 store，`--offline` 下照常可用。
 
 **为什么可行**：store 有持久化的 URL → digest 索引（`store/index/<sha256(url)>.url`）。没有它，索引未命中会是常态（每个 pom 都被当作"没见过"），`--offline` 必然失败。
+
+### 6.7.1 全局旗标 `--locked`
+
+`--locked` 关闭本次运行的 workspace 本地替换：`Substitutions` 返回空集合，所有
+classpath、`verify`、`package`、`bundle` 只消费 `jeno.lock` 与 store 中按 sha256
+找到的 jar。它不改变 lock 内容，也不拒绝 workspace 的拓扑编排；适合
+`jeno --locked verify` / `jeno --locked package` 做发布前检查。`run` 中 target
+之后出现的 `--locked` 属于程序参数。
 
 ---
 

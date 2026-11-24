@@ -206,6 +206,7 @@ jeno clean                              逐模块;遇错继续,汇总
 | 项目锁 `~/.jeno/locks/<sha(realpath)>` | 不变;编排时逐模块取锁 |
 | 严格可见性 | 不变(替换只改字节来源) |
 | `--offline` | 语义不变;兄弟模块少一次网络需求 |
+| `--locked` | 关闭本地替换;classpath/verify/package/bundle 只消费 lock + store |
 | `jeno cache` | 不变;工作区不产生新的全局目录 |
 | 深度预算 | 不变;看锁里的图,与字节来源无关 |
 | `[scripts]` 的 `JENO_CLASSPATH` | 跟随替换 |

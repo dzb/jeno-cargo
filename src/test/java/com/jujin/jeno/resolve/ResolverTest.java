@@ -914,6 +914,9 @@ class ResolverTest {
 
             [deps]
             widget = "gh:acme/widget@v1.0.0"
+
+            [deps-api]
+            widget = "gh:acme/widget@v1.0.0"
             """), pomSource(
                 "com.example:lib-b:1.0.0", pom("com.example", "lib-b", "1.0.0", "")),
             descriptorSource(ghDescriptor("acme", "widget", "v1.0.0", "1.0.0"),
@@ -925,8 +928,8 @@ class ResolverTest {
                         .collect(java.util.stream.Collectors.toSet()));
         assertTrue(artifact(exported, "com.example:lib-b").api(),
                 "the child is marked exported API");
-        assertFalse(artifact(exported, "widget").api(),
-                "the direct dependency is not marked as an API child");
+        assertTrue(artifact(exported, "widget").api(),
+                "a direct dependency marked in [deps-api] carries the API flag");
 
         String implementationDescriptor = apiDescriptor.replace("""
             [deps-api]

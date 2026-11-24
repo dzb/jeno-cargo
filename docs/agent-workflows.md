@@ -106,6 +106,20 @@ jeno --json publish --dry-run "jeno:local:../repo" --module libs/core
 - A no-value `add --json` without `--repo` returns `JSON_DISCOVERY_UNSUPPORTED`;
   pass an explicit version for mutation.
 
+## Release checks in a workspace
+
+Use `--locked` to make the lock and store the only byte source:
+
+```bash
+jeno --locked verify
+jeno --locked build
+jeno --locked package
+```
+
+This disables local `target/classes` substitution for the whole invocation. It
+does not change `jeno.lock`; a missing store artifact is a failure instead of a
+silent fallback to an unbuilt/working-tree module.
+
 ## CI pattern
 
 ```bash

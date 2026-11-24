@@ -41,6 +41,8 @@ final class CommandCatalog {
                 "print the jeno version; combine with --json for a JSON document");
         addFlag(globalFlags, "--offline, -o",
                 "refuse network access for commands that support it");
+        addFlag(globalFlags, "--locked",
+                "use only jeno.lock + store artifacts; disable workspace local overrides");
         addFlag(globalFlags, "--",
                 "end jeno's options; the rest goes to the command");
         root.put("globalFlags", globalFlags);
