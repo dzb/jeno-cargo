@@ -126,7 +126,8 @@ public final class UpdateCommand implements Command {
         }
 
         String latest;
-        String tarGzUrl = null;
+        ReleaseAsset asset;
+        boolean legacyLayout = false;
         try {
             HttpResponse<String> response = http.send(
                     HttpRequest.newBuilder(URI.create(releasesApi())).GET().build(),
@@ -137,7 +138,10 @@ public final class UpdateCommand implements Command {
             }
             var map = JsonUtils.parseObject(response.body()).toMap();
             latest = String.valueOf(map.get("tag_name"));
-            tarGzUrl = findTarGzUrl(map);
+            String latestVersion = latest == null ? null
+                    : (latest.startsWith("v") ? latest.substring(1) : latest);
+            asset = findReleaseAsset(map, latestVersion);
+            legacyLayout = hasLegacyAsset(map);
         } catch (IOException | InterruptedException e) {
             return fail(json, 1, "NETWORK_FAILED",
                     "cannot reach GitHub — check your network connection");
@@ -172,16 +176,21 @@ public final class UpdateCommand implements Command {
             return 0;
         }
 
-        if (tarGzUrl == null || tarGzUrl.isBlank()) {
-            return fail(json, 1, "RELEASE_ASSET_MISSING",
-                    "no tar.gz asset found in release " + latest);
+        if (asset == null) {
+            String message = legacyLayout
+                    ? "release " + latest + " uses the old jeno-bin-* asset name — "
+                        + "this release predates the jeno layout; install it manually once, "
+                        + "then upgrade again"
+                    : "release " + latest + " has no jeno-" + latestVersion
+                        + ".tar.gz plus .sha256 — install it manually once, then upgrade again";
+            return fail(json, 1, "RELEASE_ASSET_MISSING", message);
         }
 
         if (json) {
             String versionToInstall = latestVersion;
-            String urlToInstall = tarGzUrl;
+            ReleaseAsset assetToInstall = asset;
             JsonCapture.Result captured = JsonCapture.run(() ->
-                    install(versionToInstall, urlToInstall));
+                    install(versionToInstall, assetToInstall));
             if (captured.exitCode() != 0) {
                 JsonResult.error("upgrade", captured.exitCode(), "UPGRADE_FAILED", captured.message())
                         .emit(captured.exitCode());
@@ -192,7 +201,7 @@ public final class UpdateCommand implements Command {
         }
 
         System.out.println("upgrading " + Jeno.VERSION + " → " + latestVersion + " ...");
-        return install(latestVersion, tarGzUrl);
+        return install(latestVersion, asset);
     }
 
     private void emitResult(boolean json, String latestVersion, boolean updateAvailable,
@@ -216,18 +225,54 @@ public final class UpdateCommand implements Command {
         return exit;
     }
 
-    private int install(String latestVersion, String tarGzUrl) {
+    private int install(String latestVersion, ReleaseAsset asset) {
         Path tempTar = null;
         Path tempDir = null;
         try {
-            Fetch fetch = downloadWithRetry(tarGzUrl);
+            if (isWindows()) {
+                Fetch installer = downloadWithRetry(asset.installerUrl());
+                if (installer.body() == null) {
+                    System.err.println(Ui.errPrefix() + "download of install.ps1 failed: "
+                            + installer.failure());
+                    return 1;
+                }
+                Path ps1 = Files.createTempFile("jeno-install-", ".ps1");
+                Files.write(ps1, installer.body());
+                Process install = installProcess(ps1);
+                int exit = install.waitFor();
+                Files.deleteIfExists(ps1);
+                if (exit != 0) {
+                    System.err.println(Ui.errPrefix() + "installation failed (exit " + exit + ")");
+                    return 1;
+                }
+                System.out.println("upgraded to jeno " + latestVersion
+                        + " — takes effect on the next jeno invocation");
+                return 0;
+            }
+
+            Fetch fetch = downloadWithRetry(asset.tarUrl());
             if (fetch.body() == null) {
                 System.err.println(Ui.errPrefix() + "download failed: " + fetch.failure());
                 if (fetch.propagationLikely()) {
                     System.err.println("  the release asset may not have propagated yet — "
                             + "retry in a moment; if it keeps failing, download it from "
-                            + tarGzUrl);
+                            + asset.tarUrl());
                 }
+                return 1;
+            }
+
+            Fetch checksum = downloadWithRetry(asset.shaUrl());
+            if (checksum.body() == null) {
+                System.err.println(Ui.errPrefix() + "cannot read " + asset.shaUrl()
+                        + " — " + checksum.failure());
+                return 1;
+            }
+            String expected = new String(checksum.body(), java.nio.charset.StandardCharsets.UTF_8)
+                    .strip().split("\\s+")[0].toLowerCase(java.util.Locale.ROOT);
+            String actual = ArtifactStore.sha256(fetch.body());
+            if (!actual.equals(expected)) {
+                System.err.println(Ui.errPrefix() + "sha256 mismatch for " + asset.tarUrl()
+                        + " — expected " + expected + ", got " + actual);
                 return 1;
             }
 
@@ -244,13 +289,21 @@ public final class UpdateCommand implements Command {
                 return 1;
             }
 
-            // find and run the setup.sh inside the distribution
-            Path installScript = tempDir.resolve("jeno-" + latestVersion + "/setup.sh");
+            // The new package calls its POSIX installer install.sh. A package
+            // with only setup.sh predates the jeno layout and needs one manual
+            // install (documented in RELEASE.md).
+            Path installScript = tempDir.resolve("jeno-" + latestVersion + "/install.sh");
             try (Stream<Path> stream = Files.walk(tempDir, 2)) {
                 installScript = stream
-                        .filter(path -> path.getFileName().toString().equals("setup.sh"))
+                        .filter(path -> path.getFileName().toString().equals("install.sh"))
                         .findFirst()
                         .orElse(installScript);
+            }
+            if (!Files.isRegularFile(installScript)) {
+                System.err.println(Ui.errPrefix() + "release " + latestVersion
+                        + " has no install.sh — it predates the jeno layout; "
+                        + "install that release manually once, then upgrade again");
+                return 1;
             }
             Process install = installProcess(installScript);
             int exit = install.waitFor();
@@ -358,23 +411,67 @@ public final class UpdateCommand implements Command {
      * (and an off-home install root, should one ever be wanted).
      */
     private static Process installProcess(Path installScript) throws IOException {
-        ProcessBuilder builder = new ProcessBuilder("bash", installScript.toString());
-        String home = System.getProperty("jeno.update.home");
-        if (home != null && !home.isBlank()) {
-            builder.environment().put("HOME", home);
+        ProcessBuilder builder;
+        if (isWindows()) {
+            String powershell = System.getProperty("jeno.update.powershell", "powershell");
+            builder = new ProcessBuilder(powershell, "-NoProfile",
+                    "-ExecutionPolicy", "Bypass", "-File", installScript.toString());
+        } else {
+            builder = new ProcessBuilder("bash", installScript.toString());
+            String home = System.getProperty("jeno.update.home");
+            if (home != null && !home.isBlank()) {
+                builder.environment().put("HOME", home);
+            }
         }
         return builder.inheritIO().start();
     }
 
-    private String findTarGzUrl(Map<String, Object> release) {
+    private static boolean isWindows() {
+        String override = System.getProperty("jeno.update.os");
+        if (override != null) {
+            return override.equalsIgnoreCase("windows");
+        }
+        return System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT)
+                .contains("win");
+    }
+
+    private record ReleaseAsset(String tarUrl, String shaUrl, String installerUrl) {}
+
+    private boolean hasLegacyAsset(Map<String, Object> release) {
         if (release.get("assets") instanceof List<?> assets) {
+            for (Object asset : assets) {
+                if (asset instanceof Map<?, ?> assetMap
+                        && String.valueOf(assetMap.get("name")).startsWith("jeno-bin-")) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private ReleaseAsset findReleaseAsset(Map<String, Object> release, String version) {
+        if (release.get("assets") instanceof List<?> assets) {
+            String tarName = "jeno-" + version + ".tar.gz";
+            String shaName = tarName + ".sha256";
+            String ps1Name = "install.ps1";
+            String tar = null;
+            String sha = null;
+            String ps1 = null;
             for (Object asset : assets) {
                 if (asset instanceof Map<?, ?> assetMap) {
                     String name = String.valueOf(assetMap.get("name"));
-                    if (name.endsWith(".tar.gz")) {
-                        return String.valueOf(assetMap.get("browser_download_url"));
+                    String url = String.valueOf(assetMap.get("browser_download_url"));
+                    if (name.equals(tarName)) {
+                        tar = url;
+                    } else if (name.equals(shaName)) {
+                        sha = url;
+                    } else if (name.equals(ps1Name)) {
+                        ps1 = url;
                     }
                 }
+            }
+            if (tar != null && sha != null) {
+                return new ReleaseAsset(tar, sha, ps1);
             }
         }
         return null;

@@ -1,5 +1,6 @@
 package com.jujin.jeno.cli;
 
+import com.jujin.jeno.store.ArtifactStore;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -222,22 +223,41 @@ class UpdateTest {
     }
 
     /**
-     * Builds the minimal dist tar.gz the loopback serves: a setup.sh that
-     * drops the marker — the installer is the artifact under test.
+     * Builds the minimal dist tar.gz the loopback serves: an install.sh that
+     * drops the marker — the installer is the artifact under test. The sha256
+     * file is part of the jeno release layout.
      */
     private void packageDist(String version) throws IOException, InterruptedException {
         Path dist = Files.createDirectories(dir.resolve("jeno-" + version));
-        Files.writeString(dist.resolve("setup.sh"), """
+        Files.writeString(dist.resolve("install.sh"), """
             #!/bin/bash
             set -e
             mkdir -p "$HOME/.jeno"
             touch "$HOME/.jeno/marker"
             """);
-        Process tar = new ProcessBuilder("tar", "-czf",
-                dir.resolve("jeno-bin-" + version + ".tar.gz").toString(),
+        Files.writeString(dist.resolve("install.ps1"), "# windows installer\n");
+        Files.writeString(dir.resolve("install.ps1"), "# windows installer\n");
+        Path tarPath = dir.resolve("jeno-" + version + ".tar.gz");
+        Process tar = new ProcessBuilder("tar", "-czf", tarPath.toString(),
                 "-C", dir.toString(), "jeno-" + version)
                 .inheritIO().start();
         assertEquals(0, tar.waitFor(), "the fixture tar.gz was built");
+        Files.writeString(dir.resolve("jeno-" + version + ".tar.gz.sha256"),
+                ArtifactStore.sha256(tarPath) + "  " + tarPath.getFileName() + "\n");
+    }
+
+    private HttpServer serveJson(String json) throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        byte[] body = json.getBytes(StandardCharsets.UTF_8);
+        server.createContext("/repos/dzb/jeno-cargo/releases/latest", exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            try (var out = exchange.getResponseBody()) {
+                out.write(body);
+            }
+        });
+        server.start();
+        return server;
     }
 
     /** Serves the releases API and the tar.gz asset on one loopback. */
@@ -252,11 +272,17 @@ class UpdateTest {
      */
     private HttpServer serveLatest(String tag, int truncated) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        String json = "{\"tag_name\":\"" + tag + "\",\"assets\":[{"
-                + "\"name\":\"jeno-bin-" + tag.substring(1) + ".tar.gz\","
+        String version = tag.substring(1);
+        String json = "{\"tag_name\":\"" + tag + "\",\"assets\":["
+                + "{\"name\":\"jeno-" + version + ".tar.gz\","
                 + "\"browser_download_url\":\"http://localhost:"
-                + server.getAddress().getPort() + "/assets/jeno-bin-"
-                + tag.substring(1) + ".tar.gz\"}]}";
+                + server.getAddress().getPort() + "/assets/jeno-" + version + ".tar.gz\"},"
+                + "{\"name\":\"jeno-" + version + ".tar.gz.sha256\","
+                + "\"browser_download_url\":\"http://localhost:"
+                + server.getAddress().getPort() + "/assets/jeno-" + version + ".tar.gz.sha256\"},"
+                + "{\"name\":\"install.ps1\","
+                + "\"browser_download_url\":\"http://localhost:"
+                + server.getAddress().getPort() + "/assets/install.ps1\"}]}";
         byte[] body = json.getBytes(StandardCharsets.UTF_8);
         server.createContext("/repos/dzb/jeno-cargo/releases/latest", exchange -> {
             exchange.getResponseHeaders().add("Content-Type", "application/json");
@@ -289,6 +315,82 @@ class UpdateTest {
         });
         server.start();
         return server;
+    }
+
+    @Test
+    void aChecksumMismatchNamesTheAsset(@TempDir Path home) throws Exception {
+        packageDist("0.1.99");
+        Files.writeString(dir.resolve("jeno-0.1.99.tar.gz.sha256"),
+                "0000000000000000000000000000000000000000000000000000000000000000\n");
+        HttpServer server = serveLatest("v0.1.99");
+        System.setProperty("jeno.update.api",
+                "http://localhost:" + server.getAddress().getPort()
+                        + "/repos/dzb/jeno-cargo/releases/latest");
+        System.setProperty("jeno.update.home", home.toString());
+        var errors = new ByteArrayOutputStream();
+        PrintStream original = System.err;
+        int exit;
+        try {
+            System.setErr(new PrintStream(errors, true, StandardCharsets.UTF_8));
+            exit = new UpdateCommand().execute(List.of());
+        } finally {
+            System.setErr(original);
+            server.stop(0);
+            System.clearProperty("jeno.update.api");
+            System.clearProperty("jeno.update.home");
+        }
+        assertEquals(1, exit);
+        assertTrue(errors.toString(StandardCharsets.UTF_8).contains("sha256 mismatch"),
+                errors.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void anOldJenoBinAssetNamesTheMigration(@TempDir Path home) throws Exception {
+        Path old = Files.writeString(dir.resolve("jeno-bin-0.1.99.tar.gz"), "old");
+        String json = "{\"tag_name\":\"v0.1.99\",\"assets\":[{\"name\":\"jeno-bin-0.1.99.tar.gz\","
+                + "\"browser_download_url\":\"http://localhost:1/old\"}]}";
+        HttpServer server = serveJson(json);
+        System.setProperty("jeno.update.api",
+                "http://localhost:" + server.getAddress().getPort()
+                        + "/repos/dzb/jeno-cargo/releases/latest");
+        try {
+            int exit = new UpdateCommand().execute(List.of());
+            assertEquals(1, exit);
+        } finally {
+            server.stop(0);
+            System.clearProperty("jeno.update.api");
+        }
+    }
+
+    @Test
+    void theWindowsInstallerUsesPowerShellArguments(@TempDir Path home) throws Exception {
+        packageDist("0.1.99");
+        HttpServer server = serveLatest("v0.1.99");
+        Path args = dir.resolve("powershell-args.txt");
+        Path fake = dir.resolve("fake-powershell.sh");
+        Files.writeString(fake, "#!/bin/sh\nprintf '%s\\n' \"$@\" > "
+                + args + "\n");
+        fake.toFile().setExecutable(true);
+        System.setProperty("jeno.update.api",
+                "http://localhost:" + server.getAddress().getPort()
+                        + "/repos/dzb/jeno-cargo/releases/latest");
+        System.setProperty("jeno.update.os", "windows");
+        System.setProperty("jeno.update.powershell", fake.toString());
+        try {
+            int exit = new UpdateCommand().execute(List.of());
+            assertEquals(0, exit);
+            String invoked = Files.readString(args);
+            assertTrue(invoked.contains("-NoProfile"), invoked);
+            assertTrue(invoked.contains("-ExecutionPolicy"), invoked);
+            assertTrue(invoked.contains("Bypass"), invoked);
+            assertTrue(invoked.contains("-File"), invoked);
+            assertTrue(invoked.contains(".ps1"), invoked);
+        } finally {
+            server.stop(0);
+            System.clearProperty("jeno.update.api");
+            System.clearProperty("jeno.update.os");
+            System.clearProperty("jeno.update.powershell");
+        }
     }
 
     @Test
