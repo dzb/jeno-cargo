@@ -179,7 +179,7 @@ public final class ArtifactStore {
                 if (!Files.exists(target)) {
                     Path temp = Files.createTempFile(root, "part-", ".tmp");
                     Files.write(temp, bytes);
-                    Files.setPosixFilePermissions(temp, READ_PERMISSIONS);
+                    PosixPermissions.trySet(temp, READ_PERMISSIONS);
                     try {
                         Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE);
                     } catch (AtomicMoveNotSupportedException e) {

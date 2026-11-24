@@ -462,7 +462,7 @@ public final class BundleCommand implements Command {
             String launcherMain = project.main();
             String launcherBody = LAUNCHER_TEMPLATE.formatted(name, version, launcherMain);
             Files.writeString(bin.resolve(name), launcherBody, StandardCharsets.UTF_8);
-            Files.setPosixFilePermissions(bin.resolve(name),
+            com.jujin.jeno.store.PosixPermissions.trySet(bin.resolve(name),
                     PosixFilePermissions.fromString("r-xr-xr-x"));
             // The Windows launcher uses this bundle's exact jar name, never
             // lib\*: an upgrade may leave the previous jar beside it.
@@ -479,12 +479,12 @@ public final class BundleCommand implements Command {
             // same launcher the dist ships, spliced verbatim into the heredoc
             String setupScript = SETUP_TEMPLATE.formatted(name, version, launcherBody, jdkMajor);
             Files.writeString(dist.resolve("install.sh"), setupScript, StandardCharsets.UTF_8);
-            Files.setPosixFilePermissions(dist.resolve("install.sh"),
+            com.jujin.jeno.store.PosixPermissions.trySet(dist.resolve("install.sh"),
                     PosixFilePermissions.fromString("r-xr-xr-x"));
 
             Files.writeString(dist.resolve("uninstall.sh"),
                     UNINSTALL_TEMPLATE.formatted(name), StandardCharsets.UTF_8);
-            Files.setPosixFilePermissions(dist.resolve("uninstall.sh"),
+            com.jujin.jeno.store.PosixPermissions.trySet(dist.resolve("uninstall.sh"),
                     PosixFilePermissions.fromString("r-xr-xr-x"));
 
             // SHA256SUMS
