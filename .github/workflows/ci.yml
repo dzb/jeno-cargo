@@ -90,30 +90,19 @@ jobs:
             exit 1
           fi
 
-      # bundle is run by the JUST-BUILT jeno, not the installed one. The
-      # installed jeno is the previous release — using it to package the current
-      # tree means a change to the packaging itself only lands one release
-      # later (the v0.1.4 artifact still had the old nine-jar layout for
-      # exactly this reason). Packaging with the code under test closes that.
-      #
-      # jeno's own release still uses bundle + gh release create: the `jeno
-      # release` command exists for user applications (it publishes pkg
-      # installers), while jeno itself is a tool distributed as a tar.gz with a
-      # bootstrap script. Signing is added here explicitly.
       - name: bundle (with the freshly built jeno)
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           CP="target/classes:$(find vendor -name '*.jar' | tr '\n' ':')"
           java -cp "$CP" com.jujin.jeno.cli.Jeno bundle --toolchain
 
-      - name: stage the release asset (jeno-bin-<version>.tar.gz)
+      - name: Release notes from the annotated tag
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          mkdir dist-release
-          cp "target/dist/jeno-$VERSION.tar.gz" "dist-release/jeno-bin-$VERSION.tar.gz"
+          git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+          test -s "$RUNNER_TEMP/notes.md"
 
-      - name: install minisign and sign the release asset
+      - name: Prepare the minisign key
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           MINISIGN_KEY_B64: ${{ secrets.JENO_MINISIGN_KEY }}
@@ -125,64 +114,38 @@ jobs:
           fi
           sudo apt-get update
           sudo apt-get install -y minisign
-          VERSION="${GITHUB_REF_NAME#v}"
           KEY_DIR="$RUNNER_TEMP/minisign"
           mkdir -p "$KEY_DIR"
           printf '%s' "$MINISIGN_KEY_B64" | base64 -d > "$KEY_DIR/jeno.key"
           chmod 600 "$KEY_DIR/jeno.key"
-          minisign -R -s "$KEY_DIR/jeno.key" -p "$KEY_DIR/jeno.pub"
-          ASSET="dist-release/jeno-bin-$VERSION.tar.gz"
-          minisign -S -q -W -s "$KEY_DIR/jeno.key" -m "$ASSET" -x "$ASSET.minisig"
-          minisign -V -q -P "$(tail -1 "$KEY_DIR/jeno.pub")" -m "$ASSET" -x "$ASSET.minisig"
-          cp "$KEY_DIR/jeno.pub" dist-release/minisign.pub
-          echo "signed $ASSET; public key $(tail -1 "$KEY_DIR/jeno.pub" | cut -c1-16)…"
+          echo "KEY_DIR=$KEY_DIR" >> "$GITHUB_ENV"
 
-      # 重发安全:先删同 tag 的旧 release(保留 tag),规避附件 CDN 缓存。
-      - name: create the GitHub release
+      - name: recreate the release before uploading
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="$GITHUB_REF_NAME"
-          ASSET="dist-release/jeno-bin-${TAG#v}.tar.gz"
-          gh release view "$TAG" >/dev/null 2>&1 && gh release delete "$TAG" --yes || true
-          # The annotated tag message becomes the release notes, so what a
-          # release changed lives with the tag that made it — one place to
-          # read, and no second copy to drift.
-          gh release create "$TAG" "$ASSET" "$ASSET.minisig" \
-            dist-release/minisign.pub \
-            --target "$GITHUB_SHA" \
-            --title "jeno $TAG" \
-            --notes-from-tag
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
+            && gh release delete "$GITHUB_REF_NAME" --yes || true
 
-      - name: verify the published release by downloading it
+      - name: jeno releases itself
         if: startsWith(github.ref, 'refs/tags/v')
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JENO_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JENO_MINISIGN_KEY: ${{ env.KEY_DIR }}/jeno.key
+        run: |
+          CP="target/classes:$(find vendor -name '*.jar' | tr '\n' ':')"
+          java -cp "$CP" com.jujin.jeno.cli.Jeno release gh:dzb/jeno-cargo \
+            --notes-file "$RUNNER_TEMP/notes.md"
+
+      - name: smoke-install the published installer
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          TAG="$GITHUB_REF_NAME"
-          VERIFY="$RUNNER_TEMP/verify"
-          rm -rf "$VERIFY"
-          mkdir -p "$VERIFY"
-          for attempt in 1 2 3 4 5; do
-            gh release download "$TAG" \
-              --pattern "jeno-bin-$VERSION.tar.gz*" --dir "$VERIFY" --clobber || true
-            gh release download "$TAG" \
-              --pattern "minisign.pub" --dir "$VERIFY" --clobber || true
-            if [ -f "$VERIFY/jeno-bin-$VERSION.tar.gz" ] \
-                && [ -f "$VERIFY/jeno-bin-$VERSION.tar.gz.minisig" ] \
-                && [ -f "$VERIFY/minisign.pub" ]; then
-              break
-            fi
-            echo "assets not visible yet (attempt $attempt) — retrying"
-            sleep 3
-          done
-          test -f "$VERIFY/jeno-bin-$VERSION.tar.gz"
-          test -f "$VERIFY/jeno-bin-$VERSION.tar.gz.minisig"
-          test -f "$VERIFY/minisign.pub"
-          minisign -V -q -P "$(tail -1 "$VERIFY/minisign.pub")" \
-            -m "$VERIFY/jeno-bin-$VERSION.tar.gz" \
-            -x "$VERIFY/jeno-bin-$VERSION.tar.gz.minisig"
-          echo "published asset verified: sha256 + minisign"
+          SMOKE_HOME=$(mktemp -d)
+          curl -fsSL https://github.com/dzb/jeno-cargo/releases/latest/download/install.sh \
+            -o "$SMOKE_HOME/install.sh"
+          HOME="$SMOKE_HOME" bash "$SMOKE_HOME/install.sh"
+          "$SMOKE_HOME/.jeno/bin/jeno" --version \
+            | grep -q "jeno ${GITHUB_REF_NAME#v} "
+          echo "smoke install from the release URL passed"
