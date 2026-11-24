@@ -181,7 +181,10 @@ public final class TreeCommand implements Command {
             boolean last = i == children.size() - 1;
             ResolvedGraph.ResolvedArtifact child = byId(graph, children.get(i));
             boolean repeat = !printed.add(child.id());
-            System.out.println(Ui.dim(prefix + (last ? "└─ " : "├─ "))
+            boolean apiEdge = graph.apiEdges()
+                    .getOrDefault(artifact.id(), Set.of()).contains(child.id());
+            System.out.println(Ui.dim(prefix + (last ? "└─ " : "├─ ")
+                    + (apiEdge ? "api " : ""))
                     + line(child, repeat ? "  (*) above" : "", substitutions));
             if (!repeat) {
                 expand(child, prefix + (last ? "   " : "│  "), graph, printed,
@@ -244,6 +247,11 @@ public final class TreeCommand implements Command {
                             .sorted()
                             .forEach(children::add);
                     entry.put("children", children);
+                    var apiChildren = com.jujin.freeway.commons.json.JsonUtils.array();
+                    graph.apiEdges().getOrDefault(artifact.id(), Set.of()).stream()
+                            .sorted()
+                            .forEach(apiChildren::add);
+                    entry.put("apiChildren", apiChildren);
                     artifacts.add(entry);
                 });
         root.put("artifacts", artifacts);

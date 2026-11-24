@@ -567,8 +567,9 @@ summary:    {modules, passedModules, failedModules, checks, ...}
 `lockFile`, `check`, `upToDate`, `artifacts`, `differences[]`。check 漂移时
 诊断码为 `LOCK_STALE`,并通过 `nextActions` 给出 `["jeno","lock"]`。
 
-`why --json` 输出 `{found, target?, artifact?, paths[][], introductionPaths}`,
-`artifact` 含 `api` 标记;
+`why --json` 输出 `{found, target?, artifact?, paths[][], pathEdges[][], introductionPaths}`,
+`artifact` 含 `api` 标记;`pathEdges` 与每条 `paths` 对齐,元素为
+`{from,to,api}`,用于区分普通依赖边与显式 API 边;
 不在图中时 `found=false` 且 exit 0。`classpath --json` 输出
 `{mode: compile|test, classpath, entries[], file?, written?}`。
 
@@ -653,7 +654,7 @@ noTests,reportFiles[],durationMs}`。测试失败仍是有效结果:module exit 
 | `project` | `{name, version}` |
 | `budget` | 整数(`max-depth`) |
 | `roots[]` | 声明根 id:`[deps]` → `[deps-dev]` → processors,按各自声明顺序 |
-| `artifacts[]` | `{id, version, depth, declared, dev, scope, api, local?, children[]}`;按 id 排序,`children` 排序。`scope` 为 `main`/`dev`/`processor`;`api` 表示显式 `[deps-api]` 闭包;workspace 本地替换时 `local` 为相对工作区根的路径(否则省略) |
+| `artifacts[]` | `{id, version, depth, declared, dev, scope, api, local?, children[], apiChildren[]}`;按 id 排序,`children` 排序。`scope` 为 `main`/`dev`/`processor`;`api` 表示显式 `[deps-api]` 闭包;`apiChildren` 是 `children` 中由显式 API 边到达的子集;workspace 本地替换时 `local` 为相对工作区根的路径(否则省略) |
 
 **outdated**
 

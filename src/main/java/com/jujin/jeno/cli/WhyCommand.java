@@ -18,6 +18,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * {@code jeno why &lt;id&gt;}: every introduction path of one artifact — the
@@ -162,7 +163,7 @@ public final class WhyCommand implements Command {
             return 0;
         }
 
-        List<List<String>> paths = paths(graph, target);
+        List<TracedPath> paths = paths(graph, target);
         if (json) {
             JsonObject identity = JsonUtils.object();
             identity.put("id", artifact.id());
@@ -174,16 +175,27 @@ public final class WhyCommand implements Command {
             identity.put("api", artifact.api());
             identity.put("marker", substitutions.marker(artifact.id()));
             JsonArray pathsJson = JsonUtils.array();
-            for (List<String> path : paths) {
+            JsonArray pathEdgesJson = JsonUtils.array();
+            for (TracedPath path : paths) {
                 JsonArray one = JsonUtils.array();
-                path.forEach(one::add);
+                path.nodes().forEach(one::add);
                 pathsJson.add(one);
+                JsonArray edges = JsonUtils.array();
+                for (int i = 1; i < path.nodes().size(); i++) {
+                    JsonObject edge = JsonUtils.object();
+                    edge.put("from", path.nodes().get(i - 1));
+                    edge.put("to", path.nodes().get(i));
+                    edge.put("api", path.apiEdges().get(i - 1));
+                    edges.add(edge);
+                }
+                pathEdgesJson.add(edges);
             }
             JsonResult.start("why")
                     .workspace(projectDir, "single")
                     .put("found", true)
                     .put("artifact", identity)
                     .put("paths", pathsJson)
+                    .put("pathEdges", pathEdgesJson)
                     .put("introductionPaths", paths.size())
                     .emit(0);
             return 0;
@@ -197,8 +209,15 @@ public final class WhyCommand implements Command {
             System.out.println("  (declared: the root of its own path)");
             return 0;
         }
-        for (List<String> path : paths) {
-            System.out.println("  via " + String.join(" -> ", path));
+        for (TracedPath path : paths) {
+            StringBuilder line = new StringBuilder("  via ");
+            for (int i = 0; i < path.nodes().size(); i++) {
+                if (i > 0) {
+                    line.append(path.apiEdges().get(i - 1) ? " --api-> " : " -> ");
+                }
+                line.append(path.nodes().get(i));
+            }
+            System.out.println(line);
         }
         if (paths.size() > 1) {
             System.out.println(paths.size() + " introduction paths; the depth budget counts "
@@ -207,37 +226,43 @@ public final class WhyCommand implements Command {
         return 0;
     }
 
+    /** One path plus whether each transition is an explicit API edge. */
+    private record TracedPath(List<String> nodes, List<Boolean> apiEdges) {}
+
     /** Every simple path from a declared root to {@code target}. */
-    private static List<List<String>> paths(ResolvedGraph graph, String target) {
-        List<List<String>> found = new ArrayList<>();
+    private static List<TracedPath> paths(ResolvedGraph graph, String target) {
+        List<TracedPath> found = new ArrayList<>();
         for (ResolvedGraph.ResolvedArtifact root : graph.direct()) {
             List<String> rootPath = List.of(display(root));
             if (root.id().equals(target)) {
-                found.add(rootPath);
+                found.add(new TracedPath(rootPath, List.of()));
                 continue;
             }
-            collect(graph, root.id(), target, graph.edges(), rootPath, found, 32);
+            collect(graph, root.id(), target, graph.edges(), rootPath,
+                    new ArrayList<>(), found, 32);
         }
         return found;
     }
 
     private static void collect(ResolvedGraph graph, String current, String target,
                                 Map<String, List<String>> edges, List<String> path,
-                                List<List<String>> found, int budget) {
+                                List<Boolean> apiEdges, List<TracedPath> found, int budget) {
         if (budget <= 0) {
             return;  // defensive: a graph that deep has already failed the budget
         }
         for (String child : edges.getOrDefault(current, List.of())) {
             List<String> next = new ArrayList<>(path);
             next.add(display(graph, child));
+            List<Boolean> nextApiEdges = new ArrayList<>(apiEdges);
+            nextApiEdges.add(graph.apiEdges().getOrDefault(current, Set.of()).contains(child));
             if (child.equals(target)) {
-                found.add(List.copyOf(next));
+                found.add(new TracedPath(List.copyOf(next), List.copyOf(nextApiEdges)));
                 continue;
             }
             if (path.contains(child)) {
                 continue;  // a cycle cannot be on a simple path to the target
             }
-            collect(graph, child, target, edges, next, found, budget - 1);
+            collect(graph, child, target, edges, next, nextApiEdges, found, budget - 1);
         }
     }
 

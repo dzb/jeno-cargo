@@ -930,6 +930,8 @@ class ResolverTest {
                 "the child is marked exported API");
         assertTrue(artifact(exported, "widget").api(),
                 "a direct dependency marked in [deps-api] carries the API flag");
+        assertTrue(exported.apiEdges().get("widget").contains("com.example:lib-b"),
+                "the descriptor's explicit API edge is preserved for tree/why");
 
         String implementationDescriptor = apiDescriptor.replace("""
             [deps-api]

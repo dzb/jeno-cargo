@@ -4,6 +4,7 @@ import com.jujin.jeno.project.Species;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The resolution result: every artifact in the closed graph, selected at
@@ -13,7 +14,9 @@ import java.util.Map;
  * declared subset — the compile classpath's content (SPEC.md §4.4's strict
  * visibility is "free" here: jeno builds both lists from one graph);
  * {@link #edges()} is the walked graph — parent id to child ids — which is
- * what {@code jeno tree} / {@code jeno why} render.
+ * what {@code jeno tree} / {@code jeno why} render. {@link #apiEdges()} is the
+ * subset of those edges carrying an explicit {@code [deps-api]} marker; it lets
+ * the inspect commands distinguish an implementation edge from an API edge.
  *
  * @param source      where the artifact comes from: {@code central}, an
  *                    jeno-native origin ({@code gh:owner/repo}), or a named
@@ -27,7 +30,15 @@ import java.util.Map;
 public record ResolvedGraph(
         List<ResolvedArtifact> artifacts,
         List<ResolvedArtifact> direct,
-        Map<String, List<String>> edges) {
+        Map<String, List<String>> edges,
+        Map<String, Set<String>> apiEdges) {
+
+    /** Back-compat for callers that only need the walked edge set. */
+    public ResolvedGraph(List<ResolvedArtifact> artifacts,
+                         List<ResolvedArtifact> direct,
+                         Map<String, List<String>> edges) {
+        this(artifacts, direct, edges, Map.of());
+    }
 
     public ResolvedGraph {
         if (artifacts == null) {
@@ -42,6 +53,10 @@ public record ResolvedGraph(
             edges = Map.of();
         }
         edges = Map.copyOf(edges);
+        if (apiEdges == null) {
+            apiEdges = Map.of();
+        }
+        apiEdges = Map.copyOf(apiEdges);
     }
 
     /** The artifacts a build/run/package sees — everything except dev-only ones. */

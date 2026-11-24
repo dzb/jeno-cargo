@@ -93,6 +93,7 @@ jeno 又用严格可见性约束用户项目的依赖边界——**这个工具�
 | D28 | named jeno repository 使用 per-artifact `index.jeno.toml` | index 只做 add/outdated 的版本发现,由发布流程更新;它不进入 lock、不存 jar/sha、索引缺失时 build/lock 不受影响。全局跨仓库搜索仍是独立 catalog |
 | D29 | `--locked` 关闭 workspace 本地替换 | workspace 的本地 classes 是开发态便利,不能作为发布证据。`--locked` 让 classpath/verify/package/bundle 只消费 `jeno.lock` + store,但仍保留 workspace 的拓扑编排;不改变 lock,不引入第二套发布模型 |
 | D30 | publish/release 接受 declared repository name,明文 token opt-in 绑定仓库 | target 先按 `[repos.<name>]` 解析再按 URL 解析,因此 `jeno publish mine` 能携带仓库的 `insecure = true` 策略;该布尔是写入策略,不进入 lock source。这样不把全局环境变量扩大成所有上传的默认豁免,也避免让用户在命令行重复 URL 与信任决策 |
+| D31 | tree/why 保留路径兼容字段并增加 API 边事实 | artifact 级 `api` 无法回答“哪条引用边导出了它”。`ResolvedGraph` 增加 `apiEdges`,但 tree 的 `children` 与 why 的 `paths` 不改形状;另加 `apiChildren`/`pathEdges`,人类输出用 `api`/`--api->` 标记。这样既不破坏 agent 的既有解析,也让 API 边可审计 |
 
 ---
 

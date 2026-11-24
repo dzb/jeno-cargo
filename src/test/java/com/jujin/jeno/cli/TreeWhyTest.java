@@ -216,6 +216,88 @@ class TreeWhyTest {
     }
 
     @Test
+    void treeAndWhyExposeApiEdgesNotJustApiArtifacts() throws Exception {
+        String descriptor = """
+            [project]
+            name = "widget"
+            version = "1.0.0"
+
+            [deps]
+            "com.example:lib-b" = "1.0.0"
+
+            [deps-api]
+            "com.example:lib-b" = "1.0.0"
+            """;
+        com.jujin.jeno.project.DescriptorSource descriptors = url -> {
+            if (url.contains("widget-1.0.0.jeno.toml")) {
+                return descriptor;
+            }
+            throw new IllegalStateException("unexpected descriptor " + url);
+        };
+        PomSource poms = (group, artifact, version, base) -> {
+            if (group.equals("com.example") && artifact.equals("lib-b")
+                    && version.equals("1.0.0")) {
+                return """
+                    <project>
+                      <modelVersion>4.0.0</modelVersion>
+                      <groupId>com.example</groupId>
+                      <artifactId>lib-b</artifactId>
+                      <version>1.0.0</version>
+                    </project>
+                    """;
+            }
+            throw new IllegalStateException("unexpected pom " + group + ":" + artifact);
+        };
+        Files.writeString(dir.resolve("jeno.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [deps]
+            widget = "gh:acme/widget@v1.0.0"
+            """);
+        var project = ProjectReader.parse(Files.readString(dir.resolve("jeno.toml")));
+        Files.writeString(dir.resolve("jeno.lock"),
+                com.jujin.jeno.resolve.LockFile.serialize(
+                        com.jujin.jeno.resolve.Resolver.resolve(project, poms, descriptors),
+                        url -> "0".repeat(64)));
+
+        ArtifactStore store = new ArtifactStore(dir.resolve("store"));
+        TreeCommand tree = new TreeCommand(store, poms, descriptors, dir);
+        buffer.reset();
+        assertEquals(0, tree.execute(List.of("--json")));
+        var treeJson = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                readConsole());
+        boolean foundApiChild = false;
+        var artifacts = treeJson.getArray("artifacts");
+        for (int i = 0; i < artifacts.size(); i++) {
+            var entry = artifacts.getObject(i);
+            if (entry.getString("id").equals("widget")) {
+                foundApiChild = entry.getArray("apiChildren").size() == 1;
+            }
+        }
+        assertTrue(foundApiChild, "tree JSON names the API child edge");
+
+        buffer.reset();
+        assertEquals(0, tree.execute(List.of()));
+        assertTrue(readConsole().contains("└─ api com.example:lib-b@1.0.0"),
+                "the human tree marks the API edge");
+
+        WhyCommand why = new WhyCommand(store, poms, descriptors, dir);
+        buffer.reset();
+        assertEquals(0, why.execute(List.of("--json", "com.example:lib-b")));
+        var whyJson = com.jujin.freeway.commons.json.JsonUtils.parseObject(
+                readConsole());
+        var edge = whyJson.getArray("pathEdges").getArray(0).getObject(0);
+        assertEquals(true, edge.getBoolean("api"));
+
+        buffer.reset();
+        assertEquals(0, why.execute(List.of("com.example:lib-b")));
+        assertTrue(readConsole().contains("--api->"),
+                "the human why path marks the API edge");
+    }
+
+    @Test
     void treeWithoutALockSaysWhatToRunAndDrawsNothing() throws Exception {
         Files.writeString(dir.resolve("jeno.toml"), """
             [project]

@@ -549,8 +549,19 @@ public final class Resolver {
             List<ResolvedGraph.ResolvedArtifact> direct = artifacts.stream()
                     .filter(ResolvedGraph.ResolvedArtifact::declared)
                     .toList();
+            Map<String, Set<String>> apiEdges = new LinkedHashMap<>();
+            for (Map.Entry<String, Map<String, Set<String>>> parent : apiEdgesFrom.entrySet()) {
+                Set<String> walked = new LinkedHashSet<>(
+                        children.getOrDefault(parent.getKey(), List.of()));
+                Set<String> atSelectedVersion = parent.getValue().getOrDefault(
+                        selected.get(parent.getKey()), Set.of());
+                walked.retainAll(atSelectedVersion);
+                if (!walked.isEmpty()) {
+                    apiEdges.put(parent.getKey(), Set.copyOf(walked));
+                }
+            }
             return new ResolvedGraph(List.copyOf(artifacts), direct,
-                    Map.copyOf(children));
+                    Map.copyOf(children), Map.copyOf(apiEdges));
         }
 
         /**

@@ -89,6 +89,13 @@ jeno --json info "com.example:lib" --module apps/web
 jeno --json publish --dry-run "jeno:local:../repo" --module libs/core
 ```
 
+## API edge inspection
+
+`jeno tree --json` exposes both `children` and `apiChildren`; `jeno why --json`
+exposes each path's `pathEdges` (`{from,to,api}`). The plain `children`/`paths`
+fields stay stable for existing consumers. Human output marks API edges as
+`api <child>` in tree and `--api->` in why.
+
 ## Safety
 
 - `cache purge` without `--yes`: exit 2, `CONFIRMATION_REQUIRED`, nothing deleted.
