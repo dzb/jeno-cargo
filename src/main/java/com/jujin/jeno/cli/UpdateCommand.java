@@ -265,6 +265,11 @@ public final class UpdateCommand implements Command {
             if (checksum.body() == null) {
                 System.err.println(Ui.errPrefix() + "cannot read " + asset.shaUrl()
                         + " — " + checksum.failure());
+                if (checksum.propagationLikely()) {
+                    System.err.println("  the release asset may not have propagated yet — "
+                            + "retry in a moment; if it keeps failing, download it from "
+                            + asset.shaUrl());
+                }
                 return 1;
             }
             String expected = new String(checksum.body(), java.nio.charset.StandardCharsets.UTF_8)
@@ -336,11 +341,12 @@ public final class UpdateCommand implements Command {
     private record Fetch(byte[] body, String failure, boolean propagationLikely) {}
 
     /**
-     * The tarball download, retried. A just-created release can 404 or be cut
-     * off at the CDN edge for a few seconds; both are transient, so an
-     * IOException (EOF, reset, timeout) and 5xx/429 are retried three times with
-     * a short back-off. A 4xx (other than 429) is a client-side fact and is not
-     * retried. The releases API lookup is deliberately still one-shot.
+     * The tarball download, retried. A just-created release asset can be
+     * missing from the CDN (404) or cut off at the edge for a few seconds;
+     * both are transient, so an IOException (EOF, reset, timeout), 404,
+     * 5xx and 429 are retried with the short back-off. Authentication or
+     * request errors (401/403/422) are client-side facts and are not retried.
+     * The releases API lookup is deliberately still one-shot.
      */
     private Fetch downloadWithRetry(String url) throws InterruptedException {
         long[] backoff = backoffMillis();
@@ -355,7 +361,7 @@ public final class UpdateCommand implements Command {
                 if (status == 200) {
                     return new Fetch(response.body(), null, false);
                 }
-                boolean transientStatus = status >= 500 || status == 429;
+                boolean transientStatus = status == 404 || status >= 500 || status == 429;
                 lastFailure = "server answered " + status;
                 if (!transientStatus) {
                     return new Fetch(null, lastFailure, false);

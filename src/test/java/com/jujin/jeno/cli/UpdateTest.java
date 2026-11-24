@@ -262,15 +262,20 @@ class UpdateTest {
 
     /** Serves the releases API and the tar.gz asset on one loopback. */
     private HttpServer serveLatest(String tag) throws IOException {
-        return serveLatest(tag, 0);
+        return serveLatest(tag, 0, null, false);
+    }
+
+    private HttpServer serveLatest(String tag, int truncated) throws IOException {
+        return serveLatest(tag, truncated, null, false);
     }
 
     /**
-     * The same, truncating the first {@code truncated} asset responses: the
-     * headers promise the full length, the body stops halfway — the CDN edge
-     * that was not ready yet.
+     * The same, optionally returning one 404 (or every 404) for one asset,
+     * and truncating the first {@code truncated} asset responses: a release
+     * asset that has not reached the CDN edge yet.
      */
-    private HttpServer serveLatest(String tag, int truncated) throws IOException {
+    private HttpServer serveLatest(String tag, int truncated, String firstNotFound,
+                                   boolean alwaysNotFound) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         String version = tag.substring(1);
         String json = "{\"tag_name\":\"" + tag + "\",\"assets\":["
@@ -293,9 +298,17 @@ class UpdateTest {
         });
         java.util.concurrent.atomic.AtomicInteger served =
                 new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger missing =
+                new java.util.concurrent.atomic.AtomicInteger();
         server.createContext("/assets/", exchange -> {
-            Path tar = dir.resolve(exchange.getRequestURI().getPath()
-                    .replace("/assets/", ""));
+            String assetPath = exchange.getRequestURI().getPath().replace("/assets/", "");
+            if (firstNotFound != null && assetPath.equals(firstNotFound)
+                    && (alwaysNotFound || missing.getAndIncrement() == 0)) {
+                exchange.sendResponseHeaders(404, -1);
+                exchange.close();
+                return;
+            }
+            Path tar = dir.resolve(assetPath);
             byte[] bytes = Files.readAllBytes(tar);
             boolean cut = served.incrementAndGet() <= truncated;
             exchange.sendResponseHeaders(200, bytes.length);
@@ -391,6 +404,95 @@ class UpdateTest {
             System.clearProperty("jeno.update.os");
             System.clearProperty("jeno.update.powershell");
         }
+    }
+
+    @Test
+    void aJustPublishedTarRetriesAfter404(@TempDir Path home) throws Exception {
+        packageDist("0.1.99");
+        HttpServer server = serveLatest("v0.1.99", 0, "jeno-0.1.99.tar.gz", false);
+        System.setProperty("jeno.update.api",
+                "http://localhost:" + server.getAddress().getPort()
+                        + "/repos/dzb/jeno-cargo/releases/latest");
+        System.setProperty("jeno.update.home", home.toString());
+        System.setProperty("jeno.update.backoff.ms", "1,1,1,1");
+        var errors = new ByteArrayOutputStream();
+        PrintStream original = System.err;
+        int exit;
+        try {
+            System.setErr(new PrintStream(errors, true, StandardCharsets.UTF_8));
+            exit = new UpdateCommand().execute(List.of());
+        } finally {
+            System.setErr(original);
+            server.stop(0);
+            System.clearProperty("jeno.update.api");
+            System.clearProperty("jeno.update.home");
+            System.clearProperty("jeno.update.backoff.ms");
+        }
+        assertEquals(0, exit, errors.toString(StandardCharsets.UTF_8));
+        assertTrue(errors.toString(StandardCharsets.UTF_8)
+                        .contains("download attempt 1 failed (server answered 404) — retrying"),
+                errors.toString(StandardCharsets.UTF_8));
+        assertTrue(Files.exists(home.resolve(".jeno/marker")));
+    }
+
+    @Test
+    void aPersistentlyMissingTarNamesPropagationAndUrl(@TempDir Path home) throws Exception {
+        packageDist("0.1.99");
+        HttpServer server = serveLatest("v0.1.99", 0, "jeno-0.1.99.tar.gz", true);
+        System.setProperty("jeno.update.api",
+                "http://localhost:" + server.getAddress().getPort()
+                        + "/repos/dzb/jeno-cargo/releases/latest");
+        System.setProperty("jeno.update.home", home.toString());
+        System.setProperty("jeno.update.backoff.ms", "1,1,1,1");
+        var errors = new ByteArrayOutputStream();
+        PrintStream original = System.err;
+        int exit;
+        try {
+            System.setErr(new PrintStream(errors, true, StandardCharsets.UTF_8));
+            exit = new UpdateCommand().execute(List.of());
+        } finally {
+            System.setErr(original);
+            server.stop(0);
+            System.clearProperty("jeno.update.api");
+            System.clearProperty("jeno.update.home");
+            System.clearProperty("jeno.update.backoff.ms");
+        }
+        String message = errors.toString(StandardCharsets.UTF_8);
+        assertEquals(1, exit);
+        assertTrue(message.contains("may not have propagated"), message);
+        assertTrue(message.contains("jeno-0.1.99.tar.gz"), message);
+    }
+
+    @Test
+    void theWindowsInstallerRetriesA404(@TempDir Path home) throws Exception {
+        packageDist("0.1.99");
+        HttpServer server = serveLatest("v0.1.99", 0, "install.ps1", false);
+        Path fake = dir.resolve("fake-powershell.sh");
+        Files.writeString(fake, "#!/bin/sh\nexit 0\n");
+        fake.toFile().setExecutable(true);
+        System.setProperty("jeno.update.api",
+                "http://localhost:" + server.getAddress().getPort()
+                        + "/repos/dzb/jeno-cargo/releases/latest");
+        System.setProperty("jeno.update.os", "windows");
+        System.setProperty("jeno.update.powershell", fake.toString());
+        System.setProperty("jeno.update.backoff.ms", "1,1,1,1");
+        var errors = new ByteArrayOutputStream();
+        PrintStream original = System.err;
+        int exit;
+        try {
+            System.setErr(new PrintStream(errors, true, StandardCharsets.UTF_8));
+            exit = new UpdateCommand().execute(List.of());
+        } finally {
+            System.setErr(original);
+            server.stop(0);
+            System.clearProperty("jeno.update.api");
+            System.clearProperty("jeno.update.os");
+            System.clearProperty("jeno.update.powershell");
+            System.clearProperty("jeno.update.backoff.ms");
+        }
+        assertEquals(0, exit, errors.toString(StandardCharsets.UTF_8));
+        assertTrue(errors.toString(StandardCharsets.UTF_8).contains("server answered 404"),
+                errors.toString(StandardCharsets.UTF_8));
     }
 
     @Test
