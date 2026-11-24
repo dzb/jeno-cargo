@@ -206,7 +206,8 @@ public final class InfoCommand implements Command {
             }
             if (!descriptor.requirements().isEmpty()) {
                 System.out.println("  deps:     " + descriptor.requirements().stream()
-                        .map(r -> r.id() + "@" + (r.version() == null ? r.tag() : r.version()))
+                        .map(r -> r.id() + "@" + (r.version() == null ? r.tag() : r.version())
+                                + (descriptor.apiRequirements().contains(r.id()) ? " [api]" : ""))
                         .reduce((a, b) -> a + ", " + b).orElse(""));
             }
         }
@@ -351,6 +352,7 @@ public final class InfoCommand implements Command {
             if (requirement.classifier() != null) {
                 dependency.put("classifier", requirement.classifier());
             }
+            dependency.put("api", descriptor.apiRequirements().contains(requirement.id()));
             dependencies.add(dependency);
         }
         result.put("dependencies", dependencies);

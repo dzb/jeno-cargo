@@ -115,6 +115,20 @@ store 索引与 `--offline` 行为不变。
 - 同一坐标同时出现在 `[deps]`、任何 `[deps.{repo}]`,或两种写法混用 → 报错(身份撞车)
 - `{repo}` 未在 `[repos]` 中声明 → 报错
 
+**[deps-api]** — 导出的 API 依赖标记(可出现在 jeno.toml 与 jeno-native 描述符)
+
+`[deps-api]` 不是另一张依赖声明表,而是对 `[deps]` 中已有直接依赖的**API
+可见性标注**:
+
+- 每个条目必须与 `[deps]` 中的同 id 声明逐字段完全一致(相同 source/species/version/tag)
+- `[deps]` 必须在源文件中物理地出现在 `[deps-api]` 之前;没有前置 `[deps]` 直接报错
+- 不允许把 `[dev-deps]` 或 processor 标成 API;API 只表达消费者编译可见性
+- 发布的描述符携带同样的 `[deps-api]` 标记
+- 消费者编译 classpath = 自己的 MAIN 声明 + 沿显式 API 边可达的闭包;
+  普通 transitive implementation 依赖仍只进 runtime classpath
+- Maven POM 没有 API/implementation 区分,不会自动推断;需要导出的 POM 依赖由作者
+  在自己的 jeno manifest/描述符中显式声明
+
 **[dev-deps] 与 [dev-deps.{repo}]** — 仅测试可见的依赖(Cargo `dev-dependencies`、uv `[dependency-groups]` 先例)
 
 独立顶层节,不是 `[deps.dev]`——后者已是"来自仓库 dev 的依赖"。声明规则与 `[deps]` **完全一致**
@@ -293,17 +307,23 @@ version = 21              # 可选;语义同 §2.1 [java]
 
 [deps]                    # 可选;物种仅限 central / gh: / URL
 "com.example:foo" = "1.2.3"
+
+[deps-api]                # 可选;必须是 [deps] 中已有声明的 exact 副本
+"com.example:foo" = "1.2.3"
 ```
 
 ### 3.2 禁止项(出现即报错)
 
-`[repos]`、`[deps.{repo}]`、`[dev-deps]`、`[limits]`、`[scripts]`、`[overrides]`、`[toolchain]`、任何未知节。
+`[repos]`、`[deps.{repo}]`、`[dev-deps]`、`[limits]`、`[scripts]`、`[overrides]`、`[toolchain]`、任何未知节;
+`[deps]` 与 `[deps-api]` 是允许的事实表。
 
 理由:仓库是消费方的配置;预算规则只有一份(消费方);scripts 只属于应用。**发布物里只有事实,规则只有一份。**
 
 ### 3.3 语义
 
 描述符 `[deps]` 参与消费方闭包与深度预算,与消费方直接依赖同等对待。
+`[deps-api]` 标记其中哪些依赖通过 API 闭包进入消费者的编译 classpath;普通
+descriptor 依赖仍只进 runtime classpath。
 
 `[project]` 的 `summary` / `homepage` / `license` 是**标识事实**:发布后不可变、不参与解析、
 仅由 `jeno info` 读取展示。它们与 `[deps]` 同属"发布物里的事实",不是规则。
@@ -327,6 +347,9 @@ version = 21              # 可选;语义同 §2.1 [java]
 
 ```toml
 # 由 jeno 生成,提交进版本库,勿手改
+# jeno-lockfile-version: 2
+# 旧的无 marker 文件按 version 1 读取;未来 > 当前支持的版本直接拒绝
+# api = true 只在通过显式 [deps-api] 边可达时出现
 [[artifacts]]
 id = "com.example:foo"    # central: "group:artifact";jeno 原生: repo 名
 version = "1.2.3"
@@ -341,11 +364,12 @@ meta-sha256 = "…"         # 元数据字节(pom.xml 或描述符);URL 叶子�
 depth = 1                 # 实际深度,>= 1
 scope = "dev"             # 可选:[dev-deps] 可达的工件。缺省 = main
                           #       另一取值 "processor"(§2.1 [build].processors)
+api = true                # 可选;通过 [deps-api] 进入编译可见性的 API 闭包
 ```
 
 ### 4.2 不变式
 
-1. id 在闭包内唯一(MVS 单版本)
+1. id 在闭包内唯一(MVS 单版本);同一 id 不得来自两个不同 source,同一 source 也不得以两个 id 重复出现
 2. sha256 与 meta-sha256 必为 64 位十六进制(URL 叶子无元数据,meta-sha256 缺省);**每次下载都强制核对,任一不匹配即失败**(release asset 可变风险由它们兜底;元数据变了依赖图就变了——go.sum 同时哈希 zip 与 go.mod 的先例)。`local:` 仓库与远程同等钉定
 3. url 必须 https;明文 http 仅限字面私有网络地址(localhost、127/8、10/8、172.16-31、192.168/16、169.254/16、IPv6 ::1/fc00::/7/fe80::/10),公网 http 与主机名拒绝
 4. depth ≥ 1
@@ -354,6 +378,7 @@ scope = "dev"             # 可选:[dev-deps] 可达的工件。缺省 = main
 7. 命中策略:lock 有效 → 直接采用(sha256 权威,不重新解析);`jeno lock` **总是重解**并重写锁,
    `--check` 只比较
 8. 兼容性:旧锁里 `source` 以 `gitee:` 开头的行,**读锁即报**可执行的迁移错误(gitee: 物种已移除),而不是留给下游命令各自报 URI 错误;`source` 以 `jeno:` 开头的行照常读
+9. 版本 marker:`# jeno-lockfile-version: 2` 是注释,不是 TOML key;旧版 jeno 可忽略它,新版对高于自己支持的版本直接拒绝。无 marker 的旧锁按 version 1 读取
 
 ---
 
@@ -536,7 +561,8 @@ summary:    {modules, passedModules, failedModules, checks, ...}
 `{artifact:{id,group?,artifact,version,sha256,metaSha256?},
 provenance:{source,url,readableUrl,repository?,layout,transport?,jar,metadata?},
 descriptor?:{name,group?,version,javaVersion?,summary?,homepage?,license?,
-dependencies[],retract?}, context:{scope,depth,local,marker},
+dependencies[{id,species,version?,tag?,repository?,classifier?,api}],retract?},
+context:{scope,depth,local,marker},
 source?:{page?,archive?,fetched}}`。
 其中 `artifact/provenance/descriptor` 是包事实,`context` 只描述当前项目的 lock。
 `info --source --json` 目前以 `JSON_SOURCE_UNSUPPORTED`(exit 2)明确拒绝;
@@ -649,7 +675,9 @@ noTests,reportFiles[],durationMs}`。测试失败仍是有效结果:module exit 
 - `jeno:local:<dir>`
 
 无 target 时只准备本地产物(`target/dist/` 三件套 / `target/dist/release/`),不上传。
-非 loopback 的明文 http 目标会在 stderr 打一行“流量与 token 不加密”的 warning。
+非 loopback 的明文 http 目标会在 stderr 打一行“流量与 token 不加密”的 warning;
+`JENO_PUBLISH_TOKEN` 默认不会发往 cleartext LAN,只有显式设置
+`JENO_ALLOW_INSECURE_TOKEN=1` 才允许。
 **Maven 布局不是发布目标**:jeno 不写 POM,`https://host/`、`http://host/`、`local:<dir>` 一律拒绝
 (exit 1);其中公网 `http://` 在仓库声明阶段就会被拒绝,私有网络 http 才可使用。
 Maven 布局仓库仍可**读取**(`[repos]` 的 `type = "maven"`,§2.1)。

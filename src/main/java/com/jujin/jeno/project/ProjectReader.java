@@ -71,12 +71,25 @@ public final class ProjectReader {
                         + " must be a table — every jeno.toml entry is a [section] (SPEC.md §2)");
             }
             switch (entry.getKey()) {
-                case "project", "java", "deps", "dev-deps", "repos", "limits", "overrides",
-                     "scripts", "build", "test", "toolchain" -> { }
+                case "project", "java", "deps", "deps-api", "dev-deps", "repos", "limits",
+                     "overrides", "scripts", "build", "test", "toolchain" -> { }
 
                 default -> throw new ProjectException(at(file, source.section(entry.getKey()))
                         + "unknown section [" + entry.getKey()
                         + "] — jeno.toml is a closed schema (SPEC.md §2)");
+            }
+        }
+
+        // [deps-api] is a marker table, not a second place to declare a
+        // dependency. Keeping the declarations first makes that origin clear
+        // and lets add/remove maintain one source of truth.
+        if (root.containsKey("deps-api")) {
+            SchemaSource.Site deps = source.section("deps");
+            SchemaSource.Site api = source.section("deps-api");
+            if (deps == null || api == null || api.line() <= deps.line()) {
+                throw new ProjectException(at(file, api)
+                        + "[deps] must be declared before [deps-api] — [deps] is the "
+                        + "declaration table; [deps-api] only marks exported API deps");
             }
         }
 
@@ -154,6 +167,13 @@ public final class ProjectReader {
                     urlIds.add(requirement.id());
                 }
             }
+        }
+
+        Set<String> apiRequirements = Set.of();
+        Map<String, Object> apiDepsSection = optionalSection(root, "deps-api");
+        if (apiDepsSection != null) {
+            apiRequirements = apiRequirementIds(apiDepsSection, requirements, repos,
+                    "jeno.toml", null);
         }
 
         // [dev-deps] — test-only requirements (Cargo's dev-dependencies). It
@@ -277,9 +297,49 @@ public final class ProjectReader {
         }
 
         return new JenoProject(name, group, version, main, javaVersion, maxDepth, requirements,
-                overrides, scripts, repos, buildParameters, devRequirements,
+                apiRequirements, overrides, scripts, repos, buildParameters, devRequirements,
                 summary, homepage, license, processors, processorRequirements,
                 testInclude, testExclude, toolchain);
+    }
+
+    /**
+     * Parses a {@code [deps-api]} marker table. Every entry must name an
+     * existing {@code [deps]} declaration and carry the exact same value; the
+     * table is an API-visibility annotation, never a second declaration.
+     */
+    static Set<String> apiRequirementIds(Map<String, Object> apiSection,
+                                         List<Requirement> base,
+                                         Map<String, Repository> repos,
+                                         String where,
+                                         String sibling) {
+        for (Map.Entry<String, Object> entry : apiSection.entrySet()) {
+            if (entry.getValue() instanceof Map<?, ?>) {
+                throw new ProjectException("[deps-api]." + entry.getKey()
+                        + " must be a direct id = value marker; nested repository groups "
+                        + "belong in [deps]");
+            }
+        }
+        List<Requirement> marked = extractDependencies(apiSection, repos, where, sibling);
+        Map<String, Requirement> declared = new LinkedHashMap<>();
+        for (Requirement requirement : base) {
+            declared.put(requirement.id(), requirement);
+        }
+        Set<String> ids = new LinkedHashSet<>();
+        for (Requirement requirement : marked) {
+            Requirement original = declared.get(requirement.id());
+            if (original == null) {
+                throw new ProjectException("[deps-api]." + requirement.id()
+                        + " must first be declared in [deps] — [deps] is the declaration "
+                        + "table; [deps-api] only marks exported API deps");
+            }
+            if (!original.equals(requirement)) {
+                throw new ProjectException("[deps-api]." + requirement.id()
+                        + " must repeat the [deps] declaration exactly; [deps-api] is a "
+                        + "marker, not a second version/source");
+            }
+            ids.add(requirement.id());
+        }
+        return Set.copyOf(ids);
     }
 
     /**

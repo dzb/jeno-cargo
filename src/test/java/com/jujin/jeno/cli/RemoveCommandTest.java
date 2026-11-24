@@ -65,6 +65,28 @@ class RemoveCommandTest {
     }
 
     @Test
+    void removesTheDepsApiMarkerToo() {
+        String text = """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [deps]
+            "com.example:lib-a" = "1.0.0"
+            "com.example:lib-b" = "2.0.0"
+
+            [deps-api]
+            "com.example:lib-a" = "1.0.0"
+            """;
+
+        String updated = RemoveCommand.removeLine(text, "com.example:lib-a");
+
+        assertFalse(updated.contains("lib-a"), updated);
+        assertTrue(updated.contains("\"com.example:lib-b\" = \"2.0.0\""), updated);
+        assertTrue(updated.contains("[deps-api]"), "the empty marker header may stay");
+    }
+
+    @Test
     void removesFromDevDepsToo() {
         String text = """
             [project]

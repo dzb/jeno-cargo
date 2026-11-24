@@ -2,6 +2,7 @@ package com.jujin.jeno.project;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A jeno-native release descriptor ({@code {artifact}-{version}.jeno.toml}) —
@@ -32,6 +33,7 @@ public record Descriptor(
         String version,
         Integer javaVersion,
         List<Requirement> requirements,
+        Set<String> apiRequirements,
         Map<String, String> retract,
         String summary,
         String homepage,
@@ -42,6 +44,10 @@ public record Descriptor(
             requirements = List.of();
         }
         requirements = List.copyOf(requirements);
+        if (apiRequirements == null) {
+            apiRequirements = Set.of();
+        }
+        apiRequirements = Set.copyOf(apiRequirements);
         if (retract == null) {
             retract = Map.of();
         }
@@ -51,6 +57,7 @@ public record Descriptor(
     /** Back-compat: a descriptor with no identity facts. */
     public Descriptor(String name, String version, Integer javaVersion,
                       List<Requirement> requirements, Map<String, String> retract) {
-        this(name, null, version, javaVersion, requirements, retract, null, null, null);
+        this(name, null, version, javaVersion, requirements, Set.of(), retract,
+                null, null, null);
     }
 }

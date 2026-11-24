@@ -44,6 +44,74 @@ class ProjectReaderTest {
     }
 
     @Test
+    void depsApiMarksExistingDeclarationsWithoutDuplicatingThem() {
+        JenoProject project = ProjectReader.parse("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [deps]
+            "com.example:lib-a" = "1.0.0"
+            "com.example:lib-b" = "2.0.0"
+
+            [deps-api]
+            "com.example:lib-a" = "1.0.0"
+            """);
+
+        assertEquals(java.util.Set.of("com.example:lib-a"), project.apiRequirements());
+        assertEquals(2, project.requirements().size(),
+                "[deps-api] marks a declaration; it does not create a second graph node");
+    }
+
+    @Test
+    void depsApiRequiresDepsFirstAndAnExactExistingMarker() {
+        ProjectException order = assertThrows(ProjectException.class,
+            () -> ProjectReader.parse("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+
+                [deps-api]
+                "com.example:lib-a" = "1.0.0"
+
+                [deps]
+                "com.example:lib-a" = "1.0.0"
+                """));
+        assertTrue(order.getMessage().contains("[deps] must be declared before [deps-api]"),
+                order.getMessage());
+
+        ProjectException missing = assertThrows(ProjectException.class,
+            () -> ProjectReader.parse("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+
+                [deps]
+                "com.example:lib-a" = "1.0.0"
+
+                [deps-api]
+                "com.example:lib-b" = "2.0.0"
+                """));
+        assertTrue(missing.getMessage().contains("must first be declared in [deps]"),
+                missing.getMessage());
+
+        ProjectException mismatch = assertThrows(ProjectException.class,
+            () -> ProjectReader.parse("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+
+                [deps]
+                "com.example:lib-a" = "1.0.0"
+
+                [deps-api]
+                "com.example:lib-a" = "1.1.0"
+                """));
+        assertTrue(mismatch.getMessage().contains("must repeat the [deps] declaration exactly"),
+                mismatch.getMessage());
+    }
+
+    @Test
     void rejectsUnknownSectionsAndNonTables() {
         ProjectException unknown = assertThrows(ProjectException.class,
             () -> ProjectReader.parse("""

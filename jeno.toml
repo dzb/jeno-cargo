@@ -21,6 +21,8 @@ max-depth = 3   # junit arrives through jupiter-engine -> platform-engine -> ope
 vendor = "local:vendor"
 
 [deps]
+# Runtime bridge for Freeway's SLF4J service provider; jeno does not expose
+# slf4j types in its own public API, so this stays a normal dependency.
 "com.jujin8.freeway:freeway-commons" = "vendor:2.0.2"
 "com.jujin8.freeway:freeway-ioc" = "vendor:2.0.2"
 "org.slf4j:slf4j-api" = "vendor:2.0.18"

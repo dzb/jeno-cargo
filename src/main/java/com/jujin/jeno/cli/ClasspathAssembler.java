@@ -98,14 +98,17 @@ final class ClasspathAssembler {
                 for (LockedArtifact artifact : input.locked()) {
                     byId.put(artifact.id(), artifact);
                 }
+                List<String> direct = new ArrayList<>();
                 for (Requirement requirement : input.project().requirements()) {
                     LockedArtifact artifact = byId.get(requirement.id());
                     if (artifact == null) {
                         throw new ClasspathException("jeno.lock is stale — '" + requirement.id()
                                 + "' is declared in jeno.toml but not locked; run jeno lock");
                     }
+                    direct.add(artifact.id());
                     entries.add(artifactPath(artifact, store, substitutions, false));
                 }
+                addApiEntries(entries, input.locked(), direct, store, substitutions);
             }
             case TEST -> {
                 Path testOutput = projectDir.resolve("target/test-classes");
@@ -140,6 +143,7 @@ final class ClasspathAssembler {
                 for (LockedArtifact artifact : input.locked()) {
                     byId.put(artifact.id(), artifact);
                 }
+                List<String> direct = new ArrayList<>();
                 for (Requirement requirement : input.project().requirements()) {
                     LockedArtifact artifact = byId.get(requirement.id());
                     if (artifact == null) {
@@ -147,8 +151,10 @@ final class ClasspathAssembler {
                                 + requirement.id() + "' is declared in jeno.toml but not locked; "
                                 + "run jeno lock");
                     }
+                    direct.add(artifact.id());
                     entries.add(artifactPath(artifact, store, substitutions, false));
                 }
+                addApiEntries(entries, input.locked(), direct, store, substitutions);
             }
             case EXPORT_TEST -> {
                 entries.add(projectDir.resolve("target/test-classes"));
@@ -162,6 +168,23 @@ final class ClasspathAssembler {
             }
         }
         return new Classpath(List.copyOf(entries));
+    }
+
+    /**
+     * Add artifacts exported through {@code [deps-api]} after the direct
+     * declarations. The lock carries this closure so every consumer computes
+     * the same compile classpath without re-reading transitive descriptors.
+     */
+    private static void addApiEntries(List<Path> entries, List<LockedArtifact> locked,
+                                      List<String> direct, ArtifactStore store,
+                                      Substitutions substitutions) {
+        java.util.Set<String> seen = new java.util.LinkedHashSet<>(direct);
+        for (LockedArtifact artifact : locked) {
+            if (!artifact.isMain() || !artifact.api() || !seen.add(artifact.id())) {
+                continue;
+            }
+            entries.add(artifactPath(artifact, store, substitutions, false));
+        }
     }
 
     /**

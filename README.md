@@ -26,7 +26,7 @@ jeno --version
 Both installers need JDK 25+. Windows appends `%USERPROFILE%\.jeno\bin` to the
 user PATH; `jeno upgrade` verifies sha256 before installing.
 
-**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D23, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
+**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D26, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
 
 ---
 
@@ -41,7 +41,7 @@ costs jeno refuses to inherit:
 | Central is *the* registry | any URL that serves bytes is a registry |
 | plugins and profiles, unbounded configuration | zero plugins; `[scripts]` and build flags |
 | version ranges and silent conflict resolution | exact versions; conflicts are errors with paths |
-| transitive dependencies quietly on the compile path | **strict visibility**: only declared deps compile |
+| transitive dependencies quietly on the compile path | **strict visibility**: declared deps compile, plus only explicitly exported `[deps-api]` edges |
 
 The last one is the core.**jeno compiles against exactly what you declared.**
 Anything transitive is runtime-only. If you import a class you did not
@@ -82,6 +82,23 @@ dependency groups). It resolves into the same `jeno.lock`, but never reaches the
 compile classpath, `jeno run`, `jeno package`, `jeno bundle`, or a **published
 descriptor**. Production use wins: an artifact reachable from both scopes is
 main.
+
+A library can also mark a direct dependency as part of its exported API:
+
+```toml
+[deps]
+"org.slf4j:slf4j-api" = "2.0.18"
+
+[deps-api]
+"org.slf4j:slf4j-api" = "2.0.18"
+```
+
+`[deps-api]` is a marker, not a second declaration: its entries must repeat an
+exact `[deps]` id/value, and `[deps]` must appear first in the file. Consumers
+then get that dependency (and only its own explicitly exported API closure) on
+the compile classpath; ordinary transitive implementation dependencies stay
+runtime-only. Maven POMs do not encode this distinction, so POM dependencies are
+never guessed as exported API.
 
 In jeno's own manifest JUnit is a main dependency because `JenoTestFork` (part of
 the production CLI surface) compiles against the JUnit Platform API. Packaging
@@ -438,7 +455,7 @@ program because everything after the target is the program's.
   "descriptor": {
     "license": "Apache-2.0",
     "javaVersion": 21,
-    "dependencies": [{"id": "org.slf4j:slf4j-api", "version": "2.0.18"}]
+    "dependencies": [{"id": "org.slf4j:slf4j-api", "version": "2.0.18", "api": false}]
   },
   "context": {"scope": "main", "depth": 1, "local": false},
   "source": {"page": "...", "archive": "...", "fetched": false}

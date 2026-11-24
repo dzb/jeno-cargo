@@ -166,6 +166,30 @@ class ClasspathAssemblerTest {
     }
 
     @Test
+    void apiRowsJoinTheCompileAndIdeClasspaths() throws Exception {
+        LockedArtifact donor = locked.stream()
+                .filter(a -> a.id().equals("com.example:lib-dev"))
+                .findFirst().orElseThrow();
+        LockedArtifact api = new LockedArtifact("com.example:lib-api", donor.version(),
+                donor.source(), donor.url(), donor.sha256(), donor.metaSha256(),
+                1, com.jujin.jeno.resolve.Scope.MAIN, true);
+        List<LockedArtifact> withApi = new java.util.ArrayList<>(locked);
+        withApi.add(api);
+
+        List<String> compile = strings(ClasspathAssembler.Mode.COMPILE,
+                ClasspathAssembler.Input.compile(project, withApi));
+        List<String> exportMain = strings(ClasspathAssembler.Mode.EXPORT_MAIN,
+                ClasspathAssembler.Input.export(project, withApi));
+
+        assertEquals(2, compile.size(), "the direct MAIN jar plus the API-marked jar");
+        assertEquals(2, exportMain.size() - 1,
+                "main classes plus the direct and API-marked jars");
+        assertTrue(compile.stream().anyMatch(path -> path.equals(store.findByDigest(
+                        donor.sha256(), ArtifactStore.Kind.JAR).toString())),
+                "the API row resolves through the same content-addressed artifact: " + compile);
+    }
+
+    @Test
     void aStaleLockIsNamedByTheAssembler() throws Exception {
         var error = assertThrows(ClasspathAssembler.ClasspathException.class,
                 () -> ClasspathAssembler.of(ClasspathAssembler.Mode.COMPILE, dir, store,

@@ -18,10 +18,13 @@ import java.util.regex.Pattern;
 public final class LockFileReader {
 
     private static final Pattern HEX64 = Pattern.compile("[0-9a-f]{64}");
+    private static final Pattern VERSION_MARKER =
+            Pattern.compile("^# jeno-lockfile-version:\\s*(\\d+)\\s*$");
 
     private LockFileReader() {}
 
     public static List<LockedArtifact> read(String text) {
+        lockfileVersion(text);
         Map<String, Object> root = TomlUtils.parse(text);
         for (Map.Entry<String, Object> entry : root.entrySet()) {
             if (!entry.getKey().equals("artifacts")) {
@@ -48,7 +51,7 @@ public final class LockFileReader {
             Map<String, Object> fields = (Map<String, Object>) row;
             for (String key : fields.keySet()) {
                 if (!Set.of("id", "version", "source", "url", "sha256", "meta-sha256", "depth",
-                        "scope").contains(key)) {
+                        "scope", "api").contains(key)) {
                     throw new StoreException("jeno.lock: unknown field '" + key
                             + "' in the row for '" + fields.get("id") + "'");
                 }
@@ -70,7 +73,7 @@ public final class LockFileReader {
                     string(fields, "id"), string(fields, "version"), source,
                     string(fields, "url"), string(fields, "sha256"),
                     fields.containsKey("meta-sha256") ? string(fields, "meta-sha256") : null,
-                    depth(fields), scope(fields));
+                    depth(fields), scope(fields), api(fields));
             if (!HEX64.matcher(artifact.sha256()).matches()) {
                 throw new StoreException("jeno.lock: sha256 for '" + artifact.id()
                         + "' is not 64 hex characters");
@@ -87,6 +90,48 @@ public final class LockFileReader {
             result.add(artifact);
         }
         return List.copyOf(result);
+    }
+
+    private static boolean api(Map<String, Object> fields) {
+        Object value = fields.get("api");
+        if (value == null) {
+            return false;
+        }
+        if (!(value instanceof Boolean flag)) {
+            throw new StoreException("jeno.lock: api for '" + fields.get("id")
+                    + "' must be true or false");
+        }
+        return flag;
+    }
+
+    /**
+     * The format marker is a comment, not a TOML key: older jeno readers
+     * ignore it, while this reader can refuse a future format instead of
+     * guessing. A lock written before the marker existed is version 1.
+     */
+    private static void lockfileVersion(String text) {
+        for (String line : text.split("\n", -1)) {
+            var matcher = VERSION_MARKER.matcher(line.strip());
+            if (!matcher.matches()) {
+                continue;
+            }
+            int version;
+            try {
+                version = Integer.parseInt(matcher.group(1));
+            } catch (NumberFormatException e) {
+                throw new StoreException("jeno.lock: invalid lockfile version marker");
+            }
+            if (version < 1) {
+                throw new StoreException("jeno.lock: lockfile version must be >= 1");
+            }
+            if (version > com.jujin.jeno.resolve.LockFile.VERSION) {
+                throw new StoreException("jeno.lock: lockfile version " + version
+                        + " is newer than this jeno supports ("
+                        + com.jujin.jeno.resolve.LockFile.VERSION
+                        + ") — upgrade jeno before using this lock");
+            }
+            return;
+        }
     }
 
     private static String string(Map<String, Object> fields, String key) {

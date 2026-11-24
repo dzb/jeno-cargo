@@ -49,4 +49,21 @@ public record Requirement(
     public String origin() {
         return species == Species.GH ? "gh:" + owner + "/" + repo : null;
     }
+
+    /**
+     * The canonical source identity used by the resolver to reject aliases.
+     * Two requirements with the same id but different identities are a hard
+     * conflict; two different ids with the same identity are also rejected.
+     * The exact spelling is internal but stable enough for error messages.
+     */
+    public String identity() {
+        return switch (species) {
+            case CENTRAL -> repository == null
+                    ? "central:" + id
+                    : "repo:" + repository + "/" + id;
+            case GH -> "gh:" + owner + "/" + repo;
+            case NAMED -> "named:" + repository + "/" + id;
+            case URL -> "url:" + url;
+        };
+    }
 }

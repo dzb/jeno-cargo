@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -892,6 +893,116 @@ class ResolverTest {
     // ------------------------------------------------------------------
     // strict visibility
     // ------------------------------------------------------------------
+
+    @Test
+    void apiEdgesAddOneExplicitlyExportedLayerToCompileVisibility() {
+        String apiDescriptor = """
+            [project]
+            name = "widget"
+            version = "1.0.0"
+
+            [deps]
+            "com.example:lib-b" = "1.0.0"
+
+            [deps-api]
+            "com.example:lib-b" = "1.0.0"
+            """;
+        ResolvedGraph exported = Resolver.resolve(project("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [deps]
+            widget = "gh:acme/widget@v1.0.0"
+            """), pomSource(
+                "com.example:lib-b:1.0.0", pom("com.example", "lib-b", "1.0.0", "")),
+            descriptorSource(ghDescriptor("acme", "widget", "v1.0.0", "1.0.0"),
+                    apiDescriptor));
+
+        assertEquals(java.util.Set.of("widget", "com.example:lib-b"),
+                exported.compileArtifacts().stream()
+                        .map(ResolvedGraph.ResolvedArtifact::id)
+                        .collect(java.util.stream.Collectors.toSet()));
+        assertTrue(artifact(exported, "com.example:lib-b").api(),
+                "the child is marked exported API");
+        assertFalse(artifact(exported, "widget").api(),
+                "the direct dependency is not marked as an API child");
+
+        String implementationDescriptor = apiDescriptor.replace("""
+            [deps-api]
+            "com.example:lib-b" = "1.0.0"
+            """, "");
+        ResolvedGraph hidden = Resolver.resolve(project("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [deps]
+            widget = "gh:acme/widget@v1.0.0"
+            """), pomSource(
+                "com.example:lib-b:1.0.0", pom("com.example", "lib-b", "1.0.0", "")),
+            descriptorSource(ghDescriptor("acme", "widget", "v1.0.0", "1.0.0"),
+                    implementationDescriptor));
+
+        assertEquals(java.util.List.of("widget"), hidden.compileArtifacts().stream()
+                        .map(ResolvedGraph.ResolvedArtifact::id).toList(),
+                "ordinary transitive implementation deps stay off the compile classpath");
+        assertFalse(artifact(hidden, "com.example:lib-b").api());
+    }
+
+    @Test
+    void oneSourceCannotAppearUnderTwoIds() {
+        ResolveException error = assertThrows(ResolveException.class,
+                () -> Resolver.resolve(project("""
+                    [project]
+                    name = "demo"
+                    version = "0.1.0"
+
+                    [deps]
+                    one = "gh:acme/widget@v1.0.0"
+                    two = "gh:acme/widget@v1.0.0"
+                    """), pomSource(), descriptorSource()));
+
+        assertTrue(error.getMessage().contains("one source, one id"), error.getMessage());
+    }
+
+    @Test
+    void oneIdCannotComeFromTwoRepositories() {
+        ResolveException error = assertThrows(ResolveException.class,
+                () -> Resolver.resolve(project("""
+                    [project]
+                    name = "demo"
+                    version = "0.1.0"
+
+                    [repos]
+                    a = "https://a.example/"
+                    b = "https://b.example/"
+
+                    [deps]
+                    "com.example:a" = "a:1.0.0"
+                    "com.example:b" = "b:1.0.0"
+                    """), pomSource(
+                        "com.example:a:1.0.0", pom("com.example", "a", "1.0.0", """
+                            <dependencies>
+                              <dependency>
+                                <groupId>com.example</groupId>
+                                <artifactId>shared</artifactId>
+                                <version>1.0.0</version>
+                              </dependency>
+                            </dependencies>
+                            """),
+                        "com.example:b:1.0.0", pom("com.example", "b", "1.0.0", """
+                            <dependencies>
+                              <dependency>
+                                <groupId>com.example</groupId>
+                                <artifactId>shared</artifactId>
+                                <version>1.0.0</version>
+                              </dependency>
+                            </dependencies>
+                            """)), descriptorSource()));
+
+        assertTrue(error.getMessage().contains("one id, one source"), error.getMessage());
+    }
 
     @Test
     void directAndClosureSplitCompileFromRuntime() {

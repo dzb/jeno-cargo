@@ -94,6 +94,9 @@ public final class Resolver {
         /** id → species and origin, frozen at the first reference. */
         private final Map<String, Species> speciesById = new LinkedHashMap<>();
         private final Map<String, String> originById = new LinkedHashMap<>();
+        /** canonical source identity for each id, and its reverse for aliases. */
+        private final Map<String, String> identityById = new LinkedHashMap<>();
+        private final Map<String, String> idByIdentity = new LinkedHashMap<>();
         /** id → the requirement shape metadata is fetched with (g/a or owner/repo). */
         private final Map<String, Requirement> templateById = new LinkedHashMap<>();
         private final Map<String, List<Constraint>> constraintsById = new LinkedHashMap<>();
@@ -104,6 +107,8 @@ public final class Resolver {
          * collection phase walked, nothing else.
          */
         private final Map<String, Map<String, Set<String>>> edgesFrom = new LinkedHashMap<>();
+        /** parent id → version → children reached through an exported API edge. */
+        private final Map<String, Map<String, Set<String>>> apiEdgesFrom = new LinkedHashMap<>();
         private int expansions;
 
         Session(JenoProject project, PomSource pomSource, DescriptorSource descriptorSource) {
@@ -160,6 +165,13 @@ public final class Resolver {
                     edgesFrom.computeIfAbsent(current.id(), ignored -> new LinkedHashMap<>())
                             .computeIfAbsent(current.version(), ignored -> new LinkedHashSet<>())
                             .add(edge.requirement().id());
+                    if (edge.api()) {
+                        apiEdgesFrom.computeIfAbsent(current.id(),
+                                        ignored -> new LinkedHashMap<>())
+                                .computeIfAbsent(current.version(),
+                                        ignored -> new LinkedHashSet<>())
+                                .add(edge.requirement().id());
+                    }
                     Set<PomDependency.Exclusion> inherited = new LinkedHashSet<>(current.exclusions());
                     inherited.addAll(edge.exclusions());
                     queue.add(constraint(edge.requirement().id(), edge.requirement().version(),
@@ -205,17 +217,26 @@ public final class Resolver {
                 Set<PomDependency.Exclusion> exclusions, Requirement template) {
 
             Species species = template.species();
+            String identity = template.identity();
             Species known = speciesById.get(id);
             if (known == null) {
                 speciesById.put(id, species);
                 originById.put(id, template.origin());
+                identityById.put(id, identity);
                 templateById.put(id, template);
             } else {
-                String knownOrigin = originById.get(id);
-                if (known != species || !Objects.equals(knownOrigin, template.origin())) {
-                    throw new ResolveException("'" + id + "' is referenced as " + knownOrigin
-                            + " and " + template.origin() + " — one id, one species");
+                String knownIdentity = identityById.get(id);
+                if (known != species || !Objects.equals(knownIdentity, identity)) {
+                    throw new ResolveException("'" + id + "' is referenced as "
+                            + knownIdentity + " and " + identity
+                            + " — one id, one source; declare one of them or align the source");
                 }
+            }
+            String knownId = idByIdentity.putIfAbsent(identity, id);
+            if (knownId != null && !knownId.equals(id)) {
+                throw new ResolveException("'" + knownId + "' and '" + id
+                        + "' resolve to the same source " + identity
+                        + " — one source, one id");
             }
             Constraint constraint = new Constraint(id, version, path, declared, exclusions, template);
             constraintsById.computeIfAbsent(id, key -> new ArrayList<>()).add(constraint);
@@ -245,7 +266,7 @@ public final class Resolver {
                         List<Edge> edges = pom.dependencies().stream()
                                 .map(dependency -> new Edge(
                                         centralRequirement(dependency, template.repository()),
-                                        Set.copyOf(dependency.exclusions())))
+                                        Set.copyOf(dependency.exclusions()), false))
                                 .toList();
                         yield new Metadata(edges, Map.of());
                     }
@@ -266,7 +287,8 @@ public final class Resolver {
                                 template.repo(), version);
                         List<Edge> edges = descriptor.requirements().stream()
                                 .map(requirement -> new Edge(requirement,
-                                        Set.<PomDependency.Exclusion>of()))
+                                        Set.<PomDependency.Exclusion>of(),
+                                        descriptor.apiRequirements().contains(requirement.id())))
                                 .toList();
                         yield new Metadata(edges, descriptor.retract());
                     }
@@ -284,7 +306,8 @@ public final class Resolver {
                                 template.repository());
                         List<Edge> edges = descriptor.requirements().stream()
                                 .map(requirement -> new Edge(requirement,
-                                        Set.<PomDependency.Exclusion>of()))
+                                        Set.<PomDependency.Exclusion>of(),
+                                        descriptor.apiRequirements().contains(requirement.id())))
                                 .toList();
                         yield new Metadata(edges, descriptor.retract());
                     }
@@ -472,6 +495,8 @@ public final class Resolver {
             Set<String> mainReachable = reachable(children, project.requirements());
             Set<String> processorReachable =
                     reachable(children, project.processorRequirements());
+            Set<String> apiExported = apiReachable(selected);
+            apiExported.removeAll(declaredIds);
 
 
             Depths depths = new Depths(selected, children, declaredIds);
@@ -516,13 +541,43 @@ public final class Resolver {
                         depths.depth(id), declaredIds.contains(id),
                         mainReachable.contains(id) ? Scope.MAIN
                                 : processorReachable.contains(id) ? Scope.PROCESSOR
-                                : Scope.DEV));
+                                : Scope.DEV,
+                        apiExported.contains(id)));
             }
             List<ResolvedGraph.ResolvedArtifact> direct = artifacts.stream()
                     .filter(ResolvedGraph.ResolvedArtifact::declared)
                     .toList();
             return new ResolvedGraph(List.copyOf(artifacts), direct,
                     Map.copyOf(children));
+        }
+
+        /**
+         * Artifacts reachable from a MAIN declaration by following only
+         * {@code [deps-api]} edges. Direct artifacts are already visible; the
+         * returned set is filtered against declared ids before being written
+         * to the lock as {@code api = true}.
+         */
+        private Set<String> apiReachable(Map<String, String> selected) {
+            Set<String> reached = new HashSet<>();
+            Deque<String> frontier = new ArrayDeque<>();
+            for (Requirement requirement : project.requirements()) {
+                if (reached.add(requirement.id())) {
+                    frontier.add(requirement.id());
+                }
+            }
+            while (!frontier.isEmpty()) {
+                String parent = frontier.poll();
+                Map<String, Set<String>> byVersion = apiEdgesFrom.get(parent);
+                if (byVersion == null) {
+                    continue;
+                }
+                for (String child : byVersion.getOrDefault(selected.get(parent), Set.of())) {
+                    if (reached.add(child)) {
+                        frontier.add(child);
+                    }
+                }
+            }
+            return reached;
         }
 
         /** Everything reachable from a set of roots over the walked edges. */
@@ -605,7 +660,8 @@ public final class Resolver {
             return List.copyOf(appended);
         }
 
-        private record Edge(Requirement requirement, Set<PomDependency.Exclusion> exclusions) {
+        private record Edge(Requirement requirement, Set<PomDependency.Exclusion> exclusions,
+                            boolean api) {
 
             Edge {
                 if (exclusions == null) {

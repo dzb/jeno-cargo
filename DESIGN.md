@@ -44,7 +44,7 @@ jeno-0.1.0/
 
 jeno 的灵魂是"**严格依赖图管理器**",三件套:
 
-1. **严格可见性**——compile classpath 只有直接声明的依赖,根治幽灵依赖
+1. **严格可见性**——compile classpath 只有直接声明的依赖,以及作者用 `[deps-api]` 显式导出的 API 闭包;普通传递依赖仍只进 runtime classpath,根治幽灵依赖
 2. **深度预算**——依赖链长度上限可配置(如 2),超限即错,让该死去的库尽快死去
 3. **单版本 + MVS**——项目内同库永远只有一个版本,取最大,确定性解析
 
@@ -85,7 +85,10 @@ jeno 又用严格可见性约束用户项目的依赖边界——**这个工具�
 | D20 | 改名 jeno,cargo 风格干净切换 | 旧名文件、旧前缀与旧仓库类型不兼容;双名回退会让“当前文件是否存在”变成隐式规则,锁与描述符来源无法自证。迁移只给命令,不做运行时兼容;0.3.0 是改名后的首个发布 |
 | D21 | 测试 toolchain 由 `[toolchain].jars` 显式声明 | 不能从 `org.junit.*` 之类的包名前缀猜:那会把非 JUnit 测试库漏进生产 jar,或把恰好同前缀的库塞进 toolchain。显式 id 清单是 packaging metadata,不改变解析、可见性或锁语义 |
 | D22 | 只认 `jeno.toml`/`jeno.lock`/`jeno.ws.toml`;旧名文件只诊断不兼容 | 双名兼容会让“当前文件是否存在”变成隐式回退,锁与 manifest 的来源也更难解释。旧名通过 `jeno doctor` 和 `jeno init --ws` 的迁移提示显式暴露;用户改名/迁移并重新 lock,而不是让两套文件长期共存 |
-| D23 | 明文 HTTP 只放行字面私有网络地址 | 局域网自建仓库(192.168/10/172.16)常常没有 TLS,拒绝全部 http 会把“自己机器上的仓库”也排除;但放行主机名或公网 http 等于把安全策略交给 DNS。只接受字面 IP + localhost,不解析域名;非 loopback 的明文目标在 publish/release 打一行“流量与 token 不加密”的 warning。https 行为与“公网 http 拒绝”不变 |
+| D23 | 明文 HTTP 只放行字面私有网络地址 | 局域网自建仓库(192.168/10/172.16)常常没有 TLS,拒绝全部 http 会把“自己机器上的仓库”也排除;但放行主机名或公网 http 等于把安全策略交给 DNS。只接受字面 IP + localhost,不解析域名;非 loopback 的明文目标在 publish/release 打一行“流量与 token 不加密”的 warning；`JENO_PUBLISH_TOKEN` 默认拒绝发往 cleartext LAN，只有显式设置 `JENO_ALLOW_INSECURE_TOKEN=1` 才允许。https 行为与“公网 http 拒绝”不变 |
+| D24 | 导出的 API 依赖显式标记,不从传递闭包推断 | Java 库的公开签名可能暴露另一个库的类型;不能自动把所有 compile 依赖放回 classpath,否则 strict visibility 失效。`[deps-api]` 只标注已存在于 `[deps]` 的声明,消费者沿显式 API 边获得编译可见性,Maven POM 不做猜测 |
+| D25 | lockfile 使用版本 marker,`api` 行记录导出闭包 | 版本 marker 用 TOML 注释保存,旧 reader 可忽略;`api = true` 记录消费者需要的显式 API 编译闭包,避免每个命令重读传递描述符 |
+| D26 | 依赖身份的 canonical source 必须一致 | 同一 id 从不同仓库/GitHub/URL 进入是硬冲突;同一来源用两个 alias 也是硬冲突,禁止第一个来源静默获胜 |
 
 ---
 
@@ -197,7 +200,7 @@ Central 的元数据是 `pom.xml`;要拖库就绕不开它。jeno 把 XML 当作
 `[retract]`(作者端撤回,SPEC §3.4),与消费端的 `[overrides]` 凑成一对:坏版本死得快、死得可见。
 
 发布目标只有 jeno 能回读的几种形式(`gh:`、`jeno:https:`、字面私有网络的 `jeno:http:`、
-`jeno:local:`);Maven 布局是只读源,不是发布目标——jeno 不写 POM(见 D15/D23)。
+`jeno:local:`);Maven 布局是只读源,不是发布目标——jeno 不写 POM(见 D15)。
 
 ### 7.3 GitHub 后端(以及为什么不再是 Gitee)
 

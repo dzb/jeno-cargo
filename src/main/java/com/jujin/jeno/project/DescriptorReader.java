@@ -5,6 +5,7 @@ import com.jujin.freeway.commons.toml.TomlUtils;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Reads a jeno-native release descriptor ({@code {artifact}-{version}.jeno.toml})
@@ -47,11 +48,21 @@ public final class DescriptorReader {
                         + " must be a table — every descriptor entry is a [section] (SPEC.md §3)");
             }
             switch (entry.getKey()) {
-                case "project", "java", "deps", "retract" -> { }
+                case "project", "java", "deps", "deps-api", "retract" -> { }
                 default -> throw new ProjectException(
                         ProjectReader.at(file, source.section(entry.getKey()))
                         + "descriptor " + expectedName + ": unknown section [" + entry.getKey()
                         + "] — a descriptor carries facts only (SPEC.md §3)");
+            }
+        }
+
+        if (root.containsKey("deps-api")) {
+            SchemaSource.Site deps = source.section("deps");
+            SchemaSource.Site api = source.section("deps-api");
+            if (deps == null || api == null || api.line() <= deps.line()) {
+                throw new ProjectException(ProjectReader.at(file, api)
+                        + "[deps] must be declared before [deps-api] in a descriptor "
+                        + "— [deps-api] only marks exported API deps");
             }
         }
 
@@ -106,6 +117,13 @@ public final class DescriptorReader {
                     siblingRepository);
         }
 
+        Set<String> apiRequirements = Set.of();
+        Map<String, Object> apiDepsSection = optionalSection(root, "deps-api");
+        if (apiDepsSection != null) {
+            apiRequirements = ProjectReader.apiRequirementIds(apiDepsSection, requirements,
+                    null, "descriptor", siblingRepository);
+        }
+
         Map<String, String> retract = new LinkedHashMap<>();
         Map<String, Object> retractSection = optionalSection(root, "retract");
         if (retractSection != null) {
@@ -119,8 +137,8 @@ public final class DescriptorReader {
             }
         }
 
-        return new Descriptor(name, group, version, javaVersion, requirements, retract,
-                summary, homepage, license);
+        return new Descriptor(name, group, version, javaVersion, requirements,
+                apiRequirements, retract, summary, homepage, license);
     }
 
     private static String optionalString(Map<String, Object> section, String sectionName, String key) {

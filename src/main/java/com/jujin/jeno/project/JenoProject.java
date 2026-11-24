@@ -2,6 +2,7 @@ package com.jujin.jeno.project;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A parsed jeno.toml — SPEC.md §2's closed schema as data. Values that were
@@ -23,6 +24,12 @@ import java.util.Map;
  *                        coordinates, resolved as their own closure and put on
  *                        javac's {@code -processorpath}; empty means javac's
  *                        default (the classpath)
+ * @param apiRequirements ids marked in {@code [deps-api]}: direct dependencies
+ *                        whose types are part of this library's exported API.
+ *                        They must already be declared in {@code [deps]};
+ *                        consumers get them on the compile classpath through
+ *                        an explicit API edge, never by leaking all transitive
+ *                        dependencies.
  * @param devRequirements {@code [dev-deps]} — test-only requirements; they
  *                        resolve into jeno.lock but never reach the compile
  *                        visibility, the runtime classpath or a published
@@ -43,6 +50,7 @@ public record JenoProject(
         Integer javaVersion,
         int maxDepth,
         List<Requirement> requirements,
+        Set<String> apiRequirements,
         Map<String, String> overrides,
         Map<String, String> scripts,
         Map<String, Repository> repos,
@@ -62,6 +70,10 @@ public record JenoProject(
             requirements = List.of();
         }
         requirements = List.copyOf(requirements);
+        if (apiRequirements == null) {
+            apiRequirements = Set.of();
+        }
+        apiRequirements = Set.copyOf(apiRequirements);
         if (devRequirements == null) {
             devRequirements = List.of();
         }

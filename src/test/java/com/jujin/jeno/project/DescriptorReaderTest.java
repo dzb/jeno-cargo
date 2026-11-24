@@ -41,6 +41,24 @@ class DescriptorReaderTest {
     }
 
     @Test
+    void descriptorApiMarkersTravelWithTheRelease() {
+        Descriptor descriptor = DescriptorReader.parse("""
+            [project]
+            name = "mylib"
+            version = "1.2.0"
+
+            [deps]
+            "org.slf4j:slf4j-api" = "2.0.18"
+
+            [deps-api]
+            "org.slf4j:slf4j-api" = "2.0.18"
+            """, "mylib", "1.2.0");
+
+        assertEquals(java.util.Set.of("org.slf4j:slf4j-api"),
+                descriptor.apiRequirements());
+    }
+
+    @Test
     void nameAndVersionMustMatchWhatWasFetched() {
         ProjectException name = assertThrows(ProjectException.class,
             () -> DescriptorReader.parse(DESCRIPTOR, "other", "1.2.0"));

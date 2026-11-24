@@ -772,6 +772,17 @@ public final class PublishCommand implements Command {
                         .append("\"\n");
             }
         }
+        if (!project.apiRequirements().isEmpty()) {
+            out.append("\n[deps-api]\n");
+            for (Requirement requirement : project.requirements()) {
+                if (!project.apiRequirements().contains(requirement.id())) {
+                    continue;
+                }
+                out.append("\"").append(requirement.id()).append("\" = \"")
+                        .append(requirementValue(requirement, siblings.contains(requirement.id())))
+                        .append("\"\n");
+            }
+        }
         return out.toString();
     }
 

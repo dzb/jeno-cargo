@@ -50,11 +50,24 @@ public record ResolvedGraph(
     }
 
     /**
-     * The compile classpath: declared MAIN requirements only (strict
-     * visibility, SPEC.md §4.4) — dev declarations never appear here.
+     * The compile classpath: declared MAIN requirements plus artifacts reached
+     * through an explicit {@code [deps-api]} edge from one of those roots.
+     * Ordinary transitive implementation dependencies stay off this list;
+     * dev declarations never appear here.
      */
     public List<ResolvedArtifact> compileArtifacts() {
-        return direct.stream().filter(a -> a.scope() == Scope.MAIN).toList();
+        Map<String, ResolvedArtifact> visible = new java.util.LinkedHashMap<>();
+        for (ResolvedArtifact artifact : direct) {
+            if (artifact.scope() == Scope.MAIN) {
+                visible.put(artifact.id(), artifact);
+            }
+        }
+        for (ResolvedArtifact artifact : artifacts) {
+            if (artifact.scope() == Scope.MAIN && artifact.api()) {
+                visible.putIfAbsent(artifact.id(), artifact);
+            }
+        }
+        return List.copyOf(visible.values());
     }
 
     public record ResolvedArtifact(
@@ -66,9 +79,10 @@ public record ResolvedGraph(
             String metadataUrl,
             int depth,
             boolean declared,
-            Scope scope) {
+            Scope scope,
+            boolean api) {
 
-        /** Back-compat: artifacts built by older callers are MAIN. */
+        /** Back-compat: artifacts built by older callers are MAIN and non-API. */
         public ResolvedArtifact {
             if (scope == null) {
                 scope = Scope.MAIN;
@@ -76,8 +90,15 @@ public record ResolvedGraph(
         }
 
         public ResolvedArtifact(String id, String version, Species species, String source,
+                                String jarUrl, String metadataUrl, int depth, boolean declared,
+                                Scope scope) {
+            this(id, version, species, source, jarUrl, metadataUrl, depth, declared, scope, false);
+        }
+
+        public ResolvedArtifact(String id, String version, Species species, String source,
                                 String jarUrl, String metadataUrl, int depth, boolean declared) {
-            this(id, version, species, source, jarUrl, metadataUrl, depth, declared, Scope.MAIN);
+            this(id, version, species, source, jarUrl, metadataUrl, depth, declared,
+                    Scope.MAIN, false);
         }
 
         /** The lockfile's {@code id} line value, {@code id@version}. */

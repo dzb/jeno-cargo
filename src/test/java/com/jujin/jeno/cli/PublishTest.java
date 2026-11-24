@@ -85,6 +85,10 @@ class PublishTest {
         assertTrue(descriptor.contains("\"com.example:lib-a\" = \"1.0.0\""));
         assertTrue(descriptor.contains("\"mylib\" = \"gh:acme/mylib@v1.2.0\""),
                 "native requirements round-trip with their tag");
+        assertTrue(descriptor.contains("[deps-api]"),
+                "API markers travel into the descriptor");
+        assertTrue(descriptor.contains("\"com.example:lib-a\" = \"1.0.0\""),
+                "the marker repeats the exact declaration");
         assertFalse(descriptor.contains("[repos]"), "a descriptor carries facts, not rules");
 
         // a target without a token triggers the upload path and fails —
@@ -230,6 +234,9 @@ class PublishTest {
             [deps]
             "com.example:lib-a" = "1.0.0"
             mylib = "gh:acme/mylib@v1.2.0"
+
+            [deps-api]
+            "com.example:lib-a" = "1.0.0"
             """);
     }
     private Result publishJson(String... args) {

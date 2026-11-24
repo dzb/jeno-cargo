@@ -5,6 +5,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import com.jujin.jeno.project.Repository;
+
 import java.time.Duration;
 
 /**
@@ -37,6 +39,11 @@ final class JenoUploads {
     static void put(String url, String contentType, byte[] bytes)
             throws IOException, InterruptedException {
         String token = System.getenv("JENO_PUBLISH_TOKEN");
+        if (token != null && !token.isBlank() && isCleartextNonLoopback(url)
+                && !"1".equals(System.getenv("JENO_ALLOW_INSECURE_TOKEN"))) {
+            throw new IOException("refusing to send JENO_PUBLISH_TOKEN over plain HTTP ("
+                    + url + ") — set JENO_ALLOW_INSECURE_TOKEN=1 only for a trusted LAN");
+        }
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
                 .header("Content-Type", contentType)
                 .PUT(HttpRequest.BodyPublishers.ofByteArray(bytes));
@@ -51,6 +58,12 @@ final class JenoUploads {
                     + (response.body().isBlank() ? "" : ": " + response.body().substring(
                             0, Math.min(200, response.body().length()))));
         }
+    }
+
+    /** Whether a URL would put the bearer token on an unencrypted LAN. */
+    static boolean isCleartextNonLoopback(String url) {
+        return url != null && url.startsWith("http://")
+                && !Repository.isLoopbackHttp(url);
     }
 
     /** One GET; the release read-back check. */

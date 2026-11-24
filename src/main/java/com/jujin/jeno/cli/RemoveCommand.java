@@ -18,10 +18,10 @@ import java.util.List;
  *
  * <p>The counterpart of {@code jeno add}: before this command existed, dropping
  * a dependency meant hand-editing jeno.toml and remembering to re-lock. It
- * removes exactly the one declaration line from {@code [deps]},
- * {@code [dev-deps]}, or their {@code .{repo}} groups — comments, layout and
- * every other line survive — then refreshes jeno.lock so the artifact leaves
- * the graph immediately.
+ * removes the declaration from {@code [deps]}, {@code [dev-deps]}, or their
+ * {@code .{repo}} groups, plus any matching {@code [deps-api]} marker —
+ * comments, layout and every other line survive — then refreshes jeno.lock so
+ * the artifact leaves the graph immediately.
  *
  * <p>An id that is not declared is an error naming the declared set, never a
  * silent no-op.
@@ -235,26 +235,29 @@ public final class RemoveCommand implements Command {
     static String removeLine(String text, String id) {
         List<String> lines = new ArrayList<>(text.lines().toList());
         String section = null;
-        for (int i = 0; i < lines.size(); i++) {
+        boolean removed = false;
+        for (int i = 0; i < lines.size(); ) {
             String stripped = lines.get(i).strip();
             if (stripped.startsWith("[") && stripped.endsWith("]")) {
                 section = stripped;
+                i++;
                 continue;
             }
-            if (section == null || !isDepsSection(section)) {
-                continue;
-            }
-            if (declares(lines.get(i), id)) {
+            if (section != null && isDepsSection(section) && declares(lines.get(i), id)) {
                 lines.remove(i);
-                return String.join("\n", lines) + "\n";
+                removed = true;
+                continue;
             }
+            i++;
         }
-        return text;
+        return removed ? String.join("\n", lines) + "\n" : text;
     }
 
     private static boolean isDepsSection(String header) {
-        return header.equals("[deps]") || header.equals("[dev-deps]")
-                || header.startsWith("[deps.") || header.startsWith("[dev-deps.");
+        return header.equals("[deps]") || header.equals("[deps-api]")
+                || header.equals("[dev-deps]")
+                || header.startsWith("[deps.") || header.startsWith("[deps-api.")
+                || header.startsWith("[dev-deps.");
     }
 
     /** Whether one line is {@code <key> = <value>} for this id. */

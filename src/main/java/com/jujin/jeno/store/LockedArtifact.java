@@ -18,7 +18,8 @@ public record LockedArtifact(
         String sha256,
         String metaSha256,
         int depth,
-        Scope scope) {
+        Scope scope,
+        boolean api) {
 
     public LockedArtifact {
         if (scope == null) {
@@ -26,10 +27,16 @@ public record LockedArtifact(
         }
     }
 
+    /** Back-compat: rows without an {@code api} marker are not exported API. */
+    public LockedArtifact(String id, String version, String source, String url,
+                          String sha256, String metaSha256, int depth, Scope scope) {
+        this(id, version, source, url, sha256, metaSha256, depth, scope, false);
+    }
+
     /** Back-compat constructor: every pre-scope caller built MAIN rows. */
     public LockedArtifact(String id, String version, String source, String url,
                           String sha256, String metaSha256, int depth) {
-        this(id, version, source, url, sha256, metaSha256, depth, Scope.MAIN);
+        this(id, version, source, url, sha256, metaSha256, depth, Scope.MAIN, false);
     }
 
     /** Whether this artifact belongs on a production classpath. */

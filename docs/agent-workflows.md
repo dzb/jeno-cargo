@@ -98,7 +98,9 @@ jeno --json publish --dry-run "jeno:local:../repo" --module libs/core
   jeno targets with `OFFLINE_FORBIDDEN` before any network request.
 - Plain HTTP is accepted only for literal private-network addresses
   (`192.168/10/172.16`, loopback, IPv6 ULA/link-local). Non-loopback HTTP emits
-  a `PLAIN_HTTP_INSECURE` warning; public hosts require HTTPS.
+  a `PLAIN_HTTP_INSECURE` warning; public hosts require HTTPS. A
+  `JENO_PUBLISH_TOKEN` is never sent over cleartext LAN unless
+  `JENO_ALLOW_INSECURE_TOKEN=1` is explicitly set.
 - `add --json` without a value is remote discovery and returns
   `JSON_DISCOVERY_UNSUPPORTED`; pass an explicit version for mutation.
 
