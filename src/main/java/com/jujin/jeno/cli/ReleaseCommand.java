@@ -841,7 +841,10 @@ public final class ReleaseCommand implements Command {
             } else {
                 (Get-Command java.exe -ErrorAction Stop).Source
             }
-            $VersionText = & $Java -version 2>&1 | Select-Object -First 1
+            $VersionText = & {
+                $ErrorActionPreference = "Continue"
+                & $Java -version 2>&1
+            } | Select-Object -First 1
             if ($VersionText -match '"([0-9]+)') {
                 $Major = [int]$Matches[1]
             } else {
@@ -865,7 +868,7 @@ public final class ReleaseCommand implements Command {
                     throw "${Name}: sha256 mismatch — expected $Sha, got $Hash"
                 }
                 $TarExe = (Get-Command tar.exe -ErrorAction Stop).Source
-                & $TarExe -xzf $Tar -C $Tmp
+                & { $ErrorActionPreference = "Continue"; & $TarExe -xzf $Tar -C $Tmp }
                 if ($LASTEXITCODE -ne 0) {
                     throw "${Name}: tar.exe could not extract the installer"
                 }

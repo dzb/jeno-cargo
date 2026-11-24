@@ -91,6 +91,12 @@ class ReleaseCommandTest {
         assertTrue(ps1.contains("${Name}:"), ps1);
         assertFalse(ps1.contains("$Name:"), ps1);
         assertPowerShellScopes(ps1);
+        assertTrue(java.util.regex.Pattern.compile(
+                        "&\\s*\\{\\s*\\$ErrorActionPreference\\s*=\\s*\"Continue\""
+                                + "\\s*&\\s*\\$Java\\s+-version").matcher(ps1).find(), ps1);
+        assertTrue(java.util.regex.Pattern.compile(
+                        "&\\s*\\{\\s*\\$ErrorActionPreference\\s*=\\s*\"Continue\";"
+                                + "\\s*&\\s*\\$TarExe\\s+-xzf").matcher(ps1).find(), ps1);
         assertTrue(Files.exists(release.resolve("app-1.0.0.tar.gz.sha256")));
         var json = JsonUtils.parseObject(
                 Files.readString(release.resolve("release.json")).strip());
