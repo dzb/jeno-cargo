@@ -198,7 +198,7 @@ class DistLayoutTest {
         String launcher = Files.readString(dir.resolve("target/dist/demo-1.0.0/bin/demo"));
         assertTrue(launcher.startsWith("#!/bin/sh\n# demo 1.0.0 launcher\n"),
                 "the launcher names the program, not jeno: " + launcher);
-        assertFalse(launcher.contains("modern java manager"), "no jeno branding");
+        assertFalse(launcher.contains(Jeno.TAGLINE), "no jeno branding");
         assertTrue(launcher.contains("-cp \"$JENO_HOME/lib/*\""),
                 "one classpath wildcard, no toolchain: " + launcher);
         String execLine = launcher.lines()

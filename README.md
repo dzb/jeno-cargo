@@ -1,4 +1,4 @@
-## jeno — modern java cargo
+## jeno — a modern cargo for Java
 
 [![Latest release](https://img.shields.io/github/v/release/dzb/jeno-cargo?label=release)](https://github.com/dzb/jeno-cargo/releases/latest) [![JDK](https://img.shields.io/badge/JDK-25%2B-orange)](https://jdk.java.net/25/) ![runtime deps](https://img.shields.io/badge/runtime%20deps-0-brightgreen)
 

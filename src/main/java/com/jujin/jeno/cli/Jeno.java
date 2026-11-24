@@ -34,12 +34,15 @@ public final class Jeno {
      */
     public static final String VERSION = Version.current();
 
+    /** The human-facing brand line; keep CLI banners and tests on one string. */
+    public static final String TAGLINE = "a modern cargo for Java";
+
     private Jeno() {}
 
     public static void main(String[] args) {
         if (args.length == 1 && (args[0].equals("--version") || args[0].equals("-v"))) {
             System.out.println(Ui.heading("jeno " + VERSION)
-                    + Ui.dim(" — modern java manager"));
+                    + Ui.dim(" — " + TAGLINE));
             return;
         }
         int exit;

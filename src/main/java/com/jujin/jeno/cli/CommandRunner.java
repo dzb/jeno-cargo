@@ -70,7 +70,7 @@ public final class CommandRunner {
                 CommandCatalog.printVersion();
             } else {
                 System.out.println(Ui.heading("jeno " + Jeno.VERSION)
-                        + Ui.dim(" — modern java manager"));
+                        + Ui.dim(" — " + Jeno.TAGLINE));
             }
             return 0;
         }
@@ -272,7 +272,7 @@ public final class CommandRunner {
         }
 
         System.out.println(Ui.heading("jeno " + Jeno.VERSION)
-                + Ui.dim(" — modern java manager"));
+                + Ui.dim(" — " + Jeno.TAGLINE));
         System.out.println();
         System.out.println(Ui.dim("usage:") + " jeno <command> [args]");
         for (Map.Entry<Command.Category, List<Command>> entry : groups.entrySet()) {

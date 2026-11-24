@@ -1,4 +1,4 @@
-# jeno — modern java manager
+# jeno — a modern cargo for Java
 
 > **DESIGN 是理由,不是契约。** 规范(文件格式、CLI、发行物布局、Maven 解码范围)见
 > [SPEC.md](SPEC.md);两者冲突时以 SPEC 为准。本文只回答"为什么这样定、放弃了什么"。
