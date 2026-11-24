@@ -119,13 +119,25 @@ jobs:
           printf '%s' "$MINISIGN_KEY_B64" | base64 -d > "$KEY_DIR/jeno.key"
           chmod 600 "$KEY_DIR/jeno.key"
 
-      - name: recreate the release before uploading
+      - name: preserve the previous release before uploading
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
-            && gh release delete "$GITHUB_REF_NAME" --yes || true
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            PREV="$RUNNER_TEMP/previous-release"
+            mkdir -p "$PREV/assets"
+            gh release view "$GITHUB_REF_NAME" --json name -q .name > "$PREV/title.txt" \
+              || echo "::warning::could not save the previous release title"
+            gh release view "$GITHUB_REF_NAME" --json body -q .body > "$PREV/body.md" \
+              || echo "::warning::could not save the previous release notes"
+            gh release download "$GITHUB_REF_NAME" --dir "$PREV/assets" --clobber \
+              || echo "::warning::could not save every previous release asset"
+            echo "PREVIOUS_RELEASE=1" >> "$GITHUB_ENV"
+            gh release delete "$GITHUB_REF_NAME" --yes \
+              || echo "::warning::could not remove the previous release before upload"
+          fi
 
       - name: jeno releases itself
         id: release_cmd
@@ -163,12 +175,29 @@ jobs:
             | grep -q "jeno ${GITHUB_REF_NAME#v} "
           echo "smoke install from the release URL passed"
 
-      - name: remove the release if this run published or failed its smoke
+      - name: remove or restore the release after a failed publish
         if: >-
-          failure() && startsWith(github.ref, 'refs/tags/v') &&
-          (steps.release_cmd.outcome == 'failure' || steps.smoke.outcome == 'failure')
+          always() && startsWith(github.ref, 'refs/tags/v') &&
+          (steps.release_cmd.outcome == 'failure' || steps.smoke.outcome == 'failure' ||
+           steps.release_cmd.outcome == 'cancelled' || steps.smoke.outcome == 'cancelled')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -u
           gh release delete "$GITHUB_REF_NAME" --yes \
-            || echo "::warning::could not delete $GITHUB_REF_NAME — remove it by hand"
+            || echo "::warning::could not delete $GITHUB_REF_NAME — continuing"
+          if [ "${PREVIOUS_RELEASE:-0}" = "1" ]; then
+            PREV="$RUNNER_TEMP/previous-release"
+            TITLE=$(cat "$PREV/title.txt" 2>/dev/null || true)
+            [ -n "$TITLE" ] || TITLE="$GITHUB_REF_NAME"
+            BODY="$PREV/body.md"
+            [ -f "$BODY" ] || : > "$BODY"
+            shopt -s nullglob
+            assets=("$PREV/assets/"*)
+            if gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+                --title "$TITLE" --notes-file "$BODY"; then
+              echo "restored the previous release $GITHUB_REF_NAME"
+            else
+              echo "::warning::could not restore $GITHUB_REF_NAME — restore it from $PREV by hand"
+            fi
+          fi
