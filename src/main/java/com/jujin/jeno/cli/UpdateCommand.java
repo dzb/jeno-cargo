@@ -127,6 +127,7 @@ public final class UpdateCommand implements Command {
 
         String latest;
         ReleaseAsset asset;
+        Map<String, Object> releaseMap = null;
         boolean legacyLayout = false;
         try {
             HttpResponse<String> response = http.send(
@@ -137,6 +138,7 @@ public final class UpdateCommand implements Command {
                         "cannot check for updates (GitHub answered " + response.statusCode() + ")");
             }
             var map = JsonUtils.parseObject(response.body()).toMap();
+            releaseMap = map;
             latest = String.valueOf(map.get("tag_name"));
             String latestVersion = latest == null ? null
                     : (latest.startsWith("v") ? latest.substring(1) : latest);
@@ -181,8 +183,9 @@ public final class UpdateCommand implements Command {
                     ? "release " + latest + " uses the old jeno-bin-* asset name — "
                         + "this release predates the jeno layout; install it manually once, "
                         + "then upgrade again"
-                    : "release " + latest + " has no jeno-" + latestVersion
-                        + ".tar.gz plus .sha256 — install it manually once, then upgrade again";
+                    : "release " + latest + " is missing "
+                        + String.join(", ", missingAssets(releaseMap, latestVersion))
+                        + " — install it manually once, then upgrade again";
             return fail(json, 1, "RELEASE_ASSET_MISSING", message);
         }
 
@@ -443,6 +446,25 @@ public final class UpdateCommand implements Command {
 
     private record ReleaseAsset(String tarUrl, String shaUrl, String installerUrl) {}
 
+    private java.util.List<String> missingAssets(Map<String, Object> release, String version) {
+        java.util.Set<String> present = new java.util.HashSet<>();
+        if (release.get("assets") instanceof List<?> assets) {
+            for (Object asset : assets) {
+                if (asset instanceof Map<?, ?> assetMap) {
+                    present.add(String.valueOf(assetMap.get("name")));
+                }
+            }
+        }
+        java.util.List<String> missing = new java.util.ArrayList<>();
+        for (String name : List.of("jeno-" + version + ".tar.gz",
+                "jeno-" + version + ".tar.gz.sha256", "install.ps1")) {
+            if (!present.contains(name)) {
+                missing.add(name);
+            }
+        }
+        return missing;
+    }
+
     private boolean hasLegacyAsset(Map<String, Object> release) {
         if (release.get("assets") instanceof List<?> assets) {
             for (Object asset : assets) {
@@ -476,7 +498,7 @@ public final class UpdateCommand implements Command {
                     }
                 }
             }
-            if (tar != null && sha != null) {
+            if (tar != null && sha != null && ps1 != null) {
                 return new ReleaseAsset(tar, sha, ps1);
             }
         }

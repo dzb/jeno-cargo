@@ -464,6 +464,43 @@ class UpdateTest {
     }
 
     @Test
+    void aReleaseWithoutInstallPs1IsMalformed(@TempDir Path home) throws Exception {
+        packageDist("0.1.99");
+        HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        int port = server.getAddress().getPort();
+        String json = "{\"tag_name\":\"v0.1.99\",\"assets\":["
+                + "{\"name\":\"jeno-0.1.99.tar.gz\","
+                + "\"browser_download_url\":\"http://localhost:" + port + "/a.tar.gz\"},"
+                + "{\"name\":\"jeno-0.1.99.tar.gz.sha256\","
+                + "\"browser_download_url\":\"http://localhost:" + port + "/a.sha256\"}]}";
+        byte[] body = json.getBytes(StandardCharsets.UTF_8);
+        server.createContext("/repos/dzb/jeno-cargo/releases/latest", exchange -> {
+            exchange.sendResponseHeaders(200, body.length);
+            try (var out = exchange.getResponseBody()) {
+                out.write(body);
+            }
+        });
+        server.start();
+        System.setProperty("jeno.update.api",
+                "http://localhost:" + port + "/repos/dzb/jeno-cargo/releases/latest");
+        var errors = new ByteArrayOutputStream();
+        PrintStream original = System.err;
+        int exit;
+        try {
+            System.setErr(new PrintStream(errors, true, StandardCharsets.UTF_8));
+            exit = new UpdateCommand().execute(List.of());
+        } finally {
+            System.setErr(original);
+            server.stop(0);
+            System.clearProperty("jeno.update.api");
+        }
+        assertEquals(1, exit);
+        String message = errors.toString(StandardCharsets.UTF_8);
+        assertTrue(message.contains("install.ps1"), message);
+        assertTrue(message.contains("missing"), message);
+    }
+
+    @Test
     void theWindowsInstallerRetriesA404(@TempDir Path home) throws Exception {
         packageDist("0.1.99");
         HttpServer server = serveLatest("v0.1.99", 0, "install.ps1", false);

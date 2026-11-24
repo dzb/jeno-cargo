@@ -128,6 +128,7 @@ jobs:
             && gh release delete "$GITHUB_REF_NAME" --yes || true
 
       - name: jeno releases itself
+        id: release_cmd
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           JENO_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -138,6 +139,7 @@ jobs:
             --notes-file "$RUNNER_TEMP/notes.md"
 
       - name: smoke-install the published installer
+        id: smoke
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           set -euo pipefail
@@ -145,7 +147,7 @@ jobs:
           URL="https://github.com/dzb/jeno-cargo/releases/latest/download/install.sh"
           status=000
           for attempt in $(seq 1 12); do
-            status=$(curl -sSL -o "$SMOKE_HOME/install.sh" -w '%{http_code}' "$URL" || true)
+            status=$(curl --max-time 60 -sSL -o "$SMOKE_HOME/install.sh" -w '%{http_code}' "$URL" || true)
             if [ "$status" = "200" ]; then
               break
             fi
@@ -161,9 +163,12 @@ jobs:
             | grep -q "jeno ${GITHUB_REF_NAME#v} "
           echo "smoke install from the release URL passed"
 
-      - name: remove the release if smoke failed
-        if: failure() && startsWith(github.ref, 'refs/tags/v')
+      - name: remove the release if this run published or failed its smoke
+        if: >-
+          failure() && startsWith(github.ref, 'refs/tags/v') &&
+          (steps.release_cmd.outcome == 'failure' || steps.smoke.outcome == 'failure')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete "$GITHUB_REF_NAME" --yes || true
+          gh release delete "$GITHUB_REF_NAME" --yes \
+            || echo "::warning::could not delete $GITHUB_REF_NAME — remove it by hand"
