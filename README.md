@@ -5,9 +5,10 @@
 A package manager and build tool for Java, built to replace Maven for the
 Freeway ecosystem — and then to outgrow that role.
 
-jeno is **self-hosting**: the previous release builds the next one. Every
-release you download was compiled, tested, packaged and published by the
-release before it. That is not a slogan; it is the only way jeno is ever built.
+jeno is **self-hosting**: once a javac bootstrap compiles the current tree,
+jeno locks, builds, tests, packages and publishes that same tree. Every release
+you download exercised the build tool from the code being released, not a
+previous binary that could hide a build-system change.
 
 **Linux/macOS**
 
@@ -443,9 +444,9 @@ jeno's own options: after it, arguments belong to the command — for `run`, to 
 program (`jeno run app.Main -- --offline` passes `--offline` through).
 
 `--locked` is a run-level release switch: it disables workspace
-`target/classes` substitution and requires every artifact on the classpath,
-verify, package or bundle to come from `jeno.lock` + the store. Put it before or
-after the command:
+`target/classes` substitution and makes `jeno.lock` + the store the only byte
+source for build/test/run/classpath/package/bundle/verify and for the local
+markers shown by info/tree/why. Put it before or after the command:
 
 ```bash
 jeno --locked verify
@@ -453,13 +454,14 @@ jeno --locked build
 jeno --locked package
 ```
 
-
 ### Output and colour
 
 Human output adapts to the destination. A terminal gets colour, check marks and
 a grouped help page; status lines keep their historical plain text when stdout
 is piped, so scripts do not need to parse ANSI escapes. `--json` has the
-long-form alias `--format=json`; `--format=text` switches back.
+long-form alias `--format=json`; `--format=text` switches back. These output
+flags may appear before the command or in the command's own flag region; when
+both JSON and text are requested, `--format=text` wins.
 
 ```bash
 JENO_COLOR=always jeno --help   # force colour

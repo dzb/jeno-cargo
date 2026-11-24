@@ -8,7 +8,6 @@ import com.jujin.jeno.pom.PomSource;
 import com.jujin.jeno.project.DescriptorSource;
 import com.jujin.jeno.project.JenoProject;
 import com.jujin.jeno.project.ProjectReader;
-import com.jujin.jeno.resolve.Resolver;
 import com.jujin.jeno.resolve.ResolvedGraph;
 import com.jujin.jeno.store.ArtifactStore;
 
@@ -50,6 +49,14 @@ public final class WhyCommand implements Command {
     public String summary() {
         return "every path that introduces one artifact";
     }
+    @Override
+    public String help() {
+        return """
+               paths print as id@version chains. A transition carried by an
+               explicit [deps-api] edge prints as '--api->'; JSON keeps paths[][]
+               and adds pathEdges[][] with {from,to,api} for each transition.""";
+    }
+
     @Override
     public String usage() {
         return "<id>";

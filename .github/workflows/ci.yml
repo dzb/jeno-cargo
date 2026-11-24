@@ -1,7 +1,7 @@
-# jeno 的自举 CI/CD(DESIGN.md §7.5)——上一个 release 构建下一个 release。
+# jeno 的自举 CI/CD(DESIGN.md §7.5)——当前树由 javac 引导后自测、自打包。
 #
 # 两种触发,两种职责:
-#   push master   只验证:装上一个 release,构建 + 测试(狗粮常磨),不发版
+#   push master   只验证:javac 引导当前树,用刚编出的 jeno 跑 lock/build/test,不发版
 #   push tag v*   验证 + 发行:一致性门 → jeno bundle --toolchain → minisign 签名 → GitHub Release
 #
 # 版本账本是 git tags 本身:人工决定版本号(改 jeno.toml 一处,构建派生),
@@ -40,15 +40,11 @@ jobs:
           distribution: temurin
           java-version: '25'
 
-      # No install step: the previous release (0.2.21) still carries the old
-      # name and cannot read jeno.toml, so it has nothing to contribute. The
-      # bootstrap below compiles the code under test with javac and every later
-      # step runs that. Once a jeno release exists this reverts to
-      # "install previous release, use it to lock" — the compatibility check
-      # self-hosting is really about.
-      # Every step runs the code under test: javac straight to target/classes
-      # from vendor/, then that classpath drives lock, build and test. A change
-      # to the build itself therefore lands immediately, not one release late.
+      # No install step: CI tests the code under test, not a previous release.
+      # The bootstrap below compiles this tree with javac and every later step
+      # runs that classpath, so a build-system change lands immediately rather
+      # than one release late. A tag adds the release consistency gates and
+      # bundle/release steps after this smoke baseline.
       - name: bootstrap-compile the code under test
         run: |
           CP="$(find vendor -name '*.jar' | tr '\n' ':')"

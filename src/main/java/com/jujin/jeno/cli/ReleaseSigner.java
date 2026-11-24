@@ -23,8 +23,8 @@ final class ReleaseSigner {
 
     /** A signing attempt that must stop the release. */
     static final class SigningException extends RuntimeException {
-    @java.io.Serial
-    private static final long serialVersionUID = 1L;
+        @java.io.Serial
+        private static final long serialVersionUID = 1L;
         SigningException(String message) {
             super(message);
         }

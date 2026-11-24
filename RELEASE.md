@@ -14,7 +14,7 @@
 2. 想发版时 ───────────→   push tag v* ──────→ 一致性门 → jeno bundle --toolchain
    ├ 改 jeno.toml 的 version                       → tag notes → jeno release gh:dzb/jeno-cargo
    ├ git commit                                    → smoke install from release URL
-   └ git tag v{version} && git push github v{version}
+   └ git tag v{version} && git push origin v{version}
 ```
 
 **升级地址（唯一事实来源）**：`https://api.github.com/repos/dzb/jeno-cargo/releases/latest`。
@@ -42,7 +42,8 @@ tag 段用同一份 freshly-built classes 执行 `jeno bundle` 与 `jeno release
 
 ```bash
 # 1. 改版本（major.minor 由人决定；新增语法/命令算 minor，纯修复算 patch）
-sed -i 's/^version = ".*"$/version = "0.3.0"/' jeno.toml
+VERSION=0.3.2
+sed -i "s/^version = \".*\"$/version = \"$VERSION\"/" jeno.toml
 
 # 2. 本机验一遍，和 CI 跑同一套
 CP="target/classes:$(find vendor -name '*.jar' | tr '\n' ':')"
@@ -51,10 +52,10 @@ java -cp "$CP" com.jujin.jeno.cli.Jeno lock
 java -cp "$CP" com.jujin.jeno.cli.Jeno test
 
 # 3. 提交并推 master（只验证，不发版）
-git commit -am "release: v0.3.0" && git push github master
+git commit -am "release: v$VERSION" && git push origin master
 
 # 4. 打 annotated tag —— tag message 会成为 release body
-git tag -a v0.3.0 -m "jeno 0.3.0" && git push github v0.3.0
+git tag -a "v$VERSION" -m "jeno $VERSION" && git push origin "v$VERSION"
 ```
 
 tag 落地后的 CI 顺序：一致性门 → `jeno bundle --toolchain` → `jeno release

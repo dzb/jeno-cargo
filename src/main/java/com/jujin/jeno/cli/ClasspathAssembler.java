@@ -211,8 +211,8 @@ final class ClasspathAssembler {
 
     /** A classpath that cannot be assembled, with the sentence the user should see. */
     static final class ClasspathException extends RuntimeException {
-    @java.io.Serial
-    private static final long serialVersionUID = 1L;
+        @java.io.Serial
+        private static final long serialVersionUID = 1L;
         ClasspathException(String message) {
             super(message);
         }

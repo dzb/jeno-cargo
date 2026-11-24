@@ -1,6 +1,6 @@
 # jeno 规范（SPEC）：文件与 CLI 契约
 
-状态:现行;最后核对 2026-11-23
+状态:现行;最后核对 2026-11-24
 
 **SPEC 是规范;DESIGN 是理由;冲突以 SPEC 为准。** 本文定义文件格式、CLI 契约、发行物布局与
 Maven 解码范围,是实现与验收的依据;取舍与替代方案见 [DESIGN.md](DESIGN.md)。
@@ -456,22 +456,23 @@ modules = ["libs/core", "apps/web"]
 | `jeno bundle [--toolchain]` | `target/dist/<name>-<version>/`(bin/<name>、bin/<name>.cmd、lib/、install.sh、uninstall.sh、SHA256SUMS)+ `.tar.gz`。需要 `[project].main`(缺失即报错);install.sh 的 JDK 要求取 `[java].version`,未声明则取构建 JDK major;安装前用 `sha256sum -c`/`shasum -a 256 -c` 校验 SHA256SUMS,lib/bin 经 staging 交换并保留 store/config;默认不带 toolchain,`--toolchain` 才把 `[toolchain].jars` 对应的锁工件写入 `lib/toolchain`;未在锁图中出现的 toolchain id 是错误 |
 | `jeno clean [--target (default) \| --dist]` | 默认整棵删 `target/`;`--dist` 只删 `target/dist/` 保留 classes;永不触碰 store |
 | `jeno cache dir \| size \| prune \| purge [--dry-run] [--yes]` | `dir`/`size` 只读;`prune` 删可证明无用之物,无需确认;`purge` 删 store 与 sources,是**破坏性**命令——无 `--yes` 时打印路径/大小并 exit 2,`--dry-run` 只展示不删除(exit 0),`--yes` 才执行;`clean` 是兼容 alias,支持同样 flags |
-| `jeno outdated [--json] [--dev]` | **只读 `jeno.lock`**(不需要 `jeno.toml`);已钉版本 vs 仓库可用版本;默认只查 MAIN,`--dev` 含 dev/processor;Central 用 `maven-metadata.xml`,named `jeno:` 用 `<base>/<name>/index.jeno.toml`;索引缺失的 jeno row 列为 `not checked`;`gh:`/`url:`/`local:` 仍不可检查;跨 major 单列;完成即 exit 0(有更新也是 0) |
+| `jeno outdated [--json] [--dev]` | **只读 `jeno.lock`**(不需要 `jeno.toml`);已钉版本 vs 仓库可用版本;默认只查 MAIN,`--dev` 含 dev/processor;Central 用 `maven-metadata.xml`,named `jeno:` 用 `<base>/<name>/index.jeno.toml`;索引缺失的 jeno row 列为 `not checked`;`gh:`/`url:` 以及 Maven-layout 的 `local:` 仍不可检查(local jeno repo 有 index 时可比较);跨 major 单列;完成即 exit 0(有更新也是 0) |
 | `jeno doctor` | **只读**本地诊断:检查当前项目或 workspace 每个模块的 `jeno.toml`/`jeno.lock` 是否存在且可解析,报告旧名文件(jeno **不会**读取它们,命令会给出改名提示),并检查 XDG store/sources/locks 路径可写性;不解析依赖、不写文件、不访问网络。健康 exit 0,有问题 exit 1,带参数 exit 2 |
 | `jeno audit [--json] [--dev]` | OSV 漏洞查询;默认只查 MAIN,`--dev` 才含 dev/processor;只查 Central 坐标,其余列 `notChecked` 并给原因;漏洞或查询失败 exit 1 |
 | `jeno verify` | **只读本地发布预检**:解析 `jeno.toml`/`jeno.lock`,核对每一条直接声明与锁定行的 id/version/source/MAIN scope;按 sha256 校验 store 中每个 jar 与元数据(workspace 本地替换则校验 classes 与版本戳);若 `target/dist/` 已有完整发布三件套,校验其内部一致性与 bundle `SHA256SUMS`;只有 package 产物(仅 jar)视为未准备(skipped),部分三件套仍失败;bundle 目录存在但缺 `SHA256SUMS` 也失败(`artifacts.bundle-incomplete`)。不解析依赖、不下载、不修改项目文件、不访问网络。通过 exit 0,失败 exit 1,带参数 exit 2 |
-| `jeno publish [target] [--json] [--dry-run]` | 写三件套;目标只接受 `gh:`、`jeno:https:`、私有网络 `jeno:http://<literal-ip>…`、`jeno:local:`(§6.6)。jeno 布局逐文件 PUT 后立即 GET 回读,三个文件的字节必须完全一致,否则 exit 1;`--dry-run` 不写 descriptor/sha256、不创建目标、不上传 |
+| `jeno publish [target\|repo-name] [--json] [--dry-run]` | 写三件套;target 可接受 `gh:`、`jeno:https:`、私有网络 `jeno:http://<literal-ip>…`、`jeno:local:`，或已声明 named jeno repository 的名字(先按 `[repos.<name>]` 解析，§6.6)。named 私有 http 仓库可写 `insecure = true` 显式允许 token。jeno 布局逐文件 PUT 后立即 GET 回读,三个文件的字节必须完全一致,否则 exit 1;`--dry-run` 不写 descriptor/sha256、不创建目标、不上传 |
 | `jeno upgrade` / `jeno update`(alias) | 自升级(同一实现):只认 `jeno-<version>.tar.gz` + `.sha256`,下载后先校验 sha256;Windows 执行 release 的 `install.ps1`,POSIX 解压后执行包内 `install.sh` |
-| `jeno release [target] [--json] [--dry-run] [--allow-unsigned] [--notes-file <path>]` | 发布 `jeno bundle` 产生的安装包(默认用 minisign 签名,`--allow-unsigned` 才允许无签名):`gh:<owner>/<repo>`、`jeno:https://host/`、私有网络 `jeno:http://<literal-ip>…`、`jeno:local:<dir>`;无 target 只准备 `target/dist/release/` 并打印上传清单。**不隐式 build/test/bundle**;发布后回读并校验 tar 的 sha256(§7.3) |
+| `jeno release [target\|repo-name] [--json] [--dry-run] [--allow-unsigned] [--notes-file <path>]` | 发布 `jeno bundle` 产生的安装包(默认用 minisign 签名,`--allow-unsigned` 才允许无签名):`gh:<owner>/<repo>`、`jeno:https://host/`、私有网络 `jeno:http://<literal-ip>…`、`jeno:local:<dir>`，或已声明 named jeno repository 的名字;无 target 只准备 `target/dist/release/` 并打印上传清单。**不隐式 build/test/bundle**;发布后回读并校验 tar 的 sha256(§7.3) |
 
 ### 6.2 参数约定
 
 - **未知参数是用法错误**:exit 2,不静默忽略(`build`/`test`/`bundle`/`upgrade`(alias `update`) 无参数;`why` 恰好一个 id;`publish` 最多一个 target)。
 - **`--` 结束 jeno 的选项**:之后的内容作为位置参数交给命令(`run` 交给程序)。
 - **项目锁**：写 `target/`/`jeno.lock` 的命令 `lock`、`build`、`test`、`clean`、`add`、`remove`、`package`、`bundle`、`publish`、`release` 共用一把项目锁；`publish`/`release` 的上传阶段也在锁内。
-- **`--help` / `-h`**:只在 `--` 之前、且是唯一剩余参数时生效;`jeno --help` 打印清单 exit 0。
+- **`--help` / `-h`**:只在 `--` 之前，且除输出、offline、locked 等全局旗标外没有其他位置参数时生效;`jeno --help` 打印清单 exit 0。
 - **`run` 的旗标边界**:jeno 的 `--module`/`--offline`/`--locked` 只在 target 之前生效;target 之后(或 `--` 之后)全部是程序参数。
-- **`--locked`**:命令前后均可;关闭 workspace 的本地 `target/classes` 替换,classpath/verify/package/bundle 只消费 `jeno.lock` + store。
+- **`--locked`**:命令前后均可;关闭 workspace 的本地 `target/classes` 替换,build/test/run/classpath/package/bundle/verify 只消费 `jeno.lock` + store,info/tree/why 隐藏 local 标记。
+- **输出旗标**:`--json`/`--format=json`/`--format=text` 可写在命令前，也可写在命令自己的 flag 区域；命令后同时出现时 `--format=text` 优先，runner 会消费旗标，严格命令不会看到它们。
 
 ### 6.3 退出码
 
@@ -533,7 +534,7 @@ interactive`。
 支持 `--json` 的命令:`tree`、`outdated`、`audit`、`doctor`、`verify`、
 `lock`(普通 lock 和 `--check`)、`why`、`classpath`、`info`、`cache`
 (含 `dir`/`size`/`prune`/`purge`)、`build`、`package`、`bundle`、`clean`、
-`init`、`add`(写入模式)、`remove`、`upgrade`、`publish`、`release`、`test`。
+`init`、`add`(写入模式与 `--repo` discovery)、`remove`、`upgrade`、`publish`、`release`、`test`。
 stdout 只有**一个** JSON 文档,诊断/警告走 stderr。runner 还会兜底:JSON 命令
 若提前失败而未输出结果,stdout 仍会得到一个 `COMMAND_RESULT_MISSING` 或
 `COMMAND_FAILED` 结构化错误。唯一明确不提供 JSON 的是 `run`:它的
@@ -619,12 +620,12 @@ artifactCount,lockUpdated}`。
 updateAvailable,upgraded,takesEffectNextInvocation}`;`--check` 不下载、不执行
 install.sh、不修改安装目录。
 
-`publish --json [target] [--dry-run]` 输出 `{dryRun,target?,project,
+`publish --json [target|repo-name] [--dry-run]` 输出 `{dryRun,target?,project,
 artifacts[],uploaded,verified}`。artifact 为
 `{kind,path,sha256?,bytes,url?,wouldWrite,wouldUpload,uploaded}`。
 dry-run 不写 `target/dist/`、不创建远端目标、不 PUT、不 GET。
 
-`release --json [target] [--dry-run] [--allow-unsigned]` 输出
+`release --json [target|repo-name] [--dry-run] [--allow-unsigned]` 输出
 `{dryRun,target?,project,jdk,signing:{signed,publicKey?},installerUrl,
 bootstrapUrl?,files[],wouldUpload[],uploaded,verified}`。
 dry-run 不写 `target/dist/release/`、不签名文件、不创建远端目标、不上传。
@@ -728,9 +729,10 @@ HTTP jeno-layout 发布固定使用 **PUT**,不是 POST:
 
 ### 6.7.1 全局旗标 `--locked`
 
-`--locked` 关闭本次运行的 workspace 本地替换：`Substitutions` 返回空集合，所有
-classpath、`verify`、`package`、`bundle` 只消费 `jeno.lock` 与 store 中按 sha256
-找到的 jar。它不改变 lock 内容，也不拒绝 workspace 的拓扑编排；适合
+`--locked` 关闭本次运行的 workspace 本地替换：`Substitutions` 返回空集合。
+`build`/`test`/`run`/`classpath`/`package`/`bundle`/`verify` 只消费
+`jeno.lock` 与 store 中按 sha256 找到的 jar；`info`/`tree`/`why` 也不再显示
+local 替换标记。它不改变 lock 内容，也不拒绝 workspace 的拓扑编排；适合
 `jeno --locked verify` / `jeno --locked package` 做发布前检查。`run` 中 target
 之后出现的 `--locked` 属于程序参数。
 

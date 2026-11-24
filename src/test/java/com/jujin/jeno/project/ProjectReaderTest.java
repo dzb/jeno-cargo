@@ -212,7 +212,7 @@ class ProjectReaderTest {
                 [deps]
                 "com.example:lib" = "1.0.0"
                 """));
-        assertTrue(gh.getMessage().contains("[repos].gh is reserved for the gh: prefix"),
+        assertTrue(gh.getMessage().contains("[repos.gh] is reserved for the gh: prefix"),
                 gh.getMessage());
         assertTrue(gh.getMessage().contains("jeno.toml:6:1"),
                 "the position is named like every other schema error: " + gh.getMessage());
@@ -230,7 +230,7 @@ class ProjectReaderTest {
                 [repos]
                 gitee = "https://mirror.example.com/gitee/"
                 """));
-        assertTrue(error.getMessage().contains("[repos].gitee is reserved"),
+        assertTrue(error.getMessage().contains("[repos.gitee] is reserved"),
                 error.getMessage());
     }
 

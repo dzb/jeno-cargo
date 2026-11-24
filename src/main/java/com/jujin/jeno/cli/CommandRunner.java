@@ -43,6 +43,7 @@ public final class CommandRunner {
         boolean help = false;
         boolean offline = false;
         boolean locked = false;
+        boolean text = false;
         boolean version = false;
         for (int i = 0; i < commandLine.size(); ) {
             String arg = commandLine.get(i);
@@ -50,7 +51,7 @@ public final class CommandRunner {
                 json = true;
                 commandLine.remove(i);
             } else if (arg.equals("--format=text")) {
-                json = false;
+                text = true;
                 commandLine.remove(i);
             } else if (arg.equals("--help") || arg.equals("-h")) {
                 help = true;
@@ -120,6 +121,10 @@ public final class CommandRunner {
         int flagsEnd = Math.min(command.flagsEndAt(rest), rest.size());
         boolean localJson = hasJsonFlag(rest, flagsEnd);
         json |= localJson;
+        text |= hasTextFlag(rest, flagsEnd);
+        if (text) {
+            json = false;  // text wins regardless of output-flag position
+        }
 
         if (help || localHelp(rest, passthrough)) {
             if (json) {
@@ -137,15 +142,11 @@ public final class CommandRunner {
                     rest.subList(0, flagsEnd), offline);
             return 2;
         }
-        if (json) {
-            // The per-command JSON switches predate the global one. Keep them
-            // as the command-facing implementation until the output-context
-            // refactor lands.
-            normalizeJsonFlag(rest, flagsEnd);
-            if (!rest.contains("--json")) {
-                rest.add("--json");
-            }
-        }
+        // The per-command output switches predate the global one. Normalize
+        // both spellings here so strict command parsers never see runner-level
+        // format flags. --format=text wins when both are present.
+        normalizeOutputFlags(rest, flagsEnd, json);
+        flagsEnd = Math.min(command.flagsEndAt(rest), rest.size());
 
         // --offline/-o is a property of the run, applied before the command sees
         // its arguments. It is only recognized where this command's global flags
@@ -246,12 +247,38 @@ public final class CommandRunner {
         return false;
     }
 
-    /** Keep the historical command parsers on the `--json` spelling. */
-    private static void normalizeJsonFlag(List<String> rest, int flagsEnd) {
+    /** Whether a command-local text-output switch is present. */
+    private static boolean hasTextFlag(List<String> rest, int flagsEnd) {
         for (int i = 0; i < flagsEnd; i++) {
-            if (rest.get(i).equals("--format=json")) {
-                rest.set(i, "--json");
+            if (rest.get(i).equals("--format=text")) {
+                return true;
             }
+        }
+        return false;
+    }
+
+    /**
+     * Remove runner-level output flags from the command argument list and leave
+     * exactly the historical {@code --json} spelling when JSON is effective.
+     * This keeps strict commands unaware of global output syntax.
+     */
+    private static void normalizeOutputFlags(List<String> rest, int flagsEnd, boolean json) {
+        for (int i = flagsEnd - 1; i >= 0; i--) {
+            String arg = rest.get(i);
+            if (arg.equals("--format=text")) {
+                rest.remove(i);
+            } else if (arg.equals("--format=json")) {
+                if (json) {
+                    rest.set(i, "--json");
+                } else {
+                    rest.remove(i);
+                }
+            } else if (arg.equals("--json") && !json) {
+                rest.remove(i);
+            }
+        }
+        if (json && !rest.contains("--json")) {
+            rest.add("--json");
         }
     }
 

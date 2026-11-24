@@ -6,7 +6,6 @@ import com.jujin.jeno.store.ArtifactStore;
 import com.jujin.jeno.store.LockFileReader;
 import com.jujin.jeno.store.LockedArtifact;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -62,8 +61,8 @@ public final class RunCommand implements Command {
     public String help() {
         return """
                a [scripts] name wins over a main class of the same name.
-               jeno's flags (--module, --offline) are read only before the target;
-               after it they are the program's arguments.
+               jeno's flags (--module, --offline, --locked) are read only before
+               the target; after it they are the program's arguments.
                -- ends jeno's options; everything after it goes to the program.""";
     }
 
@@ -81,7 +80,8 @@ public final class RunCommand implements Command {
     /**
      * jeno's own flags end at the target: {@code run --module x --offline app}
      * has its flags before {@code app}, and {@code run app --offline} gives
-     * {@code --offline} to the program.
+     * {@code --offline} to the program. The same boundary applies to
+     * {@code --locked}.
      */
     @Override
     public int flagsEndAt(List<String> args) {

@@ -308,8 +308,8 @@ public final class Workspaces {
 
     /** A workspace file that cannot be read or does not make sense. */
     public static class WorkspaceException extends RuntimeException {
-    @java.io.Serial
-    private static final long serialVersionUID = 1L;
+        @java.io.Serial
+        private static final long serialVersionUID = 1L;
         WorkspaceException(String message) {
             super(message);
         }
@@ -317,8 +317,8 @@ public final class Workspaces {
 
     /** A {@code --module} argument the user has to fix — a usage error, not a file error. */
     public static final class UsageException extends WorkspaceException {
-    @java.io.Serial
-    private static final long serialVersionUID = 1L;
+        @java.io.Serial
+        private static final long serialVersionUID = 1L;
         UsageException(String message) {
             super(message);
         }

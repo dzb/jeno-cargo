@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * {@code jeno release [target] [--dry-run]} — one step: take the installer that
+ * {@code jeno release [target|repo-name] [--dry-run]} — one step: take the installer that
  * {@code jeno bundle} produced and publish it.
  *
  * <p>It never builds, tests or bundles: those decisions belong to a project's
@@ -27,8 +27,8 @@ import java.util.List;
  *
  * <p>Without a target it prepares {@code target/dist/release/} and prints the
  * upload checklist. With {@code gh:}, {@code jeno:https://…},
- * {@code jeno:http://<private-ip>/} (LAN only) or {@code jeno:local:<dir>} it
- * uploads the installer, a bootstrap {@code install.sh},
+ * {@code jeno:http://<private-ip>/} (LAN only), {@code jeno:local:<dir>}, or a
+ * declared jeno repository name it uploads the installer, a bootstrap {@code install.sh},
  * a checksum and {@code release.json}, then reads the installer back and
  * compares its sha256 — a publish that cannot be verified is not done.
  */
@@ -50,13 +50,13 @@ public final class ReleaseCommand implements Command {
 
     @Override
     public String usage() {
-        return "[target] [--dry-run] [--allow-unsigned] [--notes-file <path>]";
+        return "[target|repo-name] [--dry-run] [--allow-unsigned] [--notes-file <path>]";
     }
 
     @Override
     public String summary() {
-        return "publish a bundled installer: gh:, jeno:https://host/,"
-                + " jeno:http://<private-ip>/, jeno:local:<dir>";
+        return "publish a bundled installer to gh:, a jeno URL, or a declared "
+                + "jeno repository";
     }
 
     @Override
@@ -349,7 +349,7 @@ public final class ReleaseCommand implements Command {
                 }
                 notesFile = Path.of(args.get(i));
             } else if (arg.startsWith("-")) {
-                throw new IllegalArgumentException("release takes [target], --dry-run,"
+                throw new IllegalArgumentException("release takes [target|repo-name], --dry-run,"
                         + " --allow-unsigned and --notes-file — got '" + arg + "'");
             } else if (target == null) {
                 target = arg;

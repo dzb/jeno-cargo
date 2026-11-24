@@ -6,7 +6,6 @@ import com.jujin.jeno.project.DescriptorSource;
 import com.jujin.jeno.project.JenoProject;
 import com.jujin.jeno.project.ProjectReader;
 import com.jujin.jeno.project.Requirement;
-import com.jujin.jeno.resolve.Resolver;
 import com.jujin.jeno.resolve.ResolvedGraph;
 import com.jujin.jeno.store.ArtifactStore;
 
@@ -66,7 +65,10 @@ public final class TreeCommand implements Command {
         return """
                each artifact prints once, at its first occurrence: a declared
                dependency that first appears inside another subtree gets no root
-               line of its own — its 'declared' marker still shows on that line""";
+               line of its own — its 'declared' marker still shows on that line.
+               an artifact in the explicit [deps-api] closure carries ', api';
+               an 'api' prefix on a child line marks the API edge itself.
+               JSON keeps children[] and adds apiChildren[] for the same fact""";
     }
 
     @Override

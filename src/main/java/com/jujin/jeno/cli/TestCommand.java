@@ -3,7 +3,6 @@ package com.jujin.jeno.cli;
 import com.jujin.freeway.commons.json.JsonArray;
 import com.jujin.freeway.commons.json.JsonObject;
 import com.jujin.freeway.commons.json.JsonUtils;
-import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.jeno.project.JenoProject;
 import com.jujin.jeno.resolve.ArtifactLocations;
 import com.jujin.jeno.project.ProjectReader;
@@ -12,7 +11,6 @@ import com.jujin.jeno.store.LockFileReader;
 import com.jujin.jeno.store.LockedArtifact;
 import com.jujin.jeno.test.JenoTest;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

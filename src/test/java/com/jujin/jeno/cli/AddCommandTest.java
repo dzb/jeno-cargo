@@ -566,6 +566,33 @@ class AddCommandTest {
     }
 
     @Test
+    void namedRepositoryDiscoveryAlsoHonoursOffline() throws Exception {
+        Path repo = dir.resolve("offline-repo");
+        Files.createDirectories(repo.resolve("widget"));
+        Files.writeString(repo.resolve("widget/index.jeno.toml"), """
+            schemaVersion = 1
+            name = "widget"
+            versions = ["1.0.0"]
+            """);
+        AddCommand command = add();
+        Files.writeString(dir.resolve("jeno.toml"), """
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [repos]
+            mine = "jeno:local:%s"
+            """.formatted(repo));
+        ArtifactStore.goOffline();
+
+        int exit = command.execute(List.of("widget", "--repo", "mine"));
+
+        assertEquals(2, exit, "named discovery is still network-shaped and must respect offline");
+        assertTrue(Files.readString(dir.resolve("jeno.toml")).contains("mine ="),
+                "offline refusal leaves the manifest untouched");
+    }
+
+    @Test
     void anExplicitVersionStillResolvesOfflineFromTheStore() throws Exception {
         serveCentralPom(LIB_A_POM);
         ArtifactStore store = new ArtifactStore(storeDir);

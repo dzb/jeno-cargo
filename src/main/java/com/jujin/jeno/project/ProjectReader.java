@@ -146,8 +146,8 @@ public final class ProjectReader {
         if (reposSection != null) {
             for (Map.Entry<String, Object> entry : reposSection.entrySet()) {
                 if (!NAME.matcher(entry.getKey()).matches()) {
-                    throw new ProjectException("[repos]." + entry.getKey()
-                            + " must match [a-z][a-z0-9-]*");
+                    throw new ProjectException("[repos." + entry.getKey()
+                            + "] must match [a-z][a-z0-9-]*");
                 }
                 // gh: is a species prefix, matched before any repository lookup.
                 // Letting [repos] take that name would make "gh:owner/repo@v1"
@@ -155,7 +155,7 @@ public final class ProjectReader {
                 // never resolve as itself.
                 if (entry.getKey().equals("gh") || entry.getKey().equals("gitee")) {
                     throw new ProjectException(at(file, source.key("repos", entry.getKey()))
-                            + "[repos]." + entry.getKey() + " is reserved for the "
+                            + "[repos." + entry.getKey() + "] is reserved for the "
                             + entry.getKey() + ": prefix — pick another name");
                 }
                 repos.put(entry.getKey(), repository(entry.getKey(), entry.getValue(),
@@ -423,43 +423,43 @@ public final class ProjectReader {
                 return Repository.parse(name, legacy);
             } catch (IllegalArgumentException e) {
                 throw new ProjectException(at(file, source.key("repos", name))
-                        + "[repos]." + name + " = \"" + legacy + "\" — " + e.getMessage());
+                        + "[repos] " + name + " = \"" + legacy + "\" — " + e.getMessage());
             }
         }
         if (!(value instanceof Map<?, ?> table)) {
             throw new ProjectException(at(file, source.key("repos", name))
-                    + "[repos]." + name + " must be a table with type/url, or the legacy string");
+                    + "[repos." + name + "] must be a table with type/url, or the legacy string");
         }
         for (Object key : table.keySet()) {
             if (!key.equals("type") && !key.equals("url") && !key.equals("insecure")) {
                 throw new ProjectException(at(file, source.key("repos." + name,
                         String.valueOf(key)))
-                        + "[repos]." + name + "." + key
+                        + "[repos." + name + "]." + key
                         + " is not a key — allowed: type, url, insecure");
             }
         }
         Object typeValue = table.get("type");
         if (typeValue != null && !(typeValue instanceof String)) {
             throw new ProjectException(at(file, source.key("repos." + name, "type"))
-                    + "[repos]." + name + ".type must be \"maven\" or \"jeno\"");
+                    + "[repos." + name + "].type must be \"maven\" or \"jeno\"");
         }
         String type = typeValue == null ? "maven" : (String) typeValue;
         Object insecureValue = table.get("insecure");
         if (insecureValue != null && !(insecureValue instanceof Boolean)) {
             throw new ProjectException(at(file, source.key("repos." + name, "insecure"))
-                    + "[repos]." + name + ".insecure must be true or false");
+                    + "[repos." + name + "].insecure must be true or false");
         }
         boolean insecure = Boolean.TRUE.equals(insecureValue);
         Object urlValue = table.get("url");
         if (!(urlValue instanceof String url) || url.isBlank()) {
             throw new ProjectException(at(file, source.section("repos." + name))
-                    + "[repos]." + name + " needs a url = \"https://…\" or a directory");
+                    + "[repos." + name + "] needs a url = \"https://…\" or a directory");
         }
         try {
             return Repository.of(name, type, url, insecure);
         } catch (IllegalArgumentException e) {
             throw new ProjectException(at(file, source.key("repos." + name, "type"))
-                    + "[repos]." + name + " — " + e.getMessage());
+                    + "[repos." + name + "] — " + e.getMessage());
         }
     }
 

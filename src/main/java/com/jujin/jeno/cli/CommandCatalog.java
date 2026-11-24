@@ -35,11 +35,11 @@ final class CommandCatalog {
                 "long-form alias of --json");
         addFlag(globalFlags, "--format=text",
                 "human-readable output (the default)");
-        addFlag(globalFlags, "--help, -h",
+        addFlag(globalFlags, "-h, --help",
                 "print human help, or the JSON catalog when combined with --json");
-        addFlag(globalFlags, "--version, -v",
+        addFlag(globalFlags, "-v, --version",
                 "print the jeno version; combine with --json for a JSON document");
-        addFlag(globalFlags, "--offline, -o",
+        addFlag(globalFlags, "-o, --offline",
                 "refuse network access for commands that support it");
         addFlag(globalFlags, "--locked",
                 "use only jeno.lock + store artifacts; disable workspace local overrides");

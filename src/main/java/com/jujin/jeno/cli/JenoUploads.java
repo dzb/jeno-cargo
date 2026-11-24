@@ -1,16 +1,17 @@
 package com.jujin.jeno.cli;
 
+import com.jujin.jeno.project.Repository;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import com.jujin.jeno.project.Repository;
-
 import java.time.Duration;
 
 /**
- * HTTP PUT/GET for jeno-layout repositories, shared by publish and release.
+ * HTTP PUT/GET for jeno-layout repositories, shared by publish, release and
+ * per-artifact index updates.
  *
  * <p>Uploads use PUT, not POST. The jeno layout gives every byte a final,
  * deterministic URL, and PUT makes that URL the resource itself: retrying an
@@ -65,6 +66,7 @@ final class JenoUploads {
                     + "or set JENO_ALLOW_INSECURE_TOKEN=1 only for a trusted LAN");
         }
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
+                .timeout(MetadataVersions.requestTimeout())
                 .header("Content-Type", contentType)
                 .PUT(HttpRequest.BodyPublishers.ofByteArray(bytes));
         if (token != null && !token.isBlank()) {
@@ -99,7 +101,9 @@ final class JenoUploads {
     /** One GET; the release read-back check. */
     static byte[] get(String url) throws IOException, InterruptedException {
         HttpResponse<byte[]> response = HTTP.send(
-                HttpRequest.newBuilder(URI.create(url)).GET().build(),
+                HttpRequest.newBuilder(URI.create(url))
+                        .timeout(MetadataVersions.requestTimeout())
+                        .GET().build(),
                 HttpResponse.BodyHandlers.ofByteArray());
         if (response.statusCode() != 200) {
             throw new IOException(url + " answered " + response.statusCode());

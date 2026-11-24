@@ -46,8 +46,8 @@ final class Substitutions {
     /**
      * {@code --locked} switches off workspace replacement process-wide for one
      * invocation. It is deliberately a run-level switch: the resolver still
-     * sees a workspace for orchestration, but every classpath/packaging lookup
-     * uses only the lock and store.
+     * sees a workspace for orchestration, but every classpath/packaging and
+     * inspection lookup uses only the lock and store.
      */
     private static volatile boolean localOverrides = true;
 
@@ -230,8 +230,8 @@ final class Substitutions {
 
     /** A local checkout that cannot stand in for the locked jar. */
     static final class LocalException extends RuntimeException {
-    @java.io.Serial
-    private static final long serialVersionUID = 1L;
+        @java.io.Serial
+        private static final long serialVersionUID = 1L;
         LocalException(String message) {
             super(message);
         }

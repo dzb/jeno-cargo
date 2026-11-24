@@ -8,26 +8,18 @@ import com.jujin.jeno.project.JenoProject;
 import com.jujin.jeno.project.Repository;
 import com.jujin.jeno.project.ProjectReader;
 import com.jujin.jeno.project.Requirement;
-import com.jujin.jeno.project.Species;
 import com.jujin.jeno.resolve.ArtifactLocations;
 import com.jujin.jeno.store.ArtifactStore;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
- * {@code jeno publish [target]} — the decentralized release (DESIGN.md §7.2).
+ * {@code jeno publish [target|repo-name]} — the decentralized release (DESIGN.md §7.2).
  *
  * <p>Generates the three-piece artifact into target/dist/, then — when a target is
  * given — uploads it via the platform's release API:
@@ -40,6 +32,7 @@ import java.util.Map;
  *   jeno publish jeno:http://192.168.1.39:8080/upload/ → same, plain http on a
  *                                 literal private-network address (warning: not encrypted)
  *   jeno publish jeno:local:<dir>   → target/dist/ + the same layout on disk
+ *   jeno publish <declared-repo>   → target/dist/ + that [repos.<name>] jeno repository
  * </pre>
  *
  * <p>A Maven-layout target ({@code https://host/}, {@code local:<dir>}) is
@@ -57,9 +50,6 @@ public final class PublishCommand implements Command {
     private static final String CLASSES = "target/classes";
 
     private final Path projectDir;
-    private final HttpClient http = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .build();
 
     @Inject
     public PublishCommand(Path projectDir) {
@@ -73,8 +63,8 @@ public final class PublishCommand implements Command {
 
     @Override
     public String summary() {
-        return "write the release triple and upload it: gh:, jeno:https://host/,"
-                + " jeno:http://<private-ip>/, jeno:local:<dir>";
+        return "write the release triple and upload it to gh:, a jeno URL, "
+                + "or a declared jeno repository";
     }
 
     @Override
@@ -93,7 +83,7 @@ public final class PublishCommand implements Command {
     }
     @Override
     public String usage() {
-        return "[target] [--dry-run]";
+        return "[target|repo-name] [--dry-run]";
     }
 
 

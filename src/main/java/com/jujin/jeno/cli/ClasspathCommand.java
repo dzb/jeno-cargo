@@ -5,20 +5,14 @@ import com.jujin.freeway.commons.json.JsonUtils;
 import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.jeno.project.JenoProject;
 import com.jujin.jeno.project.ProjectReader;
-import com.jujin.jeno.project.Requirement;
-import com.jujin.jeno.resolve.Scope;
 import com.jujin.jeno.store.ArtifactStore;
 import com.jujin.jeno.store.LockFileReader;
 import com.jujin.jeno.store.LockedArtifact;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * {@code jeno classpath [--test] [--file <path>]} — the classpath an IDE should

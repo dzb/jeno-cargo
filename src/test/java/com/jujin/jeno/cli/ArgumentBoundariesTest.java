@@ -80,6 +80,12 @@ class ArgumentBoundariesTest {
 
         assertEquals(0, runner.run("run", "app.Main", "--module", "x"));
         assertEquals("--module|x", argsSeen(), "--module after the target is the program's");
+
+        assertEquals(0, runner.run("run", "--format=text", "app.Main"));
+        assertEquals("", argsSeen(), "format=text before the target is jeno's");
+        assertEquals(0, runner.run("run", "app.Main", "--format=text"));
+        assertEquals("--format=text", argsSeen(),
+                "format=text after the target belongs to the program");
     }
 
     @Test
@@ -102,6 +108,27 @@ class ArgumentBoundariesTest {
         CommandRunner runner = new CommandRunner(List.of(new RunCommand(store, project)));
         assertEquals(0, runner.run("run", "app.Main", "--", "--help"));
         assertEquals("--help", argsSeen(), "after --, --help belongs to the program");
+    }
+
+    @Test
+    void formatTextAfterACommandIsConsumedEvenWhenGlobalJsonWasRequested() {
+        CommandRunner runner = new CommandRunner(List.of(
+                stub("probe", "a strict probe", Command.Category.OTHER)));
+
+        Result text = run(runner, "probe", "--format=text");
+        assertEquals(0, text.exit(), text.err());
+
+        Result overridesJson = run(runner, "--json", "probe", "--format=text");
+        assertEquals(0, overridesJson.exit(), overridesJson.err());
+        Result textWinsRegardlessOfOrder = run(runner, "--format=text", "probe", "--json");
+        assertEquals(0, textWinsRegardlessOfOrder.exit(),
+                "text must also beat a later command-local --json: "
+                        + textWinsRegardlessOfOrder.err());
+
+        Result strict = run(new CommandRunner(List.of(new BuildCommand(store, project))),
+                "build", "--format=text");
+        assertEquals(0, strict.exit(), "build must not reject a consumed output flag: "
+                + strict.err());
     }
 
     @Test

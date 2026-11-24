@@ -1,14 +1,11 @@
 package com.jujin.jeno.cli;
 
-import com.jujin.freeway.ioc.annotation.Inject;
-import com.jujin.jeno.pom.PomSource;
-import com.jujin.jeno.project.DescriptorSource;
-import com.jujin.jeno.project.ProjectReader;
-import com.jujin.jeno.resolve.DigestSource;
 import com.jujin.freeway.commons.json.JsonArray;
 import com.jujin.freeway.commons.json.JsonObject;
 import com.jujin.freeway.commons.json.JsonUtils;
+import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.jeno.project.JenoProject;
+import com.jujin.jeno.project.ProjectReader;
 import com.jujin.jeno.project.Repository;
 import com.jujin.jeno.store.ArtifactStore;
 import com.jujin.jeno.store.LockFileReader;
@@ -58,7 +55,20 @@ public final class AddCommand implements Command {
 
     @Override
     public String summary() {
-        return "add a dependency and re-lock (no value: list versions or search)";
+        return "add a dependency and re-lock (no value: discover versions)";
+    }
+
+    @Override
+    public String help() {
+        return """
+               with a value: append one declaration to [deps] and re-lock.
+               without a value: discover only, never edit jeno.toml.
+                 group:artifact          read Central maven-metadata.xml
+                 bare-name               search the Central index
+                 --repo <name>           read a named jeno repository index
+               JSON discovery requires --repo; without it the no-value form
+               returns JSON_DISCOVERY_UNSUPPORTED. --offline rejects all
+               discovery forms and keeps explicit-version mutation available.""";
     }
 
     @Override
@@ -280,6 +290,11 @@ public final class AddCommand implements Command {
 
     /** Human-readable version discovery for one named jeno repository. */
     private int discoverNamed(String name, String repoName) {
+        if (ArtifactStore.isOffline()) {
+            System.err.println(Ui.errPrefix() + "version discovery reads a repository index — "
+                    + "pass an explicit version, or drop --offline");
+            return 2;
+        }
         JenoProject project = readProject();
         Repository repository = namedJenoRepository(project, repoName);
         try {
