@@ -8,7 +8,7 @@
 # Every byte is sha256-pinned in jeno.lock.
 [project]
 name = "jeno"
-version = "0.3.2"
+version = "0.3.3"
 main = "com.jujin.jeno.cli.Jeno"
 
 [java]
