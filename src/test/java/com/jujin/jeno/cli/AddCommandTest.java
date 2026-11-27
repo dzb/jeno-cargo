@@ -211,8 +211,9 @@ class AddCommandTest {
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            vendor = "local:%s"
+            [repos.vendor]
+            type = "maven"
+            url = "%s"
 
             [deps]
             "com.example:lib-a" = "vendor:1.0.0"
@@ -232,8 +233,9 @@ class AddCommandTest {
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            vendor = "local:vendor"
+            [repos.vendor]
+            type = "maven"
+            url = "vendor"
             """);
 
         ArtifactLocations.useProjectRoot(project);
@@ -252,7 +254,7 @@ class AddCommandTest {
                         .contains("\"com.example:lib-b\" = \"vendor:1.0.0\""),
                 "the value shape lands in [deps]");
         assertTrue(Files.readString(project.resolve("jeno.lock"))
-                        .contains("source = \"local:vendor\""),
+                        .contains("source = \"maven:local:vendor\""),
                 "and resolves through the named repository");
     }
 
@@ -495,8 +497,9 @@ class AddCommandTest {
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            vendor = "local:vendor"
+            [repos.vendor]
+            type = "maven"
+            url = "vendor"
             """);
         ArtifactLocations.useProjectRoot(project);
         ArtifactStore store = new ArtifactStore(projectStore);
@@ -580,15 +583,15 @@ class AddCommandTest {
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            mine = "jeno:local:%s"
+            [repos.mine]
+            url = "%s"
             """.formatted(repo));
         ArtifactStore.goOffline();
 
         int exit = command.execute(List.of("widget", "--repo", "mine"));
 
         assertEquals(2, exit, "named discovery is still network-shaped and must respect offline");
-        assertTrue(Files.readString(dir.resolve("jeno.toml")).contains("mine ="),
+        assertTrue(Files.readString(dir.resolve("jeno.toml")).contains("[repos.mine]"),
                 "offline refusal leaves the manifest untouched");
     }
 
@@ -643,8 +646,8 @@ class AddCommandTest {
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            mine = "jeno:local:%s"
+            [repos.mine]
+            url = "%s"
             """.formatted(repo));
         String before = Files.readString(dir.resolve("jeno.toml"));
         ArtifactStore store = new ArtifactStore(storeDir);
@@ -681,8 +684,8 @@ class AddCommandTest {
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            mine = "jeno:local:%s"
+            [repos.mine]
+            url = "%s"
             """.formatted(repo));
         ArtifactStore store = new ArtifactStore(storeDir);
         AddCommand command = new AddCommand(

@@ -55,13 +55,15 @@ class PublishLocalSiblingTest {
         publishArtifact(vendor, "gadget", "0.9.0");
         Path project = producer();
 
-        Result result = publish(project, "jeno:local:../vendor");
+        Result result = publish(project, "local:../vendor");
 
         assertEquals(0, result.exit(), result.out() + result.err());
         String descriptor = Files.readString(
                 vendor.resolve("widget/0.1.0/widget-0.1.0.jeno.toml"));
         assertTrue(descriptor.contains("\"gadget\" = \"0.9.0\""),
                 "the sibling travels as a bare name: " + descriptor);
+        assertEquals(0, new VerifyCommand(store, project).execute(List.of()),
+                "verify must accept a valid sibling descriptor without knowing its final repo");
     }
 
     @Test
@@ -70,7 +72,7 @@ class PublishLocalSiblingTest {
         publishArtifact(vendor, "gadget", "0.9.0");
         Path project = producer();
 
-        Result result = publish(project, "jeno:local:" + vendor);
+        Result result = publish(project, "local:" + vendor);
 
         assertEquals(0, result.exit(), result.out() + result.err());
         assertTrue(Files.exists(vendor.resolve("widget/0.1.0/widget-0.1.0.jar")));
@@ -84,22 +86,22 @@ class PublishLocalSiblingTest {
         publishArtifact(other, "gadget", "0.9.0");
         Path project = producer();
 
-        Result result = publish(project, "jeno:local:" + other);
+        Result result = publish(project, "local:" + other);
 
         assertEquals(1, result.exit());
-        assertTrue(result.err().contains("belongs to repository 'cascade'"), result.err());
-        assertTrue(result.err().contains("vendor"), result.err());
-        assertTrue(result.err().contains("other-vendor"), result.err());
+        assertTrue(result.err().contains("local jeno source"), result.err());
+        assertTrue(result.err().contains("cannot carry a filesystem path"), result.err());
         assertFalse(Files.exists(other.resolve("widget")), "nothing was written");
     }
 
     @Test
     void httpsSiblingComparisonIsUnchanged() {
-        var repository = com.jujin.jeno.project.Repository.parse("r", "jeno:https://HOST/repo");
+        var repository = com.jujin.jeno.project.Repository.of("r", "jeno", "https://HOST/repo");
         assertEquals(
                 com.jujin.jeno.resolve.ArtifactLocations.canonicalLocation(repository),
                 com.jujin.jeno.resolve.ArtifactLocations.canonicalLocation(
-                        com.jujin.jeno.project.Repository.parse("r2", "jeno:https://host:443/repo/")),
+                        com.jujin.jeno.project.Repository.of("r2", "jeno",
+                                "https://host:443/repo/")),
                 "host case, default port and the trailing slash are spelling");
     }
 
@@ -113,8 +115,8 @@ class PublishLocalSiblingTest {
             name = "widget"
             version = "0.1.0"
 
-            [repos]
-            cascade = "jeno:local:../vendor"
+            [repos.cascade]
+            url = "../vendor"
 
             [deps]
             "gadget" = "cascade:0.9.0"

@@ -151,7 +151,7 @@ class RepositoryDeclarationTest {
 
         locks.refresh(project);
 
-        assertEquals("jeno:" + base, LockFileFirst.source(project),
+        assertEquals("jeno:" + base + "/", LockFileFirst.source(project),
                 "the canonical declaration records the layout explicitly");
     }
 
@@ -263,12 +263,11 @@ class RepositoryDeclarationTest {
             insecure = true
             """);
 
-        Repository named = Repository.resolveTarget(parsed, "mine");
+        Repository named = Repository.resolveJenoTarget(parsed, "mine");
         assertTrue(named.insecure());
         assertEquals("jeno:http://192.168.1.39:8080/repo/", named.declaration());
 
-        Repository url = Repository.resolveTarget(parsed,
-                "jeno:https://host/repo/");
+        Repository url = Repository.resolveJenoTarget(parsed, "https://host/repo/");
         assertEquals("jeno:https://host/repo/", url.declaration());
     }
 
@@ -289,31 +288,27 @@ class RepositoryDeclarationTest {
     }
 
     @Test
-    void theLegacyStringFormsStillParse() {
-        JenoProject parsed = ProjectReader.parse("""
-            [project]
-            name = "x"
-            version = "1.0.0"
+    void legacyStringFormsAreRejectedWithStructuredMigration() {
+        ProjectException error = assertThrows(ProjectException.class, () ->
+                ProjectReader.parse("""
+                    [project]
+                    name = "x"
+                    version = "1.0.0"
 
-            [repos]
-            plain = "https://host/"
-            maven-local = "local:../vendor"
-            native = "jeno:https://host/mine/"
-            native-local = "jeno:local:../vendor"
-            """);
+                    [repos]
+                    plain = "https://host/"
+                    native = "jeno:local:../vendor"
+                    """));
 
-        assertEquals(Repository.Layout.MAVEN, parsed.repos().get("plain").layout());
-        assertEquals(Repository.Transport.NETWORK, parsed.repos().get("plain").transport());
-        assertEquals(Repository.Layout.MAVEN, parsed.repos().get("maven-local").layout());
-        assertEquals(Repository.Transport.LOCAL, parsed.repos().get("maven-local").transport());
-        assertEquals(Repository.Layout.JENO, parsed.repos().get("native").layout());
-        assertEquals("jeno:https://host/mine/", parsed.repos().get("native").declaration());
-        assertEquals(Repository.Layout.JENO, parsed.repos().get("native-local").layout());
-        assertEquals("jeno:local:../vendor", parsed.repos().get("native-local").declaration());
+        assertTrue(error.getMessage().contains(
+                        "string repository declarations were removed"), error.getMessage());
+        assertTrue(error.getMessage().contains("[repos.plain]"), error.getMessage());
+        assertTrue(error.getMessage().contains("type = \"maven\""), error.getMessage());
+        assertTrue(error.getMessage().contains("url"), error.getMessage());
     }
 
     @Test
-    void theNewFormAndTheEquivalentLegacyFormWriteTheSameLock() throws Exception {
+    void explicitJenoTypeAndTheDefaultWriteTheSameLock() throws Exception {
         jenoArtifact(root.resolve("vendor"), "gadget", "0.9.0");
 
         Path newProject = project("new", """
@@ -325,8 +320,8 @@ class RepositoryDeclarationTest {
             "gadget" = "v:0.9.0"
             """);
         Path oldProject = project("old", """
-            [repos]
-            v = "jeno:local:../vendor"
+            [repos.v]
+            url = "../vendor"
 
             [deps]
             "gadget" = "v:0.9.0"
@@ -338,7 +333,7 @@ class RepositoryDeclarationTest {
 
         assertEquals(Files.readString(oldProject.resolve("jeno.lock")),
                 Files.readString(newProject.resolve("jeno.lock")),
-                "the new spelling is a source form; the lock bytes are the same");
+                "explicit type = jeno and the omitted default must produce identical locks");
     }
 
     // ------------------------------------------------------------------

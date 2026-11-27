@@ -48,8 +48,9 @@ class DevDependenciesTest {
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            corp = "https://repo.example.com/maven2/"
+            [repos.corp]
+            type = "maven"
+            url = "https://repo.example.com/maven2/"
 
             [deps-dev]
             "com.example:lib-a" = "1.0.0"

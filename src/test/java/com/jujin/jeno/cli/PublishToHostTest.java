@@ -57,11 +57,10 @@ class PublishToHostTest {
             assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
             assertEquals(0, new PackageCommand(store, dir).execute(List.of()));
 
-            Result result = publish(base);
+            Result result = publish("maven:" + base);
 
             assertEquals(1, result.exit());
             assertTrue(result.err().contains("Maven-layout target"), result.err());
-            assertTrue(result.err().contains("jeno:local:"), result.err());
             assertTrue(received.isEmpty(), "zero requests: " + received.keySet());
             assertFalse(Files.exists(dir.resolve("target/dist/widget-1.2.0.jeno.toml")),
                     "the descriptor was not rewritten");
@@ -89,7 +88,7 @@ class PublishToHostTest {
             assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
             assertEquals(0, new PackageCommand(store, dir).execute(List.of()));
 
-            Result result = publish(base);
+            Result result = publish("maven:" + base);
 
             assertEquals(1, result.exit());
             assertTrue(result.err().contains("Maven-layout target"), result.err());
@@ -106,7 +105,7 @@ class PublishToHostTest {
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
         assertEquals(0, new PackageCommand(store, dir).execute(List.of()));
 
-        Result result = publish("local:../maven-repo");
+        Result result = publish("maven:local:../maven-repo");
 
         assertEquals(1, result.exit());
         assertTrue(result.err().contains("Maven-layout target"), result.err());
@@ -126,7 +125,7 @@ class PublishToHostTest {
             exchange.close();
         });
         server.start();
-        String base = "jeno:http://localhost:" + server.getAddress().getPort() + "/repo/";
+        String base = "http://localhost:" + server.getAddress().getPort() + "/repo/";
 
         try {
             project();
@@ -151,7 +150,7 @@ class PublishToHostTest {
         assertEquals(0, new BuildCommand(store, dir).execute(List.of()));
         assertEquals(0, new PackageCommand(store, dir).execute(List.of()));
 
-        Result result = publish("jeno:http://203.0.113.1/");
+        Result result = publish("http://203.0.113.1/");
 
         assertEquals(1, result.exit());
         assertTrue(result.err().contains("private network"), result.err());

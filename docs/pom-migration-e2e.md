@@ -35,11 +35,10 @@ version = 25
 
 ## 迁移后人工审阅（手工补的三处）
 
-1. **本地 jeno 仓库**（freeway 已在 `~/Projects/freeway/vendor` 用 `jeno publish jeno:local:` 发布）：
+1. **本地 jeno 仓库**（freeway 已在 `~/Projects/freeway/vendor` 用 `jeno publish local:<dir>` 发布）：
    ```toml
    [repos.freeway]
-   type = "jeno"
-   url = "/home/dzb/Projects/freeway/vendor"
+   url = "/home/dzb/Projects/freeway/vendor"   # type omitted = jeno layout
    ```
 2. **snapshot → 已发布版本**：
    ```toml

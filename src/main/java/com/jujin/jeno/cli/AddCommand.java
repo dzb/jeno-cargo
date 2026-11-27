@@ -376,7 +376,8 @@ public final class AddCommand implements Command {
         }
         if (repository.layout() != Repository.Layout.JENO) {
             throw new IllegalArgumentException("repository '" + repoName
-                    + "' is a Maven layout; --repo discovery is only for jeno: repositories");
+                    + "' is a Maven layout; --repo discovery is only for jeno-native "
+                    + "repositories (type = \"jeno\")");
         }
         return repository;
     }

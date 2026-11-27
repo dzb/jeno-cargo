@@ -33,11 +33,12 @@ public final class DescriptorReader {
     }
 
     /**
-     * The full form: {@code siblingRepository} is the {@code jeno:} repository the
-     * descriptor came from, where a bare name means another artifact in it.
+     * The full form: {@code siblingSource} is the actual canonical source
+     * (for example {@code jeno:https://repo.example/}) the descriptor came
+     * from, where a bare name means another artifact in that same repository.
      */
     public static Descriptor parse(String text, String expectedName, String expectedVersion,
-                                   String siblingRepository) {
+                                   String siblingSource) {
         Map<String, Object> root = TomlUtils.parse(text);
         SchemaSource source = SchemaSource.scan(text);
         String file = expectedName + "-" + expectedVersion + ".jeno.toml";
@@ -114,14 +115,14 @@ public final class DescriptorReader {
         Map<String, Object> depsSection = optionalSection(root, "deps");
         if (depsSection != null) {
             requirements = ProjectReader.extractDependencies(depsSection, null, "descriptor",
-                    siblingRepository);
+                    siblingSource);
         }
 
         Set<String> apiRequirements = Set.of();
         Map<String, Object> apiDepsSection = optionalSection(root, "deps-api");
         if (apiDepsSection != null) {
             apiRequirements = ProjectReader.apiRequirementIds(apiDepsSection, requirements,
-                    null, "descriptor", siblingRepository);
+                    null, "descriptor", siblingSource);
         }
 
         Map<String, String> retract = new LinkedHashMap<>();

@@ -37,7 +37,8 @@ public final class LegacyNames {
 
     public static String lockSource(String id, String source) {
         return "jeno.lock row '" + id + "' uses the old " + source + " source — the "
-                + REPOSITORY_PREFIX + " family is now jeno:; update jeno.toml and run jeno lock";
+                + REPOSITORY_PREFIX + " family is gone; use a structured [repos.<name>] "
+                + "table, then run jeno lock";
     }
 
     public static String manifest(Path dir) {
@@ -65,8 +66,8 @@ public final class LegacyNames {
     }
 
     public static String repositoryPrefix(String value) {
-        return "'" + value + "' uses the old mjm: prefix — write jeno: (jeno:https://…, "
-                + "jeno:local:<dir>, or jeno:http://<private-ip>/…)";
+        return "'" + value + "' uses the old mjm: prefix — write a structured "
+                + "[repos.<name>] table with type = \"jeno\" and url";
     }
 
     public static String localDescriptor(Path descriptor) {

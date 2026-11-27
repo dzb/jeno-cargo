@@ -44,6 +44,48 @@ class RepositoryTest {
 
 
     @Test
+    void structuredRepoDefaultsToJenoWhileLegacyStringsKeepTheirOldDefault() {
+        Repository structured = Repository.of("r", null, "https://host/repo");
+        assertEquals(Repository.Layout.JENO, structured.layout());
+        assertEquals(Repository.Transport.NETWORK, structured.transport());
+
+        Repository structuredLocal = Repository.of("r", null, "vendor");
+        assertEquals(Repository.Layout.JENO, structuredLocal.layout());
+        assertEquals(Repository.Transport.LOCAL, structuredLocal.transport());
+
+        Repository legacy = Repository.parse("r", "https://host/repo");
+        assertEquals(Repository.Layout.MAVEN, legacy.layout(),
+                "legacy strings keep the pre-default-flip spelling");
+    }
+
+    @Test
+    void lockSourceMakesJenoDefaultAndMavenExplicit() {
+        assertEquals("https://host/repo/",
+                Repository.lockSource(Repository.of("r", null, "https://host/repo")));
+        assertEquals("local:vendor",
+                Repository.lockSource(Repository.of("r", null, "vendor")));
+        assertEquals("maven:https://nexus.corp/repository/",
+                Repository.lockSource(Repository.of("r", "maven", "https://nexus.corp/repository/")));
+        assertEquals("maven:local:maven-vendor",
+                Repository.lockSource(Repository.of("r", "maven", "maven-vendor")));
+    }
+
+    @Test
+    void writeTargetsRejectTheRemovedJenoPrefix() {
+        JenoProject project = ProjectReader.parse("""
+            [project]
+            name = "x"
+            version = "1.0.0"
+            """);
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> Repository.resolveJenoTarget(project, "jeno:https://host/"));
+
+        assertTrue(error.getMessage().contains("target prefixes were removed"),
+                error.getMessage());
+    }
+
+    @Test
     void plainHttpIsOnlyForPrivateNetworksAndLiteralHosts() {
         for (String url : List.of(
                 "http://localhost:8090/repo/",
@@ -123,11 +165,12 @@ class RepositoryTest {
     }
 
     @Test
-    void anUnknownLocationNamesBothDimensions() {
+    void anUnknownLocationNamesTheStructuredForm() {
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> Repository.parse("r", "jeno:../vendor"));
-        assertTrue(error.getMessage().contains("jeno:https://"), error.getMessage());
-        assertTrue(error.getMessage().contains("jeno:local:"), error.getMessage());
+        assertTrue(error.getMessage().contains("[repos.<name>]"), error.getMessage());
+        assertTrue(error.getMessage().contains("type = \"maven\""), error.getMessage());
+        assertTrue(error.getMessage().contains("url"), error.getMessage());
     }
 
     @Test

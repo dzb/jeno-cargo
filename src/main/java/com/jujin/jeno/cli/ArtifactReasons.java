@@ -9,7 +9,7 @@ import com.jujin.jeno.store.LockedArtifact;
  * with different words made CI filters impossible to write.
  *
  * <p>The labels are about the <em>species and layout</em>, not about which
- * query failed: a {@code gh:} release is a native release, an {@code jeno:}
+ * query failed: a {@code gh:} release is a native release, a jeno-native
  * repository (local or remote) uses its per-artifact {@code index.jeno.toml}
  * when present and is otherwise uncheckable, a local Maven directory has no
  * listing, and a bare URL is a leaf. Anything else — including a source the

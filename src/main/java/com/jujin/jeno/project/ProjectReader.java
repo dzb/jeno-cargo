@@ -154,7 +154,7 @@ public final class ProjectReader {
                 // silently mean a repository named gh — a dependency that can
                 // never resolve as itself.
                 if (entry.getKey().equals("gh") || entry.getKey().equals("gitee")) {
-                    throw new ProjectException(at(file, source.key("repos", entry.getKey()))
+                    throw new ProjectException(at(file, source.section("repos." + entry.getKey()))
                             + "[repos." + entry.getKey() + "] is reserved for the "
                             + entry.getKey() + ": prefix — pick another name");
                 }
@@ -411,24 +411,24 @@ public final class ProjectReader {
     }
 
     /**
-     * One {@code [repos]} entry: the explicit table ({@code type}/{@code url}) or
-     * the legacy string. Both produce the same {@link Repository}; this is the
-     * only place the two shapes are told apart.
+     * One {@code [repos]} entry. Only the explicit {@code type}/{@code url}
+     * table shape is accepted; string declarations are a removed feature and
+     * produce a structured migration error.
      */
     private static Repository repository(String name, Object value,
                                          Map<String, Object> reposSection,
                                          SchemaSource source, String file) {
         if (value instanceof String legacy) {
-            try {
-                return Repository.parse(name, legacy);
-            } catch (IllegalArgumentException e) {
-                throw new ProjectException(at(file, source.key("repos", name))
-                        + "[repos] " + name + " = \"" + legacy + "\" — " + e.getMessage());
-            }
+            throw new ProjectException(at(file, source.key("repos", name))
+                    + "[repos." + name + "] = \"" + legacy + "\" — string repository "
+                    + "declarations were removed; write a structured table instead:\n"
+                    + "  [repos." + name + "]\n"
+                    + "  type = \"maven\"   # omit type for the default jeno layout\n"
+                    + "  url = \"…\"");
         }
         if (!(value instanceof Map<?, ?> table)) {
             throw new ProjectException(at(file, source.key("repos", name))
-                    + "[repos." + name + "] must be a table with type/url, or the legacy string");
+                    + "[repos." + name + "] must be a table with type/url");
         }
         for (Object key : table.keySet()) {
             if (!key.equals("type") && !key.equals("url") && !key.equals("insecure")) {
@@ -443,7 +443,9 @@ public final class ProjectReader {
             throw new ProjectException(at(file, source.key("repos." + name, "type"))
                     + "[repos." + name + "].type must be \"maven\" or \"jeno\"");
         }
-        String type = typeValue == null ? "maven" : (String) typeValue;
+        // jeno-native is the product's default layout. Maven is the explicit
+        // foreign layout; the structured table has no string-declaration path.
+        String type = typeValue == null ? "jeno" : (String) typeValue;
         Object insecureValue = table.get("insecure");
         if (insecureValue != null && !(insecureValue instanceof Boolean)) {
             throw new ProjectException(at(file, source.key("repos." + name, "insecure"))
@@ -470,7 +472,7 @@ public final class ProjectReader {
     }
 
     /**
-     * The full form. {@code sibling} is the {@code jeno:} repository a descriptor
+     * The full form. {@code sibling} is the jeno-native repository a descriptor
      * was fetched from: a bare name there addresses another artifact in that same
      * repository — a descriptor cannot name repositories (they are rules), but it
      * can say "the sibling called gadget, version 0.9.0".
@@ -480,8 +482,8 @@ public final class ProjectReader {
                                    String sibling) {
         if (sibling != null && value instanceof String raw
                 && !raw.isBlank() && !raw.startsWith("gh:") && !raw.startsWith("https://")
-                && !raw.contains(":") && !key.contains(":")) {
-            return nativeInNamedRepository(key, raw, sibling, where);
+                && !raw.startsWith("http://") && !raw.contains(":") && !key.contains(":")) {
+            return nativeInNamedRepository(key, raw, null, sibling, where);
         }
         if (key.isBlank() || key.contains(" ") || key.contains("\t")) {
             throw new ProjectException("[" + where + "] dependency name '" + key
@@ -526,12 +528,27 @@ public final class ProjectReader {
             throw new ProjectException("[" + where + "] '" + key + " = \"" + raw
                     + "\"' — " + LegacyNames.repositoryPrefix(raw));
         }
-        if (raw.startsWith("https://")) {
-            if (!raw.endsWith(".jar")) {
-                throw new ProjectException("[" + where + "] '" + key
-                        + "' — a URL dependency must end in .jar");
+        if (raw.startsWith("https://") || raw.startsWith("http://")) {
+            if (raw.endsWith(".jar")) {
+                if (!raw.startsWith("https://")) {
+                    throw new ProjectException("[" + where + "] '" + key
+                            + "' — a bare jar URL must use https, got '" + raw + "'");
+                }
+                return new Requirement(key, Species.URL, null, null, null, null,
+                        raw, null, null, null);
             }
-            return new Requirement(key, Species.URL, null, null, null, null, raw, null, null, null);
+            Requirement absolute = absoluteNative(key, raw, where);
+            if (absolute != null) {
+                return absolute;
+            }
+            if (raw.startsWith("https://")) {
+                throw new ProjectException("[" + where + "] '" + key
+                        + "' — a URL dependency must end in .jar, or be an absolute "
+                        + "native source of the form https://repo.example/@1.2.3");
+            }
+            throw new ProjectException("[" + where + "] '" + key + "' — plain http is only "
+                    + "accepted as a literal private-network absolute native source "
+                    + "(http://<private-ip>/repo/@1.2.3)");
         }
 
         // "name:version" names a repository (SPEC.md §2.1, value shapes): the
@@ -545,15 +562,19 @@ public final class ProjectReader {
             if (NAME.matcher(name).matches() && !version.isEmpty()) {
                 if (repos == null) {
                     throw new ProjectException("[" + where + "] '" + key + " = \"" + raw
-                            + "\"' — descriptors cannot declare repositories; rules live only "
-                            + "in the consumer's jeno.toml (SPEC.md §3.2)");
+                            + "\"' — descriptors cannot declare repository aliases; use an "
+                            + "absolute native source such as "
+                            + "\"https://repo.example/@1.2.3\" when the dependency is "
+                            + "outside the descriptor's repository (SPEC.md §3.2)");
                 }
                 boolean namedJeno = repos != null && checkRepos
                         && repos.get(name) != null
                         && repos.get(name).layout() == Repository.Layout.JENO;
                 if (namedJeno || (!checkRepos && !key.contains(":"))) {
-                    // "name:version": a named jeno: repository, keyed by artifact name
-                    return nativeInNamedRepository(key, version, name, where);
+                    // "name:version": a named jeno-native repository, keyed by artifact name
+                    Repository named = repos.get(name);
+                    return nativeInNamedRepository(key, version, name,
+                            named == null ? null : named.declaration(), where);
                 }
                 if (checkRepos && !repos.containsKey(name)) {
                     throw new ProjectException("[" + where + "] '" + key + " = \"" + raw
@@ -588,29 +609,72 @@ public final class ProjectReader {
     }
 
     /**
+     * Parse the descriptor-safe absolute native form:
+     * {@code https://repo.example/base/@1.2.3}. The last {@code @} separates the
+     * repository base from the version; the URL before it is a jeno repository,
+     * never a literal jar URL. Local sources are intentionally not accepted in
+     * this form because a published descriptor must be replayable on another
+     * machine.
+     */
+    private static Requirement absoluteNative(String key, String raw, String where) {
+        int at = raw.lastIndexOf('@');
+        if (at <= raw.indexOf("://") + 2) {
+            return null;
+        }
+        String base = raw.substring(0, at);
+        String version = raw.substring(at + 1).strip();
+        Matcher tag = TAG.matcher(version);
+        if (!tag.matches()) {
+            throw new ProjectException("[" + where + "] '" + key + " = \"" + raw
+                    + "\"' — absolute native source version must be semver after the final @ "
+                    + "(1.2.3 or 1.2.3-rc1)");
+        }
+        Repository repository;
+        try {
+            repository = Repository.parse("jeno:" + base);
+        } catch (IllegalArgumentException e) {
+            throw new ProjectException("[" + where + "] '" + key + " = \"" + raw
+                    + "\"' — the part before @ must be an absolute jeno repository URL: "
+                    + e.getMessage());
+        }
+        if (repository.layout() != Repository.Layout.JENO || repository.isLocal()) {
+            throw new ProjectException("[" + where + "] '" + key + " = \"" + raw
+                    + "\"' — absolute native source must be a network jeno repository "
+                    + "(https://…/@version or private http://…/@version)");
+        }
+        return nativeInNamedRepository(key, tag.group(1), null,
+                repository.declaration(), where);
+    }
+
+    /**
      * A dependency on a native release inside an {@code jeno:} repository: the key
      * is the artifact name (the layout has no group), the version is semver, and
      * metadata comes from the descriptor beside the jar — the same parse path as
-     * gh:.
+     * gh:. {@code repository} is the manifest alias when one is available;
+     * {@code repositoryUrl} is the canonical source used by descriptors and
+     * aliases alike.
      */
     private static Requirement nativeInNamedRepository(String key, String version,
-                                                       String repository, String where) {
+                                                       String repository, String repositoryUrl,
+                                                       String where) {
         if (key.contains(":")) {
             throw new ProjectException("[" + where + "] '" + key + "' — a dependency from a "
-                    + "jeno: repository is addressed by its artifact name (no group:artifact)");
+                    + "jeno-native repository is addressed by its artifact name "
+                    + "(no group:artifact)");
         }
         if (!NAME.matcher(key).matches()) {
             throw new ProjectException("[" + where + "] dependency name '" + key
-                    + "' must match [a-z][a-z0-9-]* for a jeno: repository");
+                    + "' must match [a-z][a-z0-9-]* for a jeno-native repository");
         }
         String stripped = version == null ? "" : version.strip();
         Matcher tag = TAG.matcher(stripped);
         if (!tag.matches()) {
             throw new ProjectException("[" + where + "] '" + key + "' uses version '"
-                    + stripped + "' — a jeno: repository holds semver releases (1.2.3, 1.2.3-rc1)");
+                    + stripped + "' — a jeno-native repository holds semver releases "
+                    + "(1.2.3, 1.2.3-rc1)");
         }
-        return new Requirement(key, Species.NAMED, null, null, tag.group(1), repository,
-                null, null, null, null);
+        return new Requirement(key, Species.NAMED, null, null, tag.group(1),
+                repository, repositoryUrl, null, null, null, null, null);
     }
 
     private static void requireConcreteVersion(String key, String version, String where) {

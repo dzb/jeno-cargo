@@ -108,7 +108,7 @@ class RelativeLockTest {
         Path outside = Files.createDirectories(dir.resolve("outside-repo"));
         writeRepository(outside);  // the layout root IS the repository
         Path project = Files.createDirectories(dir.resolve("outside-project"));
-        Files.writeString(project.resolve("jeno.toml"), manifest("local:" + outside));
+        Files.writeString(project.resolve("jeno.toml"), manifest(outside.toString()));
 
         String lock = lock(project, new ArtifactStore(dir.resolve("store-outside")));
 
@@ -139,7 +139,7 @@ class RelativeLockTest {
     private Path project(Path projectDir) throws IOException {
         Files.createDirectories(projectDir);
         writeRepository(projectDir.resolve("vendor"));
-        Files.writeString(projectDir.resolve("jeno.toml"), manifest("local:vendor"));
+        Files.writeString(projectDir.resolve("jeno.toml"), manifest("vendor"));
         Path main = projectDir.resolve("src/main/java/demo/Main.java");
         Files.createDirectories(main.getParent());
         Files.writeString(main, """
@@ -160,8 +160,9 @@ class RelativeLockTest {
             version = "0.1.0"
             main = "demo.Main"
 
-            [repos]
-            vendor = "%s"
+            [repos.vendor]
+            type = "maven"
+            url = "%s"
 
             [deps]
             "com.example:lib-a" = "vendor:1.0.0"

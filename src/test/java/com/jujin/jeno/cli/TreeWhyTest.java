@@ -70,8 +70,9 @@ class TreeWhyTest {
             [limits]
             max-depth = 5
 
-            [repos]
-            fix = "local:%s"
+            [repos.fix]
+            type = "maven"
+            url = "%s"
 
             [deps]
             "com.example:lib-a" = "fix:1.0.0"
@@ -164,8 +165,9 @@ class TreeWhyTest {
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            fix = "local:%s"
+            [repos.fix]
+            type = "maven"
+            url = "%s"
 
             [deps]
             "com.example:lib-a" = "fix:1.0.0"
@@ -333,8 +335,9 @@ class TreeWhyTest {
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            fix = "local:%s"
+            [repos.fix]
+            type = "maven"
+            url = "%s"
 
             [deps]
             "com.example:lib-a" = "fix:1.0.0"
@@ -346,8 +349,9 @@ class TreeWhyTest {
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            fix = "local:%s"
+            [repos.fix]
+            type = "maven"
+            url = "%s"
 
             [deps]
             "com.example:lib-a" = "fix:1.1.0"
@@ -415,8 +419,9 @@ class TreeWhyTest {
             name = "app"
             version = "0.1.0"
 
-            [repos]
-            v = "local:../vendor"
+            [repos.v]
+            type = "maven"
+            url = "../vendor"
 
             [deps]
             "com.example:core" = "v:1.0.0"
@@ -554,8 +559,9 @@ class TreeWhyTest {
             [limits]
             max-depth = 5
 
-            [repos]
-            fix = "local:%s"
+            [repos.fix]
+            type = "maven"
+            url = "%s"
 
             [deps]
             "com.example:root-a" = "fix:1.0.0"
@@ -620,8 +626,9 @@ class TreeWhyTest {
             [limits]
             max-depth = 5
 
-            [repos]
-            fix = "local:%s"
+            [repos.fix]
+            type = "maven"
+            url = "%s"
 
             [deps]
             "com.example:lib-a" = "fix:1.0.0"
@@ -680,8 +687,9 @@ class TreeWhyTest {
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            fix = "local:%s"
+            [repos.fix]
+            type = "maven"
+            url = "%s"
 
             [deps-dev]
             "com.example:lib-b" = "fix:1.1.0"

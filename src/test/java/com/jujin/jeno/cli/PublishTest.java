@@ -107,7 +107,7 @@ class PublishTest {
         Files.writeString(dist.resolve("demo-1.0.0.jar"), "jar bytes");
         Path repo = dir.resolve("repo");
 
-        int exit = new PublishCommand(dir).execute(List.of("jeno:local:" + repo));
+        int exit = new PublishCommand(dir).execute(List.of("local:" + repo));
 
         assertEquals(0, exit);
         Path indexFile = repo.resolve("demo/index.jeno.toml");
@@ -169,7 +169,7 @@ class PublishTest {
         writeProject(dir);
 
         Result result = publishJson("--json", "--dry-run",
-                "jeno:local:" + dir.resolve("repo"));
+                "local:" + dir.resolve("repo"));
 
         assertEquals(1, result.exit());
         var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(result.out());
@@ -187,7 +187,7 @@ class PublishTest {
         Files.writeString(dist.resolve("demo-1.0.0.jar"), "jar bytes");
 
         Result result = publishJson("--json", "--dry-run",
-                "jeno:http://192.168.1.39:18080/upload/");
+                "http://192.168.1.39:18080/upload/");
 
         assertEquals(0, result.exit(), result.err());
         var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(result.out());
@@ -248,8 +248,9 @@ class PublishTest {
             name = "demo"
             version = "1.0.0"
 
-            [repos]
-            corp = "https://nexus.corp.internal/repository/maven/"
+            [repos.corp]
+            type = "maven"
+            url = "https://nexus.corp.internal/repository/maven/"
 
             [deps]
             "com.corp:internal" = "corp:2.1.0"

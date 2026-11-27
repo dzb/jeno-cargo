@@ -168,8 +168,9 @@ class RemoveCommandTest {
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            vendor = "local:%s"
+            [repos.vendor]
+            type = "maven"
+            url = "%s"
 
             [deps]
             "com.example:lib-a" = "vendor:1.0.0"

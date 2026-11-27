@@ -44,8 +44,8 @@ jeno --json build
 jeno --json test                 # read result.reportFiles as JUnit XML
 jeno --json package
 jeno --json verify
-jeno --json publish --dry-run jeno:local:../repo
-jeno --json publish jeno:local:../repo
+jeno --json publish --dry-run local:../repo
+jeno --json publish local:../repo
 ```
 
 On test failure, inspect the XML listed in each module's
@@ -58,8 +58,8 @@ jeno --json build
 jeno --json test
 jeno --json bundle
 jeno --json verify
-jeno --json release --dry-run --allow-unsigned jeno:local:../releases
-jeno --json release --allow-unsigned jeno:local:../releases
+jeno --json release --dry-run --allow-unsigned local:../releases
+jeno --json release --allow-unsigned local:../releases
 ```
 
 Use `result.artifacts` from `bundle` for the directory and tar.gz paths and
@@ -86,8 +86,22 @@ Module-scoped commands require `--module`:
 jeno --json add "com.example:lib" 1.0.0 --module apps/web
 jeno --json remove "com.example:lib" --module apps/web
 jeno --json info "com.example:lib" --module apps/web
-jeno --json publish --dry-run "jeno:local:../repo" --module libs/core
+jeno --json publish --dry-run "local:../repo" --module libs/core
 ```
+
+## Cross-repository native dependencies
+
+A descriptor may carry an absolute native source:
+
+```toml
+"freeway-commons" = "https://dzb.github.io/freeway/@2.0.2"
+```
+
+The final `@version` is the semver selector; the URL before it is the jeno
+repository base. A bare version remains a sibling of the descriptor's actual
+repository. This lets a library published in one jeno repository depend on an
+artifact in another without copying the other artifact into the same vendor
+repository.
 
 ## API edge inspection
 
@@ -113,6 +127,12 @@ fields stay stable for existing consumers. Human output marks API edges as
   declared `[repos.mine]` target with its policy.
 - `add --json <name> --repo <repo>` is named-repository discovery and returns
   versions without changing the project.
+- In structured `[repos.<name>]` tables, omitted `type` means the native jeno
+  layout. Maven repositories must say `type = "maven"`. Old string repository
+  declarations were removed.
+- Current locks are v3: jeno sources are bare URLs/`local:` paths and Maven
+  sources are `maven:...`. Old lock versions are read-only migration input;
+  `jeno lock` rewrites them to v3, whose text never contains `jeno:`.
 - A no-value `add --json` without `--repo` returns `JSON_DISCOVERY_UNSUPPORTED`;
   pass an explicit version for mutation.
 

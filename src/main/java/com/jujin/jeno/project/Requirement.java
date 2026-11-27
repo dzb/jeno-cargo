@@ -10,9 +10,10 @@ package com.jujin.jeno.project;
  *       Maven Central when null)</li>
  *   <li>{@link Species#GH}: {@code owner} + {@code repo} + {@code tag} +
  *       {@code version} (the tag without its {@code v})</li>
- *   <li>{@link Species#NAMED}: {@code version} + {@code repository} — a native
- *       release in a named {@code jeno:} repository, whose layout has no group
- *       and no tag: the artifact name is the id</li>
+ *   <li>{@link Species#NAMED}: {@code version} plus either a manifest-local
+ *       {@code repository} alias or a canonical {@code repositoryUrl} — a
+ *       native release in a named jeno-native repository, whose layout has no
+ *       group and no tag: the artifact name is the id</li>
  *   <li>{@link Species#URL}: {@code url} only — a bare leaf, no metadata</li>
  * </ul>
  *
@@ -21,6 +22,9 @@ package com.jujin.jeno.project;
  * jar and its {@code -sources}/{@code -native} sibling never collide), the
  * declared key for named jeno, GitHub native, and URL requirements.
  *
+ * @param repositoryUrl canonical jeno repository declaration for a
+ *                      descriptor-absolute native requirement; null when only a
+ *                      manifest alias is present
  * @param classifier null for a plain jar; e.g. {@code linux-x86_64},
  *                   {@code sources}. It is part of the artifact's identity and
  *                   of its download URL ({@code artifact-version-classifier.jar})
@@ -32,17 +36,27 @@ public record Requirement(
         String artifactId,
         String version,
         String repository,
+        String repositoryUrl,
         String url,
         String owner,
         String repo,
         String tag,
         String classifier) {
 
-    /** Back-compat: a requirement with no classifier. */
+    /** Back-compat: no canonical repository URL and no classifier. */
     public Requirement(String id, Species species, String group, String artifactId,
                        String version, String repository, String url, String owner,
                        String repo, String tag) {
-        this(id, species, group, artifactId, version, repository, url, owner, repo, tag, null);
+        this(id, species, group, artifactId, version, repository, null,
+                url, owner, repo, tag, null);
+    }
+
+    /** Back-compat: no canonical repository URL. */
+    public Requirement(String id, Species species, String group, String artifactId,
+                       String version, String repository, String url, String owner,
+                       String repo, String tag, String classifier) {
+        this(id, species, group, artifactId, version, repository, null,
+                url, owner, repo, tag, classifier);
     }
 
     /** The GitHub origin, {@code gh:owner/repo}. */
@@ -62,7 +76,14 @@ public record Requirement(
                     ? "central:" + id
                     : "repo:" + repository + "/" + id;
             case GH -> "gh:" + owner + "/" + repo;
-            case NAMED -> "named:" + repository + "/" + id;
+            case NAMED -> {
+                String source = repositoryUrl != null ? repositoryUrl : repository;
+                if (source == null) {
+                    throw new IllegalStateException(
+                            "native requirement '" + id + "' has no repository source");
+                }
+                yield "named:" + (source.endsWith("/") ? source : source + "/") + id;
+            }
             case URL -> "url:" + url;
         };
     }

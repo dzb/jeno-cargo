@@ -7,12 +7,12 @@ package com.jujin.jeno.project;
  *
  * <p>{@code gitee:} was removed on 2026-11-22: its release assets need a token
  * even for reading, which contradicts jeno's zero-configuration promise. A bare
- * URL or a {@code jeno:} repository is the replacement.
+ * URL or a jeno-native repository is the replacement.
  */
 public enum Species {
     CENTRAL,
     GH,
-    /** A native release served by a named {@code jeno:} repository (name/version layout). */
+    /** A native release served by a named jeno-native repository (name/version layout). */
     NAMED,
     URL
 }

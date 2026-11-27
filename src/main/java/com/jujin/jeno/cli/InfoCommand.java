@@ -212,7 +212,7 @@ public final class InfoCommand implements Command {
             }
         }
 
-        System.out.println("  origin:   " + artifact.source());
+        System.out.println("  origin:   " + Repository.displaySource(artifact.source()));
         System.out.println("  depth:    " + artifact.depth());
         Path localClasses = substitutions.classesOrNull(artifact.id());
         System.out.println("  jar:      " + (localClasses != null
@@ -256,7 +256,7 @@ public final class InfoCommand implements Command {
         }
 
         JsonObject provenance = JsonUtils.object();
-        provenance.put("source", artifact.source());
+        provenance.put("source", Repository.displaySource(artifact.source()));
         provenance.put("url", artifact.url());
         provenance.put("readableUrl", artifact.readableUrl(projectDir));
         repositoryFacts(provenance, artifact.source());
@@ -349,6 +349,9 @@ public final class InfoCommand implements Command {
             if (requirement.repository() != null) {
                 dependency.put("repository", requirement.repository());
             }
+            if (requirement.repositoryUrl() != null) {
+                dependency.put("source", Repository.displaySource(requirement.repositoryUrl()));
+            }
             if (requirement.classifier() != null) {
                 dependency.put("classifier", requirement.classifier());
             }
@@ -382,7 +385,7 @@ public final class InfoCommand implements Command {
         }
         try {
             Repository repository = Repository.parse(source);
-            provenance.put("repository", repository.declaration());
+            provenance.put("repository", Repository.displaySource(source));
             provenance.put("layout", repository.layout().name()
                     .toLowerCase(java.util.Locale.ROOT));
             provenance.put("transport", repository.transport().name()
@@ -439,8 +442,18 @@ public final class InfoCommand implements Command {
             return null;  // not downloaded yet or a pom-kind metadata row
         }
         try {
+            String siblingSource = null;
+            try {
+                Repository source = Repository.parse(artifact.source());
+                if (source.layout() == Repository.Layout.JENO) {
+                    siblingSource = source.declaration();
+                }
+            } catch (IllegalArgumentException ignored) {
+                // central/gh/url rows are not sibling repositories
+            }
             return DescriptorReader.parse(Files.readString(meta),
-                    artifact.id().substring(artifact.id().indexOf(':') + 1), artifact.version());
+                    artifact.id().substring(artifact.id().indexOf(':') + 1), artifact.version(),
+                    siblingSource);
         } catch (IOException | RuntimeException e) {
             return null;  // unreadable metadata never blocks the facts we do have
         }

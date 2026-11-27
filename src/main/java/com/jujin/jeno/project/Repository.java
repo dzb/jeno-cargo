@@ -7,30 +7,28 @@ import java.nio.file.Path;
 /**
  * A {@code [repos]} entry as a value: a <em>location</em> plus a <em>layout</em>.
  *
- * <p>These are two independent facts, and the old prefix chain conflated them:
- * {@code local:} said "on disk" and {@code jeno:} said "the two-level layout",
- * so "the jeno layout on disk" had no spelling. Now every combination is one
- * value:
+ * <p>The structured form ({@link #of}) declares the layout directly and
+ * defaults to the native jeno layout when {@code type} is omitted:
  *
  * <pre>
- *   https://host/…        NETWORK + MAVEN    local:&lt;dir&gt;        LOCAL + MAVEN
- *   jeno:https://host/…    NETWORK + JENO      jeno:local:&lt;dir&gt;    LOCAL + JENO
- *   jeno:http://<private-ip>/…  NETWORK + JENO  (LAN only; literal address)
- *
- * Plain {@code http://} is a NETWORK location too, but only for literal
- * private-network addresses ({@link #isLocalNetworkHttp}).
+ *   [repos.mine] url = "https://host/"       NETWORK + JENO (default)
+ *   [repos.corp] type = "maven" + url        NETWORK + MAVEN
+ *   [repos.vendor] url = "vendor"            LOCAL + JENO (default)
  * </pre>
+ *
+ * <p>Manifests accept only the structured form. The old declaration grammar
+ * ({@code local:}, optional {@code jeno:}) remains as an internal parser for
+ * lock migration and URL construction; it is not a user-facing repository
+ * syntax.
  *
  * <p>Usage points switch on {@link #layout()} and {@link #transport()}, never on
  * the declaration text. Adding a third layout (or a future git transport) is an
  * enum value plus URLs here — not a new {@code startsWith} in every command.
  *
- * <p>{@link #declaration()} is the exact location text the manifest wrote; it
- * is what the lock records as {@code source}, because the lock records
- * artifacts. The table-only {@code insecure} flag is a write policy, not an
- * artifact fact, so it is not part of that declaration. Reading a lock parses
- * the declaration with {@link #parse}, the same parser, so the two sides cannot
- * drift.
+ * <p>{@link #declaration()} is the internal legacy-canonical source spelling;
+ * lock v3 uses {@link #lockSource(Repository)} instead (jeno unmarked, Maven
+ * marked {@code maven:}). The table-only {@code insecure} flag is a write
+ * policy, not an artifact fact, so it is not part of either spelling.
  */
 public record Repository(String name, Layout layout, Transport transport,
                          String declaration, String localPath, String networkBase,
@@ -59,8 +57,9 @@ public record Repository(String name, Layout layout, Transport transport,
     }
 
     /**
-     * The one place a repository declaration is understood. Everything else
-     * receives a {@code Repository} and switches on the enums.
+     * Internal parser for the legacy declaration spelling used by old lock
+     * migration and URL construction. Manifests use {@link #of}; user-facing
+     * repository syntax is the structured table only.
      */
     public static Repository parse(String name, String declaration) {
         if (declaration == null || declaration.isBlank()) {
@@ -100,26 +99,114 @@ public record Repository(String name, Layout layout, Transport transport,
     }
 
     /**
-     * Resolve a publish/release target: a declared repository name wins over
-     * URL parsing, so {@code jeno publish mine} can carry the repository's
-     * security policy (notably {@code insecure = true}). A target that is not
-     * a declared name is still accepted as a URL declaration.
+     * The lock v3 source spelling: the jeno layout is the default and therefore
+     * unmarked; Maven layout is the explicit exception. This is deliberately a
+     * separate representation from {@link #declaration()}, whose legacy string
+     * grammar keeps Maven as the old default for compatibility.
      */
-    public static Repository resolveTarget(JenoProject project, String target) {
+    public static String lockSource(Repository repository) {
+        if (repository.layout() == Layout.JENO) {
+            return repository.isLocal()
+                    ? "local:" + repository.localPath()
+                    : repository.networkBase();
+        }
+        return "maven:" + repository.declaration();
+    }
+
+    /**
+     * Convert an internal canonical source (the pre-v3 {@code declaration()}
+     * form) to the lock v3 text. Special source species are not repositories
+     * and are returned unchanged.
+     */
+    public static String lockSourceFor(String internalSource) {
+        if (internalSource.equals("central") || internalSource.equals("url")
+                || internalSource.startsWith("gh:")) {
+            return internalSource;
+        }
+        return lockSource(parse(internalSource));
+    }
+
+    /** Best-effort user-facing spelling for an internal canonical source. */
+    public static String displaySource(String internalSource) {
+        try {
+            return lockSourceFor(internalSource);
+        } catch (RuntimeException e) {
+            return internalSource;
+        }
+    }
+
+    /**
+     * Parse one lock {@code source} value according to the lockfile version.
+     * v1/v2 used the legacy declaration grammar (bare https/local = Maven;
+     * {@code jeno:} = jeno) and are accepted only as migration input. v3 is the
+     * current grammar: bare https/local = jeno and Maven is marked with
+     * {@code maven:}.
+     */
+    public static Repository parseLockSource(String source, int lockVersion) {
+        if (lockVersion <= 2) {
+            return parse(source);
+        }
+        if (source.startsWith("jeno:")) {
+            throw new IllegalArgumentException(
+                    "lockfile v3 uses jeno layout by default; remove the jeno: prefix");
+        }
+        if (source.startsWith("maven:")) {
+            String location = source.substring("maven:".length());
+            Repository repository = parse(location);
+            if (repository.layout() != Layout.MAVEN) {
+                throw new IllegalArgumentException(
+                        "maven: lock source must name a Maven-layout repository");
+            }
+            return repository;
+        }
+        if (source.startsWith("local:") || source.startsWith("https://")
+                || source.startsWith("http://")) {
+            return parse("jeno:" + source);
+        }
+        throw new IllegalArgumentException("lockfile v3 source must be a network URL, a "
+                + "local: directory, or maven:<declaration> — got '" + source + "'");
+    }
+
+    /**
+     * Resolve a publish/release target in the command's jeno-layout context.
+     * Because publish/release only write the native layout, a bare https/http
+     * URL (or a local: directory) means jeno layout here; Maven must be named
+     * explicitly as {@code maven:<declaration>} and will be rejected by the
+     * caller. Legacy {@code jeno:} target prefixes are rejected.
+     */
+    public static Repository resolveJenoTarget(JenoProject project, String target) {
         Repository named = project.repos().get(target);
-        return named != null ? named : parse(target);
+        if (named != null) {
+            return named;
+        }
+        if (target.startsWith("gh:")) {
+            throw new IllegalArgumentException(
+                    "gh: is a release channel, not a repository target");
+        }
+        if (target.startsWith("jeno:")) {
+            throw new IllegalArgumentException("jeno: target prefixes were removed; use "
+                    + "https://host/, local:<dir>, or a declared [repos.<name>] target");
+        }
+        if (target.startsWith("maven:")) {
+            return parse(target.substring("maven:".length()));
+        }
+        String location = target.startsWith("local:")
+                ? target.substring("local:".length()) : target;
+        return of("", "jeno", location);
     }
 
     /**
      * The explicit form: {@code [repos.<name>] type = "maven"|"jeno", url = ...}.
      * The type decides the layout — a static host can serve either one, so the
-     * protocol is a declared fact, never guessed from the URL. A url that starts
-     * with http is a network location; anything else is a directory ({@code ~}
-     * and project-relative paths allowed).
+     * layout is a declared fact, never guessed from the URL. <b>Omitting type
+     * means the native jeno layout</b>; Maven is the explicit foreign layout.
+     * A url that starts with http is a network location; anything else is a
+     * directory ({@code ~} and project-relative paths allowed).
      *
-     * <p>The declaration this builds is the canonical lock form, the same one
-     * the legacy string spellings produce, so the lockfile does not learn a new
-     * shape.
+     * <p>{@link #declaration()} is the internal legacy-canonical spelling
+     * shared with the legacy string parser. Lock v3 serializes through
+     * {@link #lockSource(Repository)} and reads through
+     * {@link #parseLockSource(String, int)}.
      */
     public static Repository of(String name, String type, String url) {
         return of(name, type, url, false);
@@ -132,7 +219,7 @@ public record Repository(String name, Layout layout, Transport transport,
      * declaration: it is a write policy, not an artifact fact.
      */
     public static Repository of(String name, String type, String url, boolean insecure) {
-        String kind = type == null || type.isBlank() ? "maven" : type.strip();
+        String kind = type == null || type.isBlank() ? "jeno" : type.strip();
         if (kind.equalsIgnoreCase(LegacyNames.REPOSITORY_TYPE)) {
             throw new IllegalArgumentException(LegacyNames.repositoryType());
         }
@@ -152,6 +239,12 @@ public record Repository(String name, Layout layout, Transport transport,
                     "url must be https://… , plain http on a private network"
                     + " (localhost/10/172.16-31/192.168/169.254/IPv6 ULA or link-local),"
                     + " or a directory");
+        }
+        if (location.matches("[A-Za-z][A-Za-z0-9+.-]*://.*")
+                && !location.startsWith("https://") && !isLocalNetworkHttp(location)) {
+            throw new IllegalArgumentException(
+                    "url scheme must be https://, private-network http://, or a local "
+                            + "directory — got '" + location + "'");
         }
         if (location.startsWith("jeno:") || location.startsWith("local:")) {
             throw new IllegalArgumentException(
@@ -372,12 +465,14 @@ public record Repository(String name, Layout layout, Transport transport,
     }
     private static String twoShapes() {
         return "a repository is a location plus a layout:\n"
-                + "  https://host/…          or local:<dir>       (Maven layout)\n"
-                + "  http://<private-ip>/…   or local:<dir>       (Maven layout, LAN only)\n"
-                + "  jeno:https://host/…      or jeno:local:<dir>   (jeno layout, artifact names,\n"
-                + "                                                no group)\n"
-                + "  jeno:http://<private-ip>/… or jeno:local:<dir> (jeno layout, LAN only)\n"
+                + "  [repos.<name>] url = \"https://host/…\" (or a directory)  → jeno layout by default\n"
+                + "  [repos.<name>] type = \"maven\" + url                    → Maven layout\n"
                 + "  plain http: literal private address only; public hosts need https.";
+    }
+
+    /** The location without a layout/transport prefix, for user-facing output. */
+    public String location() {
+        return isLocal() ? localPath : networkBase;
     }
 
     public boolean isLocal() {

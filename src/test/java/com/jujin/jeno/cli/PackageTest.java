@@ -133,8 +133,9 @@ class PackageTest {
             name = "demo"
             version = "1.0.0"
 
-            [repos]
-            fix = "local:fix-repo"
+            [repos.fix]
+            type = "maven"
+            url = "fix-repo"
 
             [deps]
             "com.example:lib-a" = "fix:1.0.0"

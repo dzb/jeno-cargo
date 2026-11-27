@@ -278,12 +278,36 @@ class InfoCommandTest {
     }
 
     @Test
-    void anJenoRepositoryHasNoSourceTree(@TempDir Path storeDir) throws Exception {
+    void infoDisplaysTheV3LockSourceWithoutTheLegacyJenoPrefix(
+            @TempDir Path storeDir) throws Exception {
         Files.writeString(dir.resolve("jeno.lock"), """
+            # jeno-lockfile-version: 3
             [[artifacts]]
             id = "widget"
             version = "1.0.0"
-            source = "jeno:https://repo.example/"
+            source = "https://repo.example/"
+            url = "https://repo.example/widget/1.0.0/widget-1.0.0.jar"
+            sha256 = "%s"
+            depth = 1
+            """.formatted("d".repeat(64)));
+
+        String output = run(storeDir, List.of("--json", "widget"));
+        var json = com.jujin.freeway.commons.json.JsonUtils.parseObject(output);
+        var provenance = json.getObject("provenance");
+
+        assertEquals("https://repo.example/", provenance.getString("source"));
+        assertEquals("https://repo.example/", provenance.getString("repository"));
+        assertEquals("jeno", provenance.getString("layout"));
+    }
+
+    @Test
+    void anJenoRepositoryHasNoSourceTree(@TempDir Path storeDir) throws Exception {
+        Files.writeString(dir.resolve("jeno.lock"), """
+            # jeno-lockfile-version: 3
+            [[artifacts]]
+            id = "widget"
+            version = "1.0.0"
+            source = "https://repo.example/"
             url = "https://repo.example/widget/1.0.0/widget-1.0.0.jar"
             sha256 = "%s"
             meta-sha256 = "%s"

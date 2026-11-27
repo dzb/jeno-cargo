@@ -1,5 +1,7 @@
 package com.jujin.jeno.resolve;
 
+import com.jujin.jeno.project.Repository;
+
 /**
  * jeno.lock as text (SPEC.md §4): one {@code [[artifacts]]} row per artifact,
  * sorted by id, each pinned by its own sha256 and its metadata's sha256 —
@@ -10,7 +12,7 @@ package com.jujin.jeno.resolve;
 public final class LockFile {
 
     /** Bump when a lock row or its semantics changes incompatibly. */
-    public static final int VERSION = 2;
+    public static final int VERSION = 3;
 
     private LockFile() {}
 
@@ -22,7 +24,8 @@ public final class LockFile {
             out.append("[[artifacts]]\n");
             out.append("id = ").append(string(artifact.id())).append('\n');
             out.append("version = ").append(string(artifact.version())).append('\n');
-            out.append("source = ").append(string(artifact.source())).append('\n');
+            out.append("source = ").append(string(
+                    Repository.lockSourceFor(artifact.source()))).append('\n');
             out.append("url = ").append(string(artifact.jarUrl())).append('\n');
             out.append("sha256 = ").append(string(digests.sha256(artifact.jarUrl()))).append('\n');
             if (artifact.metadataUrl() != null) {

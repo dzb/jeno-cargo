@@ -1,5 +1,6 @@
 # jeno builds itself with jeno (DESIGN.md M3/M5 acceptance). The freeway jars come
-# from the vendor directory — a local: Maven-layout repository whose poms are
+# from the vendor directory — a local Maven-layout repository (`type = "maven"`)
+# whose poms are
 # curated standalone manifests (no parent chain), versions re-pinned without
 # the snapshot suffix. JUnit is a main dependency because JenoTestFork (part of
 # jeno's production surface) compiles against the Platform API; [toolchain]
@@ -8,7 +9,7 @@
 # Every byte is sha256-pinned in jeno.lock.
 [project]
 name = "jeno"
-version = "0.3.3"
+version = "0.3.5"
 main = "com.jujin.jeno.cli.Jeno"
 
 [java]
@@ -17,8 +18,9 @@ version = 25
 [limits]
 max-depth = 3   # junit arrives through jupiter-engine -> platform-engine -> opentest4j
 
-[repos]
-vendor = "local:vendor"
+[repos.vendor]
+type = "maven"
+url = "vendor"
 
 [deps]
 # Runtime bridge for Freeway's SLF4J service provider; jeno does not expose

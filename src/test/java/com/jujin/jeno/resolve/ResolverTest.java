@@ -956,6 +956,52 @@ class ResolverTest {
     }
 
     @Test
+    void anAbsoluteNativeSourceAndItsSiblingClosureResolveWithoutARepoAlias() {
+        String base = "jeno:https://dzb.github.io/freeway/";
+        String db = "https://dzb.github.io/freeway/freeway-db/2.0.2/"
+                + "freeway-db-2.0.2.jeno.toml";
+        String commons = "https://dzb.github.io/freeway/freeway-commons/2.0.2/"
+                + "freeway-commons-2.0.2.jeno.toml";
+        DescriptorSource descriptors = url -> {
+            if (url.equals(db)) {
+                return """
+                    [project]
+                    name = "freeway-db"
+                    version = "2.0.2"
+
+                    [deps]
+                    "freeway-commons" = "2.0.2"
+                    """;
+            }
+            if (url.equals(commons)) {
+                return """
+                    [project]
+                    name = "freeway-commons"
+                    version = "2.0.2"
+                    """;
+            }
+            throw new IllegalStateException("unexpected descriptor " + url);
+        };
+
+        ResolvedGraph graph = Resolver.resolve(project("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [deps]
+            "freeway-db" = "https://dzb.github.io/freeway/@2.0.2"
+            """), pomSource(), descriptors);
+
+        assertEquals(base, artifact(graph, "freeway-db").source());
+        assertEquals(base, artifact(graph, "freeway-commons").source(),
+                "the bare sibling inherits the absolute source's actual repository base");
+        assertEquals(java.util.Set.of("freeway-db", "freeway-commons"),
+                graph.artifacts().stream()
+                        .map(ResolvedGraph.ResolvedArtifact::id)
+                        .collect(java.util.stream.Collectors.toSet()));
+    }
+
+    @Test
     void oneSourceCannotAppearUnderTwoIds() {
         ResolveException error = assertThrows(ResolveException.class,
                 () -> Resolver.resolve(project("""
@@ -979,9 +1025,12 @@ class ResolverTest {
                     name = "demo"
                     version = "0.1.0"
 
-                    [repos]
-                    a = "https://a.example/"
-                    b = "https://b.example/"
+                    [repos.a]
+                    type = "maven"
+                    url = "https://a.example/"
+                    [repos.b]
+                    type = "maven"
+                    url = "https://b.example/"
 
                     [deps]
                     "com.example:a" = "a:1.0.0"

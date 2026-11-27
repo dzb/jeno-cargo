@@ -79,8 +79,8 @@ class JenoRepositoryTest {
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            mine = "jeno:%s"
+            [repos.mine]
+            url = "%s"
 
             [deps]
             "widget" = "mine:1.0.0"
@@ -96,12 +96,44 @@ class JenoRepositoryTest {
         assertEquals(2, locked.size(), "the descriptor's dependency joins the closure");
         LockedArtifact widget = locked.stream().filter(row -> row.id().equals("widget"))
                 .findFirst().orElseThrow();
-        assertEquals("jeno:" + base, widget.source(),
+        assertEquals("jeno:" + base + "/", widget.source(),
                 "source keeps the declaration, like a local: repository");
         assertEquals(ArtifactLocations.jenoFile("jeno:" + base, "widget", "1.0.0", "jar"),
                 widget.url());
         assertTrue(locked.stream().anyMatch(row -> row.id().equals("gadget")),
                 "the sibling in the same repository is resolved");
+    }
+
+    @Test
+    void anAbsoluteNativeSourceResolvesThroughTheStore(@TempDir Path storeDir)
+            throws Exception {
+        serve("""
+            [project]
+            name = "gadget"
+            version = "0.9.0"
+            """.getBytes(), "/freeway/gadget/0.9.0/gadget-0.9.0.jeno.toml");
+        serve(validJar(), "/freeway/gadget/0.9.0/gadget-0.9.0.jar");
+        String base = start();
+        Path consumer = Files.createDirectories(dir.resolve("absolute-consumer"));
+        Files.writeString(consumer.resolve("jeno.toml"), """
+            [project]
+            name = "consumer"
+            version = "0.1.0"
+
+            [deps]
+            "gadget" = "%s/freeway/@0.9.0"
+            """.formatted(base));
+        ArtifactStore store = new ArtifactStore(storeDir);
+        LockService lockService = new LockService(store, new StorePomSource(store),
+                new StoreDescriptorSource(store));
+
+        lockService.refresh(consumer);
+
+        List<LockedArtifact> locked = LockFileReader.read(
+                Files.readString(consumer.resolve("jeno.lock")));
+        assertEquals(1, locked.size());
+        assertEquals("gadget", locked.getFirst().id());
+        assertEquals("jeno:" + base + "/freeway/", locked.getFirst().source());
     }
 
     @Test
@@ -128,16 +160,16 @@ class JenoRepositoryTest {
         assertEquals(0, new BuildCommand(store, project).execute(List.of()));
         assertEquals(0, new PackageCommand(store, project).execute(List.of()));
 
-        int exit = new PublishCommand(project).execute(List.of("jeno:" + base + "/repo/"));
+        int exit = new PublishCommand(project).execute(List.of(base + "/repo/"));
 
-        assertEquals(0, exit, "a group is not needed for the jeno: layout");
+        assertEquals(0, exit, "a group is not needed for the jeno layout");
         assertEquals(List.of(
                 "/repo/demo/0.1.0/demo-0.1.0.jar",
                 "/repo/demo/0.1.0/demo-0.1.0.jeno.toml",
                 "/repo/demo/0.1.0/demo-0.1.0.sha256",
                 "/repo/demo/index.jeno.toml"), puts);
 
-        exit = new PublishCommand(project).execute(List.of(base + "/maven/"));
+        exit = new PublishCommand(project).execute(List.of("maven:" + base + "/maven/"));
         assertEquals(1, exit, "a Maven-layout target is refused: jeno writes no POM");
     }
 
@@ -160,7 +192,7 @@ class JenoRepositoryTest {
         assertEquals(0, new BuildCommand(store, project).execute(List.of()));
         assertEquals(0, new PackageCommand(store, project).execute(List.of()));
 
-        int exit = new PublishCommand(project).execute(List.of("jeno:" + base + "/"));
+        int exit = new PublishCommand(project).execute(List.of(base + "/"));
 
         assertEquals(0, exit);
         String descriptor = Files.readString(project.resolve("target/dist/demo-0.1.0.jeno.toml"));
@@ -170,7 +202,7 @@ class JenoRepositoryTest {
     }
 
     @Test
-    void publishingElsewhereRefusesTheSibling(@TempDir Path storeDir) throws Exception {
+    void publishingElsewhereWritesAnAbsoluteNativeSource(@TempDir Path storeDir) throws Exception {
         serve("""
             [project]
             name = "gadget"
@@ -187,45 +219,48 @@ class JenoRepositoryTest {
         assertEquals(0, new BuildCommand(store, project).execute(List.of()));
         assertEquals(0, new PackageCommand(store, project).execute(List.of()));
 
-        java.io.PrintStream original = System.err;
-        var errors = new java.io.ByteArrayOutputStream();
-        int exit;
-        try {
-            System.setErr(new java.io.PrintStream(errors, true, StandardCharsets.UTF_8));
-            exit = new PublishCommand(project)
-                    .execute(List.of("jeno:http://localhost:1/elsewhere/"));
-        } finally {
-            System.setErr(original);
-        }
+        int exit = new PublishCommand(project)
+                .execute(List.of(base + "/elsewhere/"));
 
-        String message = errors.toString(StandardCharsets.UTF_8);
-        assertEquals(1, exit);
-        assertTrue(message.contains("belongs to repository 'mine'"), message);
-        assertTrue(message.contains("http://localhost:1/elsewhere/"),
-                "the message names where you are publishing instead: " + message);
+        assertEquals(0, exit);
+        String descriptor = Files.readString(
+                project.resolve("target/dist/demo-0.1.0.jeno.toml"));
+        assertTrue(descriptor.contains(
+                        "\"gadget\" = \"" + base + "/@0.9.0\""),
+                "a network source becomes an absolute descriptor fact: " + descriptor);
+        assertTrue(!descriptor.contains("mine:"), descriptor);
     }
 
     @Test
-    void aGhTargetStillRefusesARepoBoundDependency(@TempDir Path storeDir) throws Exception {
+    void aGhTargetCarriesARepoBoundDependencyAsAnAbsoluteSource(
+            @TempDir Path storeDir) throws Exception {
         String base = start();
         Path project = siblingProject(base);
         Files.createDirectories(project.resolve("target/classes"));
+        Path dist = Files.createDirectories(project.resolve("target/dist"));
+        Files.writeString(dist.resolve("demo-0.1.0.jar"), "jar bytes");
         ArtifactStore store = new ArtifactStore(storeDir);
-        // no lock/build needed: the dependency rule is checked before any upload
 
-        java.io.PrintStream original = System.err;
+        java.io.PrintStream originalErr = System.err;
         var errors = new java.io.ByteArrayOutputStream();
         int exit;
         try {
             System.setErr(new java.io.PrintStream(errors, true, StandardCharsets.UTF_8));
             exit = new PublishCommand(project).execute(List.of("gh:acme/demo"));
         } finally {
-            System.setErr(original);
+            System.setErr(originalErr);
         }
 
-        assertEquals(1, exit);
-        assertTrue(errors.toString(StandardCharsets.UTF_8)
-                .contains("belongs to repository 'mine'"));
+        assertEquals(1, exit, "the missing GitHub token is still a failure");
+        assertTrue(errors.toString(StandardCharsets.UTF_8).contains("JENO_GITHUB_TOKEN"),
+                errors.toString());
+        assertTrue(!errors.toString(StandardCharsets.UTF_8)
+                        .contains("belongs to repository 'mine'"),
+                "the repo-bound dependency is now serializable: "
+                        + errors.toString());
+        assertTrue(Files.readString(dist.resolve("demo-0.1.0.jeno.toml"))
+                        .contains("\"gadget\" = \"" + base + "/@0.9.0\""),
+                "the descriptor is self-contained before the token check");
     }
 
     private Path siblingProject(String base) throws IOException {
@@ -245,8 +280,8 @@ class JenoRepositoryTest {
             version = "0.1.0"
             main = "demo.Main"
 
-            [repos]
-            mine = "jeno:%s"
+            [repos.mine]
+            url = "%s"
 
             [deps]
             "gadget" = "mine:0.9.0"

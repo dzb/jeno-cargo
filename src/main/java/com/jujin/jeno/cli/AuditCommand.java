@@ -26,8 +26,8 @@ import java.util.Set;
  * {@code jeno audit} — known vulnerabilities for the locked closure, from OSV.
  *
  * <p>Only artifacts addressed by Maven coordinates are checked: OSV's Maven
- * ecosystem is keyed by {@code group:artifact}, which a {@code gh:} release, an
- * {@code jeno:} repository, a local repository or a bare URL do not have. Those
+ * ecosystem is keyed by {@code group:artifact}, which a {@code gh:} release, a
+ * jeno-native repository, a local repository or a bare URL do not have. Those
  * are listed as <em>not checked</em> with the reason — never as clean, because
  * "nothing found" and "nothing could be asked" are different answers.
  *

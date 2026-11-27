@@ -93,8 +93,9 @@ class ReproduciblePackageTest {
         Path vendor = root.resolve("vendor");
         dependency(vendor);
         Path project = project("uber", """
-            [repos]
-            v = "local:../vendor"
+            [repos.v]
+            type = "maven"
+            url = "../vendor"
 
             [deps]
             "org.example:dep" = "v:1.0.0"

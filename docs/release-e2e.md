@@ -90,8 +90,8 @@ exec /usr/bin/curl --resolve github.com:443:140.82.113.3 --http1.1 -4 "$@"
 密钥临时生成在 `/tmp/jeno-sig`（`minisign -G -W`），未写入仓库；安装用干净 HOME。
 
 ```text
-$ JENO_MINISIGN_KEY=/tmp/jeno-sig/minisign.key   JENO_MINISIGN_PUBKEY=/tmp/jeno-sig/minisign.pub   JENO_MINISIGN=/tmp/minisign-pkg/root/usr/bin/minisign   jeno release jeno:local:/tmp/jeno-sig/repo
-released jeno:local:/tmp/jeno-sig/repo; installer:
+$ JENO_MINISIGN_KEY=/tmp/jeno-sig/minisign.key   JENO_MINISIGN_PUBKEY=/tmp/jeno-sig/minisign.pub   JENO_MINISIGN=/tmp/minisign-pkg/root/usr/bin/minisign   jeno release local:/tmp/jeno-sig/repo
+released local:/tmp/jeno-sig/repo; installer:
   curl -fsSL file:///tmp/jeno-sig/repo/sigapp/install.sh | bash
 ```
 

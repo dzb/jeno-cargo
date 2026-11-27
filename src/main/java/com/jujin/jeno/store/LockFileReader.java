@@ -2,6 +2,7 @@ package com.jujin.jeno.store;
 
 import com.jujin.freeway.commons.toml.TomlUtils;
 import com.jujin.jeno.cli.LegacyNames;
+import com.jujin.jeno.project.Repository;
 import com.jujin.jeno.resolve.Scope;
 
 import java.util.ArrayList;
@@ -24,7 +25,7 @@ public final class LockFileReader {
     private LockFileReader() {}
 
     public static List<LockedArtifact> read(String text) {
-        lockfileVersion(text);
+        int lockVersion = lockfileVersion(text);
         Map<String, Object> root = TomlUtils.parse(text);
         for (Map.Entry<String, Object> entry : root.entrySet()) {
             if (!entry.getKey().equals("artifacts")) {
@@ -56,12 +57,12 @@ public final class LockFileReader {
                             + "' in the row for '" + fields.get("id") + "'");
                 }
             }
-            String source = string(fields, "source");
-            if (source.startsWith(LegacyNames.REPOSITORY_PREFIX)) {
+            String rawSource = string(fields, "source");
+            if (rawSource.startsWith(LegacyNames.REPOSITORY_PREFIX)) {
                 throw new LegacyNames.LegacyException(LegacyNames.lockSource(
-                        string(fields, "id"), source));
+                        string(fields, "id"), rawSource));
             }
-            if (source.startsWith("gitee:")) {
+            if (rawSource.startsWith("gitee:")) {
                 // every reader of a lock gets the same sentence: build, info, test,
                 // outdated — the species is gone, the row has to be re-declared
                 throw new StoreException("this jeno.lock pins gitee: artifacts, and the "
@@ -69,6 +70,7 @@ public final class LockFileReader {
                         + "read) — give '" + fields.get("id") + "' a release jar URL or a "
                         + "[repos] entry in jeno.toml, then run jeno lock");
             }
+            String source = normalizedSource(rawSource, lockVersion, string(fields, "id"));
             LockedArtifact artifact = new LockedArtifact(
                     string(fields, "id"), string(fields, "version"), source,
                     string(fields, "url"), string(fields, "sha256"),
@@ -109,9 +111,10 @@ public final class LockFileReader {
      * ignore it, while this reader can refuse a future format instead of
      * guessing. A lock written before the marker existed is version 1.
      */
-    private static void lockfileVersion(String text) {
+    private static int lockfileVersion(String text) {
         boolean sawArtifacts = false;
         boolean sawVersion = false;
+        int foundVersion = 1;
         for (String line : text.split("\n", -1)) {
             String stripped = line.strip();
             if (stripped.equals("[[artifacts]]")) {
@@ -145,6 +148,32 @@ public final class LockFileReader {
                         + com.jujin.jeno.resolve.LockFile.VERSION
                         + ") — upgrade jeno before using this lock");
             }
+            foundVersion = version;
+        }
+        return foundVersion;
+    }
+
+    /**
+     * Keep the in-memory canonical source spelling stable for every command.
+     * v3's jeno-default grammar is normalized back to the internal
+     * {@code jeno:...} form. The lock file itself writes the v3 spelling, so
+     * this translation is confined to the reader; obsolete lock versions are
+     * rejected rather than interpreted with a second grammar.
+     */
+    private static String normalizedSource(String source, int lockVersion, String id) {
+        if (lockVersion <= 2) {
+            return source;
+        }
+        if (source.equals("central") || source.equals("url")
+                || source.startsWith("gh:")) {
+            return source;
+        }
+        try {
+            return Repository.parseLockSource(source, lockVersion).declaration();
+        } catch (IllegalArgumentException e) {
+            throw new StoreException("jeno.lock: invalid source for '" + id + "': "
+                    + e.getMessage() + " (lockfile v3 uses jeno layout by default; "
+                    + "write maven:<URL> for a Maven repository)");
         }
     }
 

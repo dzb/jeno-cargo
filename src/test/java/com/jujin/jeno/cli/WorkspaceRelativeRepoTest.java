@@ -45,8 +45,9 @@ class WorkspaceRelativeRepoTest {
         b = root.resolve("libs/b");
         a = root.resolve("apps/a");
         module(b, "b", "com.example", """
-            [repos]
-            v = "local:../vendor"
+            [repos.v]
+            type = "maven"
+            url = "../vendor"
 
             [deps]
             "org.example:lib" = "v:1.0.0"
@@ -60,8 +61,9 @@ class WorkspaceRelativeRepoTest {
             }
             """);
         module(a, "a", "com.example", """
-            [repos]
-            v = "local:../vendor-a"
+            [repos.v]
+            type = "maven"
+            url = "../vendor-a"
 
             [deps]
             "com.example:b" = "v:0.1.0"
@@ -125,8 +127,9 @@ class WorkspaceRelativeRepoTest {
     void aSingleProjectWithARelativeRepositoryIsUnchanged() throws Exception {
         Path solo = root.resolve("solo");
         module(solo, "solo", null, """
-            [repos]
-            v = "local:../vendor-solo"
+            [repos.v]
+            type = "maven"
+            url = "../vendor-solo"
 
             [deps]
             "org.example:lib" = "v:1.0.0"
@@ -155,8 +158,9 @@ class WorkspaceRelativeRepoTest {
         Path one = root.resolve("one");
         Path two = root.resolve("two");
         module(one, "one", null, """
-            [repos]
-            v = "local:vendor"
+            [repos.v]
+            type = "maven"
+            url = "vendor"
 
             [deps]
             "org.example:lib" = "v:1.0.0"
@@ -167,8 +171,9 @@ class WorkspaceRelativeRepoTest {
             }
             """);
         module(two, "two", null, """
-            [repos]
-            v = "local:vendor"
+            [repos.v]
+            type = "maven"
+            url = "vendor"
 
             [deps]
             "org.example:lib" = "v:1.0.0"

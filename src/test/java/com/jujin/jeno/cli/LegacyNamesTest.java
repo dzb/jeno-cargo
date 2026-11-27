@@ -89,7 +89,8 @@ class LegacyNamesTest {
     void theOldRepositoryPrefixIsRejected() {
         var thrown = assertThrows(IllegalArgumentException.class,
                 () -> Repository.parse("mjm:local:/tmp/repo"));
-        assertTrue(thrown.getMessage().contains("jeno:local:"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("[repos.<name>]"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("type = \"jeno\""), thrown.getMessage());
     }
 
     @Test
@@ -102,7 +103,8 @@ class LegacyNamesTest {
                 [deps]
                 "a:b" = "mjm:local:/tmp/repo"
                 """));
-        assertTrue(thrown.getMessage().contains("jeno:"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("[repos.<name>]"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("type = \"jeno\""), thrown.getMessage());
     }
 
     @Test
@@ -288,7 +290,7 @@ class LegacyNamesTest {
                         depth = 1
                         """));
         assertTrue(thrown.getMessage().contains("com.example:lib"), thrown.getMessage());
-        assertTrue(thrown.getMessage().contains("jeno:"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("jeno.lock"), thrown.getMessage());
         assertTrue(thrown.getMessage().contains("jeno lock"), thrown.getMessage());
     }
 

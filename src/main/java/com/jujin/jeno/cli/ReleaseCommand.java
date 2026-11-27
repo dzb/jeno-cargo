@@ -26,8 +26,8 @@ import java.util.List;
  * {@code target/dist/<name>-<version>.tar.gz}.
  *
  * <p>Without a target it prepares {@code target/dist/release/} and prints the
- * upload checklist. With {@code gh:}, {@code jeno:https://…},
- * {@code jeno:http://<private-ip>/} (LAN only), {@code jeno:local:<dir>}, or a
+ * upload checklist. With {@code gh:}, {@code https://…},
+ * {@code http://<private-ip>/} (LAN only), {@code local:<dir>}, or a
  * declared jeno repository name it uploads the installer, a bootstrap {@code install.sh},
  * a checksum and {@code release.json}, then reads the installer back and
  * compares its sha256 — a publish that cannot be verified is not done.
@@ -55,8 +55,8 @@ public final class ReleaseCommand implements Command {
 
     @Override
     public String summary() {
-        return "publish a bundled installer to gh:, a jeno URL, or a declared "
-                + "jeno repository";
+        return "publish a bundled installer to gh:, a jeno URL/directory, or a "
+                + "declared jeno repository";
     }
 
     @Override
@@ -65,8 +65,8 @@ public final class ReleaseCommand implements Command {
                needs target/dist/<name>-<version>.tar.gz (run jeno bundle first);
                signed with minisign by default: set JENO_MINISIGN_KEY, and optionally
                JENO_MINISIGN_PUBKEY/JENO_MINISIGN; --allow-unsigned is the explicit opt-out.
-               targets: gh:<owner>/<repo>, jeno:https://host/, jeno:http://<private-ip>/
-               (literal LAN address only; public hosts need https), jeno:local:<dir>,
+               targets: gh:<owner>/<repo>, https://host/, http://<private-ip>/
+               (literal LAN address only; public hosts need https), local:<dir>,
                or the name of a declared [repos.<name>] with type = "jeno".
                """ + "\n" + RepositoryHelp.INSECURE_TOKEN + """
 
@@ -251,7 +251,7 @@ public final class ReleaseCommand implements Command {
         if (plan.repository != null && plan.repository.isPlainHttp()
                 && !plan.repository.isLoopbackNetwork()) {
             System.err.println("warning: releasing over plain HTTP ("
-                    + plan.repository.declaration() + ") — the traffic and JENO_PUBLISH_TOKEN"
+                    + plan.repository.location() + ") — the traffic and JENO_PUBLISH_TOKEN"
                     + " are not encrypted");
         }
 
@@ -582,11 +582,11 @@ public final class ReleaseCommand implements Command {
             return new Plan(null, target, name, version, tar, stable, windows, urls);
         }
 
-        Repository repository = Repository.resolveTarget(project, target);
+        Repository repository = Repository.resolveJenoTarget(project, target);
         if (repository.layout() != Repository.Layout.JENO) {
             throw new IllegalArgumentException("release publishes installers, not Maven "
-                    + "artifacts — use gh:<owner>/<repo>, jeno:https://host/,"
-                    + " jeno:http://<private-ip>/ (LAN only) or jeno:local:<dir>");
+                    + "artifacts — use gh:<owner>/<repo>, https://host/, "
+                    + "http://<private-ip>/ (LAN only) or local:<dir>");
         }
         String root = repository.isLocal()
                 ? repository.directory(ArtifactLocations.projectRoot()).toUri().toString()

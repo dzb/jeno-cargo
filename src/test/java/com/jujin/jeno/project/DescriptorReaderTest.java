@@ -96,8 +96,43 @@ class DescriptorReaderTest {
                 "com.corp:lib" = "corp:2.1.0"
                 """, "mylib", "1.2.0"));
 
-        assertTrue(error.getMessage().contains("cannot declare repositories"),
+        assertTrue(error.getMessage().contains("cannot declare repository aliases"),
                 error.getMessage());
+    }
+
+    @Test
+    void descriptorCanCarryAnAbsoluteNativeSourceWithoutARepoTable() {
+        Descriptor descriptor = DescriptorReader.parse("""
+            [project]
+            name = "mylib"
+            version = "1.2.0"
+
+            [deps]
+            "freeway-db" = "https://dzb.github.io/freeway/@2.0.2"
+            """, "mylib", "1.2.0");
+
+        Requirement requirement = descriptor.requirements().get(0);
+        assertEquals(Species.NAMED, requirement.species());
+        assertEquals("jeno:https://dzb.github.io/freeway/", requirement.repositoryUrl());
+        assertEquals("2.0.2", requirement.version());
+    }
+
+    @Test
+    void descriptorBareNamesInheritTheActualSiblingSource() {
+        Descriptor descriptor = DescriptorReader.parse("""
+            [project]
+            name = "mylib"
+            version = "1.2.0"
+
+            [deps]
+            "freeway-db" = "2.0.2"
+            """, "mylib", "1.2.0", "jeno:https://mirror.example/freeway/");
+
+        Requirement requirement = descriptor.requirements().get(0);
+        assertEquals(Species.NAMED, requirement.species());
+        assertEquals("jeno:https://mirror.example/freeway/", requirement.repositoryUrl());
+        assertEquals("named:jeno:https://mirror.example/freeway/freeway-db",
+                requirement.identity());
     }
 
     @Test
@@ -136,8 +171,9 @@ class DescriptorReaderTest {
                 name = "mylib"
                 version = "1.2.0"
 
-                [repos]
-                corp = "https://nexus.corp.internal/repository/maven/"
+                [repos.corp]
+                type = "maven"
+                url = "https://nexus.corp.internal/repository/maven/"
 
                 [deps.corp]
                 "com.corp:internal" = "2.1.0"

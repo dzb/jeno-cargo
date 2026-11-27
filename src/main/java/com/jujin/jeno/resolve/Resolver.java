@@ -293,17 +293,17 @@ public final class Resolver {
                         yield new Metadata(edges, descriptor.retract());
                     }
                     case NAMED -> {
-                        String base = template.repository() == null
-                                ? ArtifactLocations.centralBase()
-                                : project.repos().get(template.repository()).declaration();
+                        String base = namedBase(template);
                         String url = ArtifactLocations.jenoFile(base, template.id(), version,
                                 "jeno.toml");
                         String text = fetchDescriptor(url);
                         if (text == null || text.isBlank()) {
-                            throw new ProjectException("no descriptor at " + url);
+                            throw new ProjectException("no descriptor at " + url
+                                    + " — if this repository is Maven-layout, declare "
+                                    + "type = \"maven\" in its [repos] entry");
                         }
                         Descriptor descriptor = DescriptorReader.parse(text, template.id(), version,
-                                template.repository());
+                                base);
                         List<Edge> edges = descriptor.requirements().stream()
                                 .map(requirement -> new Edge(requirement,
                                         Set.<PomDependency.Exclusion>of(),
@@ -535,7 +535,9 @@ public final class Resolver {
                             ? "central"
                             : project.repos().get(template.repository()).declaration();
                     case GH -> originById.get(id);
-                    case NAMED -> project.repos().get(template.repository()).declaration();
+                    case NAMED -> template.repositoryUrl() != null
+                            ? template.repositoryUrl()
+                            : project.repos().get(template.repository()).declaration();
                     case URL -> "url";
                 };
                 artifacts.add(new ResolvedGraph.ResolvedArtifact(id, version, species, source,
@@ -614,11 +616,35 @@ public final class Resolver {
             return reached;
         }
 
+        /**
+         * The canonical base for a native requirement. Manifest aliases are
+         * resolved through this project's [repos]; descriptor-absolute
+         * requirements already carry a canonical jeno declaration and must not
+         * depend on a consumer-local alias.
+         */
+        private String namedBase(Requirement template) {
+            if (template.repositoryUrl() != null) {
+                return template.repositoryUrl();
+            }
+            if (template.repository() != null) {
+                Repository declared = project.repos().get(template.repository());
+                if (declared != null) {
+                    return declared.declaration();
+                }
+            }
+            throw new ResolveException("native requirement '" + template.id()
+                    + "' has no repository source");
+        }
+
         /** The repository a requirement names, or null for Central's default. */
         private Repository repository(Requirement template) {
-            return template.repository() == null
-                    ? null
-                    : project.repos().get(template.repository());
+            if (template.repository() != null) {
+                return project.repos().get(template.repository());
+            }
+            if (template.repositoryUrl() != null) {
+                return Repository.parse(template.repositoryUrl());
+            }
+            return null;
         }
 
         /** The base a POM fetch uses: the https base, or the directory itself. */

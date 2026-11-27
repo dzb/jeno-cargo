@@ -19,7 +19,7 @@ import java.util.List;
  * you: it reports what exists above what you pinned, and you choose. Nothing
  * is written; {@code jeno lock} is what applies a change.
  *
- * <p>Central artifacts use {@code maven-metadata.xml}; named {@code jeno:}
+ * <p>Central artifacts use {@code maven-metadata.xml}; named jeno-native
  * artifacts use their per-artifact {@code index.jeno.toml} when present. A
  * {@code gh:} release carries no version index — the tag is the version — and
  * a bare URL leaf has no metadata at all. Uncheckable rows are listed as
@@ -186,7 +186,7 @@ public final class OutdatedCommand implements Command {
                     repository = Repository.parse(source);
                 } catch (IllegalArgumentException unrecognized) {
                     unchecked.add(new Skipped(artifact.id(), reason,
-                            "unrecognized source: " + source));
+                            "unrecognized source: " + Repository.displaySource(source)));
                     continue;
                 }
                 try {
@@ -207,7 +207,7 @@ public final class OutdatedCommand implements Command {
                     // ArtifactReasons already labels this named-repository; do not
                     // turn an unknown source into a command failure
                     unchecked.add(new Skipped(artifact.id(), "named-repository",
-                            "unrecognized source: " + source));
+                            "unrecognized source: " + Repository.displaySource(source)));
                     continue;
                 }
                 try {

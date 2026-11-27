@@ -184,8 +184,9 @@ class LockCheckTest {
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            vendor = "local:vendor"
+            [repos.vendor]
+            type = "maven"
+            url = "vendor"
 
             [deps]
             "com.example:lib-a" = "vendor:1.0.0"

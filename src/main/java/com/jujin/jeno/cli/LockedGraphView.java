@@ -2,6 +2,7 @@ package com.jujin.jeno.cli;
 
 import com.jujin.jeno.project.DescriptorSource;
 import com.jujin.jeno.project.JenoProject;
+import com.jujin.jeno.project.Repository;
 import com.jujin.jeno.pom.PomSource;
 import com.jujin.jeno.resolve.ResolvedGraph;
 import com.jujin.jeno.resolve.Resolver;
@@ -111,8 +112,9 @@ final class LockedGraphView {
                 continue;
             }
             if (!row.source().equals(artifact.source())) {
-                add(differences, id + ": lock source " + row.source() + ", manifest "
-                        + artifact.source());
+                add(differences, id + ": lock source "
+                        + Repository.displaySource(row.source()) + ", manifest "
+                        + Repository.displaySource(artifact.source()));
             }
             if (row.scope() != artifact.scope()) {
                 add(differences, id + ": lock scope " + scopeName(row.scope())

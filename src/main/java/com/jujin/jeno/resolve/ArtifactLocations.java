@@ -84,7 +84,11 @@ public final class ArtifactLocations {
         return repository.declaration();
     }
 
-    /** The declaration text a repository is addressed by — the lock's {@code source}. */
+    /**
+     * The internal legacy-canonical declaration for a named repository. This
+     * is not the lock v3 text; lock serialization goes through
+     * {@code Repository.lockSource}.
+     */
     public static String repositoryDeclaration(Map<String, Repository> repos, String name) {
         Repository repository = repos.get(name);
         if (repository == null) {

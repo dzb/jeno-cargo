@@ -12,7 +12,7 @@ schema 封闭,拼写错误(`[dep]` ≠ `[deps]`)不会静默失效。
 
 ## 0. 四个文件
 
-**名称**：本工具曾用前一代名称；旧文件、旧前缀与旧 `[repos] type` 不被读取，命令会给出改名/重发布提示（集中实现见 `LegacyNames`，行为见 §6）。
+**名称**：本工具曾用前一代名称；旧文件、旧 manifest 前缀与旧 `[repos] type` 不被读取，命令会给出改名/重发布提示（集中实现见 `LegacyNames`，行为见 §6）。旧 lock 版本仅作为一次性迁移输入。
 
 | 文件 | 谁写 | 谁读 | 提交版本库 |
 |---|---|---|---|
@@ -92,30 +92,56 @@ key = 坐标,value 形态决定物种:
 | 值形态 | 物种 | 要求 |
 |---|---|---|
 | `"1.2.3"` | central | 版本字符串非空、无空白;**禁止 version ranges**(`[1.0,2.0)`)。带 classifier 的依赖沿 pom 传递时,classifier 是身份的一部分(`group:artifact:classifier`),URL 为 `artifact-version-classifier.jar` |
-| `"corp:1.2.3"` | 命名仓库 | 只查 `corp` 这个仓库,**不回退**;`corp` 必须在 `[repos]` 里声明(否则报错并列出可用仓库名);版本规则与 central 相同(非空、无空白、禁 ranges/snapshot)。若 `corp` 是 Maven 布局 → 读 pom;若是 `jeno:` 仓库 → 读描述符(见下) |
+| `"corp:1.2.3"` | 命名仓库 | 只查 `corp` 这个仓库,**不回退**;`corp` 必须在 `[repos]` 里声明(否则报错并列出可用仓库名);版本规则与 central 相同(非空、无空白、禁 ranges/snapshot)。若 `corp` 是 Maven 布局 → 读 pom;若是 jeno layout 仓库 → 读描述符(见下) |
 | `"gh:owner/repo@tag"` | jeno 原生 | tag 为可选 `v` 前缀 + semver;展开规则见 §2.2 |
+| `"https://<jeno-repo-base>/@1.2.3"` | 绝对 jeno 原生 source | key 是 native artifact name,URL base 必须是网络 jeno 仓库,末尾 `@version` 是 semver;不需要消费者声明同名 alias。私有网络 `http://<literal-ip>/…/@1.2.3` 同样允许 |
 | `"https://…/x.jar"` | 裸 URL(叶子) | 必须 https、以 `.jar` 结尾 |
 
-**`jeno:` 仓库**(`[repos] mine = "jeno:https://repo.example/"` 或 `"jeno:local:../vendor"`):jeno 自己的两层布局,发布物三件套
-平铺在 `<base>/<name>/<version>/` 下(`<name>` = 发布方 `[project].name`),**不需要 `[project].group`**。
-传输可以是 HTTPS(`jeno:https://…`)、字面私有网络 HTTP(`jeno:http://<private-ip>/…`,LAN 专用)
-或本地目录(`jeno:local:<dir>`,`~` 展开、相对路径相对项目根,`jeno publish jeno:local:<dir>` 直接写入)。
+**jeno-native 仓库**(推荐结构化):
+`[repos.mine]` 省略 `type` 即 jeno layout,`url = "https://repo.example/"` 或本地 `url = "../vendor"`。
+仓库声明只接受结构化 `[repos.<name>]` 表;旧字符串声明(`mine = "https://…"`、
+`mine = "jeno:local:…"` 等)已移除,读到即报可执行的迁移错误。
+发布物三件套平铺在 `<base>/<name>/<version>/` 下(`<name>` = 发布方 `[project].name`),
+**不需要 `[project].group`**。传输可以是 HTTPS、字面私有网络 HTTP(LAN 专用)或本地目录
+(`~` 展开、相对路径相对项目根;`jeno publish local:<dir>` 直接写入)。
 依赖写成 `"<name>" = "mine:<semver>"`;元数据取自同目录的
 `.jeno.toml` 描述符,`[project].name` 必须与 key 一致(由 `DescriptorReader` 校验)。描述符里的裸名+裸版本
-指向同一仓库的兄弟工件(描述符只写事实,不写仓库规则)——**这条兄弟规则仅适用于从 `jeno:` 仓库取到的
-描述符**;从 `gh:` 取到的描述符里写裸名不会变成同仓库,仍按 Central 坐标报错。`jeno:https://` 与
-`jeno:local:` 都支持;`http://` 只接受**字面私有网络地址**(localhost/127/8、10/8、
+指向同一仓库的兄弟工件(描述符只写事实,不写仓库规则)——**这条兄弟规则仅适用于从 jeno layout
+仓库取到的描述符**;从 `gh:` 取到的描述符里写裸名不会变成同仓库,仍按 Central 坐标报错。
+`http://` 只接受**字面私有网络地址**(localhost/127/8、10/8、
 172.16-31、192.168/16、169.254/16、IPv6 ::1/fc00::/7/fe80::/10),公网 http 与主机名一律拒绝;
 store 索引与 `--offline` 行为不变。
 
+**absolute native source** 用于 descriptor/消费方无法共享发布方 `[repos]` alias 的场景：
+
+```toml
+[deps]
+"freeway-commons" = "https://dzb.github.io/freeway/@2.0.2"
+```
+
+这不是一个字面 GET 的 URL；实际布局仍是：
+
+```text
+https://dzb.github.io/freeway/freeway-commons/2.0.2/
+  freeway-commons-2.0.2.jeno.toml
+  freeway-commons-2.0.2.jar
+  freeway-commons-2.0.2.sha256
+```
+
+最后一个 `@` 前的部分是 repository base，之后是 semver version。裸 URL 叶子（`.jar`）和这一形态不会混淆。
+本地 jeno 来源(`[repos]` 的本地目录)不能作为 absolute native source 写进 descriptor；
+它仍只能在发布方 manifest 中通过 `[repos]` alias 表达，或作为同仓库 sibling。
+
 **歧义规则**(无例外):
 
-1. `gh:` / `https://` 前缀**先**匹配——它们是保留前缀,代表 jeno 自己的物种。
+1. `gh:` 与 `https://` 前缀**先**匹配。`https://` 值再按形状区分:以 `.jar` 结尾是裸 URL 叶子;
+   最后一个 `@` 后是 semver 且 URL 部分是网络 jeno repository 时,是 absolute native source;
+   其余 `https://` 值报错。私有网络 `http://` 只接受 absolute native source 形状。
 2. 其余值,若冒号前是**已声明**的仓库名(且冒号后非空),按「命名仓库」解析;声明了却没写对名字、
    或名字未声明 → 报错并列出可用仓库名(不默默当成 central 版本)。不匹配仓库名形式的(例如
    `1.2.3`)仍是 central 版本。
 
-`gh` 与 `gitee` 是保留的仓库名:`[repos] gh = …` / `[repos] gitee = …` 直接报错。
+`gh` 与 `gitee` 是保留的仓库名:`[repos.gh]` / `[repos.gitee]` 直接报错。
 `gh:` 是物种前缀;`gitee:` 虽已移除,但它的值必须继续产出迁移错误,不能被一个同名仓库静默接管。
 `local` / `http` / `https` / `file` 不保留。
 
@@ -165,22 +191,21 @@ store 索引与 `--offline` 行为不变。
 每个仓库是一张子表,**类型决定布局**:
 
 ```toml
-[repos.corp]          # Maven 布局(缺省 type 可省)
+[repos.corp]          # Maven 是显式例外
+type = "maven"
 url = "https://nexus.corp/"
 
-[repos.mine]          # 同一台静态主机,也可以是 jeno 布局
-type = "jeno"
+[repos.mine]          # 缺省 type = jeno;同一台静态主机也可以是 Maven
 url = "https://my.host/"
 
-[repos.vendor]        # 裸路径 = 本地目录(~ 与相对项目根均可)
-type = "jeno"
+[repos.vendor]        # 裸路径 = 本地目录(~ 与相对项目根均可);缺省 jeno
 url = "vendor"
 ```
 
 | 字段 | 规则 |
 |---|---|
 | key | 仓库名,`^[a-z][a-z0-9-]*$` |
-| `type` | `maven` \| `jeno`(封闭枚举;缺省 `maven`) |
+| `type` | `maven` \| `jeno`(封闭枚举;**缺省 `jeno`**) |
 | `url` | `https://…`、私有网络内的 `http://<literal-ip>…`(不做 DNS;公网/主机名 http 拒绝)或文件系统路径。以 http 开头即 URL,否则即目录 |
 | `insecure` | 可选布尔,缺省 false。仅允许 `type = "jeno"` 且 `url` 为私有网络 `http://…`;显式允许 `JENO_PUBLISH_TOKEN` 发往这一仓库的明文连接。HTTPS/本地目录/maven 布局不得设置 true |
 
@@ -189,14 +214,13 @@ url = "vendor"
 | **`type = "maven"`** | `https://host/…` 或 `http://192.168.1.39/…` | `url = "vendor"` |
 | **`type = "jeno"`** | `url = "https://host/"` 或私有 `http://…` | `url = "vendor"` |
 
-布局是声明的属性,不是 URL 的属性:同一台 https 主机可以装任一布局,所以协议必须由 `type`
-声明,不能从 URL 前缀猜。子表里只允许 `type`、`url`、`insecure` 三个键,未知键报错(带
+布局是声明的属性,不是 URL 的属性:同一台 https 主机可以装任一布局,所以结构化表用 `type`
+表达布局,不能从 URL 前缀猜。**未写 `type` 时默认是 jeno-native layout;Maven 必须显式写
+`type = "maven"`。** 子表里只允许 `type`、`url`、`insecure` 三个键,未知键报错(带
 `file:line:column`)。`insecure` 是仓库级写入策略,不进入锁的 `source` 声明原文。
 
-**legacy 字符串写法**(仍可读,等价于上表):
-`"https://…"` = maven+https;`"http://<私有 IP>…"` = maven+私有 http;`"local:<dir>"` = maven+本地;
-`"jeno:https://…"` = jeno+https;`"jeno:http://<私有 IP>…"` = jeno+私有 http;`"jeno:local:<dir>"` = jeno+本地。
-写锁时这些写法都归一成同样的规范声明,锁格式不变。
+旧字符串声明已移除。现在只接受结构化 `[repos.<name>]` 表;`type` 缺省为 jeno,
+Maven 必须显式写 `type = "maven"`。
 
 查找顺序:**互不回退**——值形态 `repo:version` 只查对应仓库,裸版本只查 Central。
 `local:` 仓库的字节同样经过 store 的 sha256 钉定,与远程仓库同等可审计。
@@ -318,8 +342,9 @@ license = "Apache-2.0"    # 可选;SPDX 标识符
 [java]
 version = 21              # 可选;语义同 §2.1 [java]
 
-[deps]                    # 可选;物种仅限 central / gh: / URL
+[deps]                    # 可选;物种仅限 central / gh: / absolute jeno source / URL
 "com.example:foo" = "1.2.3"
+"freeway-commons" = "https://dzb.github.io/freeway/@2.0.2"
 
 [deps-api]                # 可选;必须是 [deps] 中已有声明的 exact 副本
 "com.example:foo" = "1.2.3"
@@ -329,6 +354,7 @@ version = 21              # 可选;语义同 §2.1 [java]
 
 `[repos]`、`[deps.<repo>]`、`[deps-dev]`、`[limits]`、`[scripts]`、`[overrides]`、`[toolchain]`、任何未知节;
 `[deps]` 与 `[deps-api]` 是允许的事实表。旧的 `[deps.<repo>]` 分组表一律拒绝。
+descriptor 可以携带 absolute native source（`https://…/@version`），但不可以携带仓库 alias、`[repos]` 或其他规则。
 
 理由:仓库是消费方的配置;预算规则只有一份(消费方);scripts 只属于应用。**发布物里只有事实,规则只有一份。**
 
@@ -337,6 +363,8 @@ version = 21              # 可选;语义同 §2.1 [java]
 描述符 `[deps]` 参与消费方闭包与深度预算,与消费方直接依赖同等对待。
 `[deps-api]` 标记其中哪些依赖通过 API 闭包进入消费者的编译 classpath;普通
 descriptor 依赖仍只进 runtime classpath。
+descriptor 中的裸版本（`"gadget" = "0.9.0"`）仍是当前 descriptor 实际所在仓库的 sibling；
+需要跨仓库时必须写 absolute native source（`"freeway-commons" = "https://…/@2.0.2"`）。
 
 `[project]` 的 `summary` / `homepage` / `license` 是**标识事实**:发布后不可变、不参与解析、
 仅由 `jeno info` 读取展示。它们与 `[deps]` 同属"发布物里的事实",不是规则。
@@ -360,14 +388,16 @@ descriptor 依赖仍只进 runtime classpath。
 
 ```toml
 # 由 jeno 生成,提交进版本库,勿手改
-# jeno-lockfile-version: 2
-# 旧的无 marker 文件按 version 1 读取;未来 > 当前支持的版本直接拒绝
+# jeno-lockfile-version: 3
+# v1/v2 无 marker 或旧 marker 文件按旧 grammar 读取;未来 > 当前支持的版本直接拒绝
 # api = true 只在通过显式 [deps-api] 边可达时出现
 [[artifacts]]
 id = "com.example:foo"    # central: "group:artifact";jeno native: artifact name
 version = "1.2.3"
-source = "central"        # "central" / "gh:owner/repo" / "url"
-                          # / 命名仓库的声明原文(如 "local:vendor"、"jeno:https://repo.example/"、"jeno:local:../vendor")
+source = "central"        # "central" / "gh:owner/repo" / "url" /
+                          # "https://…" (jeno-native,默认) / "local:…" (jeno local) /
+                          # "maven:https://…" (Maven network) /
+                          # "maven:local:…" (Maven local)
 url = "https://…"         # 实际下载 URL。local: 仓库写为相对项目根的 file: 形式
                           # (如 file:vendor/com/…/x.jar),读取时按项目根展开;
                           # 路径落在项目根之外(如 local:/opt/repo)仍写绝对 file:///…;
@@ -390,8 +420,11 @@ api = true                # 可选;通过 [deps-api] 进入编译可见性的 AP
 6. 一致性:lock 的依赖集合与 jeno.toml + 描述符闭包一致;不一致 → 拒绝 build/run,提示 `jeno lock`。`tree`/`why` 也以锁为权威:二者先读锁、再解析 manifest 只为补父子边,id/version/source/depth/scope/api 任一不一致即 exit 1(至多 10 行差异,不输出图);无锁 → exit 1
 7. 命中策略:lock 有效 → 直接采用(sha256 权威,不重新解析);`jeno lock` **总是重解**并重写锁,
    `--check` 只比较
-8. 兼容性:旧锁里 `source` 以 `gitee:` 开头的行,**读锁即报**可执行的迁移错误(gitee: 物种已移除),而不是留给下游命令各自报 URI 错误;`source` 以 `jeno:` 开头的行照常读
-9. 版本 marker:`# jeno-lockfile-version: 2` 是注释,不是 TOML key;旧版 jeno 可忽略它,新版对高于自己支持的版本直接拒绝。无 marker 的旧锁按 version 1 读取
+8. 当前 lock grammar 是 v3:裸 URL/local = jeno,Maven 必须写 `maven:`。v1/v2 只作为升级迁移输入
+   被 reader 识别(内部归一成 canonical source),不是当前可写/可采用的格式;新 lock 文件永不写
+   `jeno:` 前缀
+9. 兼容性:旧锁里 `source` 以 `gitee:` 开头的行,**读锁即报**可执行的迁移错误(gitee: 物种已移除),而不是留给下游命令各自报 URI 错误
+10. 版本 marker:`# jeno-lockfile-version: 3` 是注释,不是 TOML key;新版对高于自己支持的版本直接拒绝。无 marker 的旧锁按 version 1 识别为迁移输入,并通过 `jeno lock` 重写为 v3;v1/v2 grammar 不是当前格式
 
 ---
 
@@ -442,7 +475,7 @@ modules = ["libs/core", "apps/web"]
 | 命令 | 契约 |
 |---|---|
 | `jeno init [--pom] [--ws] [--force] [paths...]` | 写 `jeno.toml` 骨架;`--pom` 从 `pom.xml` 迁移并逐条报告不可表达的事实——本地 parent 从 `relativePath` 读取,本地不存在时经 store 从 Central 读取远端 parent 与 `scope=import` 的 BOM(递归其 parent/嵌套 BOM,`--offline` 只用已缓存内容,深度上限 8);快照/私有仓库 BOM 不自动解析;`[java].version` 从 `maven.compiler.release`/`java.version`/`maven.compiler.target`/`source` 推导;`--ws` 写 `jeno.ws.toml`(§5),此时 `paths...` 可显式指定模块目录。**工作区根目录拒绝 `init`/`--pom`/`--force`**(exit 1),`--ws` 仍可用 |
-| `jeno add <key> [value] [--repo <name>]` | key: `group:artifact`(Central)、裸名(搜索)、`owner/repo@tag`(原生简写)。value: `1.2.3`、`<repo>:1.2.3`、`gh:owner/repo@tag`、裸 `https://...jar`。无 value 时:`group:artifact`/裸名只查询,不写 `jeno.toml`(查询成功 exit 0);`--repo <name>` 读取该 named `jeno:` repository 的 `<base>/<name>/index.jeno.toml` 并列出版本;`owner/repo@tag` 会写入 `[deps]` 并重锁 |
+| `jeno add <key> [value] [--repo <name>]` | key: `group:artifact`(Central)、裸名(搜索)、`owner/repo@tag`(原生简写)。value: `1.2.3`、`<repo>:1.2.3`、`gh:owner/repo@tag`、absolute native `https://repo.example/@1.2.3`、裸 `https://...jar`。无 value 时:`group:artifact`/裸名只查询,不写 `jeno.toml`(查询成功 exit 0);`--repo <name>` 读取该 named jeno-native repository 的 `<base>/<name>/index.jeno.toml` 并列出版本;`owner/repo@tag` 会写入 `[deps]` 并重锁 |
 | `jeno remove <id>` | 删除一行声明并重锁 |
 | `jeno lock [--check]` | 解析并写出 `jeno.lock`;**总是重解**。`--check` 只在内存生成并与磁盘逐字节比较,不写文件。未知参数是用法错误(exit 2) |
 | `jeno build` | javac 编译 `src/main/java`,严格可见性 classpath(只含 MAIN 声明);`--release` 取 `[java].version`;processor 走 `-processorpath`。至少一个 Java 源或 `src/main/resources` 下的文件必须存在:有源则编译并拷资源;无源但有资源则只创建 `target/classes` 并拷资源、exit 0;两者都没有则报错 |
@@ -456,13 +489,13 @@ modules = ["libs/core", "apps/web"]
 | `jeno bundle [--toolchain]` | `target/dist/<name>-<version>/`(bin/<name>、bin/<name>.cmd、lib/、install.sh、uninstall.sh、SHA256SUMS)+ `.tar.gz`。需要 `[project].main`(缺失即报错);install.sh 的 JDK 要求取 `[java].version`,未声明则取构建 JDK major;安装前用 `sha256sum -c`/`shasum -a 256 -c` 校验 SHA256SUMS,lib/bin 经 staging 交换并保留 store/config;默认不带 toolchain,`--toolchain` 才把 `[toolchain].jars` 对应的锁工件写入 `lib/toolchain`;未在锁图中出现的 toolchain id 是错误 |
 | `jeno clean [--target (default) \| --dist]` | 默认整棵删 `target/`;`--dist` 只删 `target/dist/` 保留 classes;永不触碰 store |
 | `jeno cache dir \| size \| prune \| purge [--dry-run] [--yes]` | `dir`/`size` 只读;`prune` 删可证明无用之物,无需确认;`purge` 删 store 与 sources,是**破坏性**命令——无 `--yes` 时打印路径/大小并 exit 2,`--dry-run` 只展示不删除(exit 0),`--yes` 才执行;`clean` 是兼容 alias,支持同样 flags |
-| `jeno outdated [--json] [--dev]` | **只读 `jeno.lock`**(不需要 `jeno.toml`);已钉版本 vs 仓库可用版本;默认只查 MAIN,`--dev` 含 dev/processor;Central 用 `maven-metadata.xml`,named `jeno:` 用 `<base>/<name>/index.jeno.toml`;索引缺失的 jeno row 列为 `not checked`;`gh:`/`url:` 以及 Maven-layout 的 `local:` 仍不可检查(local jeno repo 有 index 时可比较);跨 major 单列;完成即 exit 0(有更新也是 0) |
+| `jeno outdated [--json] [--dev]` | **只读 `jeno.lock`**(不需要 `jeno.toml`);已钉版本 vs 仓库可用版本;默认只查 MAIN,`--dev` 含 dev/processor;Central 用 `maven-metadata.xml`,named jeno-native 用 `<base>/<name>/index.jeno.toml`;索引缺失的 jeno row 列为 `not checked`;`gh:`/`url:` 以及 Maven-layout 的 `local:` 仍不可检查(local jeno repo 有 index 时可比较);跨 major 单列;完成即 exit 0(有更新也是 0) |
 | `jeno doctor` | **只读**本地诊断:检查当前项目或 workspace 每个模块的 `jeno.toml`/`jeno.lock` 是否存在且可解析,报告旧名文件(jeno **不会**读取它们,命令会给出改名提示),并检查 XDG store/sources/locks 路径可写性;不解析依赖、不写文件、不访问网络。健康 exit 0,有问题 exit 1,带参数 exit 2 |
 | `jeno audit [--json] [--dev]` | OSV 漏洞查询;默认只查 MAIN,`--dev` 才含 dev/processor;只查 Central 坐标,其余列 `notChecked` 并给原因;漏洞或查询失败 exit 1 |
 | `jeno verify` | **只读本地发布预检**:解析 `jeno.toml`/`jeno.lock`,核对每一条直接声明与锁定行的 id/version/source/MAIN scope;按 sha256 校验 store 中每个 jar 与元数据(workspace 本地替换则校验 classes 与版本戳);若 `target/dist/` 已有完整发布三件套,校验其内部一致性与 bundle `SHA256SUMS`;只有 package 产物(仅 jar)视为未准备(skipped),部分三件套仍失败;bundle 目录存在但缺 `SHA256SUMS` 也失败(`artifacts.bundle-incomplete`)。不解析依赖、不下载、不修改项目文件、不访问网络。通过 exit 0,失败 exit 1,带参数 exit 2 |
-| `jeno publish [target\|repo-name] [--json] [--dry-run]` | 写三件套;target 可接受 `gh:`、`jeno:https:`、私有网络 `jeno:http://<literal-ip>…`、`jeno:local:`，或已声明 named jeno repository 的名字(先按 `[repos.<name>]` 解析，§6.6)。named 私有 http 仓库可写 `insecure = true` 显式允许 token。jeno 布局逐文件 PUT 后立即 GET 回读,三个文件的字节必须完全一致,否则 exit 1;`--dry-run` 不写 descriptor/sha256、不创建目标、不上传 |
+| `jeno publish [target\|repo-name] [--json] [--dry-run]` | 写三件套;target 可接受 `gh:`、`https://host/`、私有网络 `http://<literal-ip>…`、`local:<dir>`，或已声明 named jeno repository 的名字(先按 `[repos.<name>]` 解析，§6.6)。命令上下文只能写 jeno layout;Maven target 必须显式写成 `maven:<declaration>` 并会被拒绝。named 私有 http 仓库可写 `insecure = true` 显式允许 token。jeno 布局逐文件 PUT 后立即 GET 回读,三个文件的字节必须完全一致,否则 exit 1;`--dry-run` 不写 descriptor/sha256、不创建目标、不上传 |
 | `jeno upgrade` / `jeno update`(alias) | 自升级(同一实现):只认 `jeno-<version>.tar.gz` + `.sha256`,下载后先校验 sha256;Windows 执行 release 的 `install.ps1`,POSIX 解压后执行包内 `install.sh` |
-| `jeno release [target\|repo-name] [--json] [--dry-run] [--allow-unsigned] [--notes-file <path>]` | 发布 `jeno bundle` 产生的安装包(默认用 minisign 签名,`--allow-unsigned` 才允许无签名):`gh:<owner>/<repo>`、`jeno:https://host/`、私有网络 `jeno:http://<literal-ip>…`、`jeno:local:<dir>`，或已声明 named jeno repository 的名字;无 target 只准备 `target/dist/release/` 并打印上传清单。**不隐式 build/test/bundle**;发布后回读并校验 tar 的 sha256(§7.3) |
+| `jeno release [target\|repo-name] [--json] [--dry-run] [--allow-unsigned] [--notes-file <path>]` | 发布 `jeno bundle` 产生的安装包(默认用 minisign 签名,`--allow-unsigned` 才允许无签名):`gh:<owner>/<repo>`、`https://host/`、私有网络 `http://<literal-ip>…`、`local:<dir>`，或已声明 named jeno repository 的名字;无 target 只准备 `target/dist/release/` 并打印上传清单。**不隐式 build/test/bundle**;发布后回读并校验 tar 的 sha256(§7.3) |
 
 ### 6.2 参数约定
 
@@ -578,7 +611,7 @@ summary:    {modules, passedModules, failedModules, checks, ...}
 `{artifact:{id,group?,artifact,version,sha256,metaSha256?},
 provenance:{source,url,readableUrl,repository?,layout,transport?,jar,metadata?},
 descriptor?:{name,group?,version,javaVersion?,summary?,homepage?,license?,
-dependencies[{id,species,version?,tag?,repository?,classifier?,api}],retract?},
+dependencies[{id,species,version?,tag?,repository?,source?,classifier?,api}],retract?},
 context:{scope,depth,local,marker},
 source?:{page?,archive?,fetched}}`。
 其中 `artifact/provenance/descriptor` 是包事实,`context` 只描述当前项目的 lock。
@@ -630,7 +663,7 @@ dry-run 不写 `target/dist/`、不创建远端目标、不 PUT、不 GET。
 bootstrapUrl?,files[],wouldUpload[],uploaded,verified}`。
 dry-run 不写 `target/dist/release/`、不签名文件、不创建远端目标、不上传。
 
-`--offline` 对发布链路按 target 判断:无 target 或 `jeno:local:` 允许;
+`--offline` 对发布链路按 target 判断:无 target 或 `local:` 允许;
 `gh:` 与远端 jeno target 在产生任何网络请求前以 `OFFLINE_FORBIDDEN` 拒绝。
 `release` 的 `gh:`/远端 jeno target 同样处理。
 
@@ -682,7 +715,7 @@ noTests,reportFiles[],durationMs}`。测试失败仍是有效结果:module exit 
 |---|---|
 | `native-release` | `gh:owner/repo` release(标签就是版本) |
 | `bare-url` | 裸 `https://…jar` 叶子(无元数据) |
-| `jeno-repository` | `jeno:` 布局仓库(含 `jeno:local:`;index 缺失时为 `not checked`,有 `index.jeno.toml` 时可比较版本;OSV 坐标仍不可用) |
+| `jeno-repository` | jeno layout 仓库(含本地目录;index 缺失时为 `not checked`,有 `index.jeno.toml` 时可比较版本;OSV 坐标仍不可用) |
 | `local-repository` | 本地 Maven 布局目录(无版本索引) |
 | `named-repository` | 命名 HTTPS Maven 仓库;无法解析的 source 也归到这里 |
 
@@ -692,19 +725,28 @@ noTests,reportFiles[],durationMs}`。测试失败仍是有效结果:module exit 
 (`bundle` 的 tar.gz + bootstrap)。两者接受同一组目标:
 
 - `gh:owner/repo`
-- `jeno:https://host/`
-- 私有网络 `jeno:http://<literal-ip>:<port>/…`(字面私有地址,不做 DNS)
-- `jeno:local:<dir>`
-- `[repos.<name>]` 的仓库名(target 先按声明名解析;解析不到才按 URL 声明解析)
+- `https://host/`(publish/release 上下文已经确定是 jeno layout)
+- 私有网络 `http://<literal-ip>:<port>/…`(字面私有地址,不做 DNS)
+- `local:<dir>`(jeno-native 本地仓库)
+- `[repos.<name>]` 的仓库名(target 先按声明名解析;未声明时按 jeno write target 解析)
+- `maven:<https://…|local:…>` 只用于明确声明 Maven layout,发布时拒绝
 
 无 target 时只准备本地产物(`target/dist/` 三件套 / `target/dist/release/`),不上传。
 非 loopback 的明文 http 目标会在 stderr 打一行“流量与 token 不加密”的 warning;
 `JENO_PUBLISH_TOKEN` 默认不会发往 cleartext LAN。named jeno 仓库可在 manifest 写
 `insecure = true` 做逐仓库 opt-in;否则只有显式设置 `JENO_ALLOW_INSECURE_TOKEN=1`
 这个进程级 escape hatch 才允许。
-**Maven 布局不是发布目标**:jeno 不写 POM,`https://host/`、`http://host/`、`local:<dir>` 一律拒绝
-(exit 1);其中公网 `http://` 在仓库声明阶段就会被拒绝,私有网络 http 才可使用。
-Maven 布局仓库仍可**读取**(`[repos]` 的 `type = "maven"`,§2.1)。
+**Maven 布局不是发布目标**:jeno 不写 POM;`maven:<declaration>` 或声明为
+`type = "maven"` 的仓库名一律拒绝(exit 1)。裸 `https://host/`、私有 `http://…`、
+`local:<dir>` 在 publish/release 上下文是 jeno layout。公网 `http://` 在仓库声明阶段
+就会被拒绝,私有网络 http 才可使用。Maven 布局仓库仍可**读取**(`[repos]` 的
+`type = "maven"`,§2.1)。
+
+生成 descriptor 时,publish 会把 manifest 里的 native alias 解析成 canonical source:
+同目标仓库的依赖写裸名+版本(sibling),来自另一个网络 jeno 仓库的依赖写
+`https://<base>/@<version>` 绝对事实。本地 jeno 来源不能写进跨仓库 descriptor;
+要么把它发布到网络仓库,要么让依赖与目标处于同一仓库。这样发布物不携带
+消费方本地 alias,也不需要把外部依赖复制进目标仓库。
 
 HTTP jeno-layout 发布固定使用 **PUT**,不是 POST:
 
@@ -721,7 +763,7 @@ HTTP jeno-layout 发布固定使用 **PUT**,不是 POST:
 
 每个 store 访问都经过同一个判定点（`ArtifactStore.ensure`），所以 `lock` / `build` / `test` / `info --source` 都自动遵守。
 
-**不因 `--offline` 接受的命令**：`upgrade`(alias `update`)、`outdated`、`audit` 总是联网，传入 `--offline` 报用法错误（退出码 2）。`publish`/`release` 由 target 决定：`jeno:local:` 离线可用；`gh:`、`jeno:https:` 与私有 http 目标在联网前以 `OFFLINE_FORBIDDEN` 拒绝（退出码 2），与实现一致。
+**不因 `--offline` 接受的命令**：`upgrade`(alias `update`)、`outdated`、`audit` 总是联网，传入 `--offline` 报用法错误（退出码 2）。`publish`/`release` 由 target 决定：`local:` 离线可用；`gh:`、`https:` 与私有 http 目标在联网前以 `OFFLINE_FORBIDDEN` 拒绝（退出码 2），与实现一致。
 
 **`add` 的 discover 形态**：不带显式版本时（列举 Central 版本、Central 裸名搜索，或 named jeno repository 的 `index.jeno.toml`）是联网操作，`--offline` 下报用法错误（退出码 2）——要离线就带上显式版本：`jeno add "<id>" <version>` 只读 store，`--offline` 下照常可用。
 
@@ -749,9 +791,9 @@ local 替换标记。它不改变 lock 内容，也不拒绝 workspace 的拓扑
 ```
 
 生成在 `target/dist/`;`jeno package` 产出 jar,`jeno publish` 写描述符与 sha256。
-发布**只发 jeno 布局**:`jeno:https://` 或私有网络 `jeno:http://<literal-ip>` 的
-`<base>/<name>/<version>/`,或 `jeno:local:<dir>` 的同构目录;Maven 布局(`group/...`,需要 POM)
-不是发布目标(§6.6)。HTTP 上传为 PUT,并以 GET 回读三件套做逐字节校验;目标主机必须是可写、
+发布**只发 jeno 布局**:`https://` 或私有网络 `http://<literal-ip>` 的
+`<base>/<name>/<version>/`,或 `local:<dir>` 的同构目录。Maven 布局(`maven:...`,需要 POM)不是发布目标(§6.6)。
+HTTP 上传为 PUT,并以 GET 回读三件套做逐字节校验;目标主机必须是可写、
 匿名可读的 PUT 端点。非 loopback 的明文 HTTP 会提示流量与 token 未加密。
 
 ### 7.1.1 `index.jeno.toml`（named jeno repository 的版本发现）
@@ -772,7 +814,7 @@ versions = ["1.0.0", "1.1.0", "1.2.0"]
 
 规则：
 
-- 只存在于 named `jeno:` repository；不存 jar、descriptor 或 sha256
+- 只存在于 named jeno-native repository；不存 jar、descriptor 或 sha256
 - `name` 必须与路径中的 artifact name 一致
 - `versions` 是 jeno-native semver 数组，排序稳定
 - `jeno publish` 在 named repository 的三件套上传并回读校验后自动更新
@@ -856,14 +898,14 @@ gh:<owner>/<repo>      https://github.com/<owner>/<repo>/releases/download/<tag>
                          <tar>.sha256 | release.json
                        稳定入口: .../releases/latest/download/install.sh
                                  .../releases/latest/download/install.ps1
-jeno:https://host/      <base>/<name>/<version>/release/
+https://host/           <base>/<name>/<version>/release/
                          <name>-<version>.tar.gz | install.sh | install.ps1
                          <tar>.sha256 | release.json
                        <base>/<name>/<version>/install.sh      (本版本)
                        <base>/<name>/<version>/install.ps1
                        <base>/<name>/install.sh                 (稳定,每次 release 覆盖)
                        <base>/<name>/install.ps1
-jeno:local:<dir>        同一目录结构,file: 写入,无网络
+local:<dir>             同一目录结构,file: 写入,无网络
 ```
 
 **签名**:`JENO_MINISIGN_KEY`(secret key,必需除非 `--allow-unsigned`)、`JENO_MINISIGN_PUBKEY`(可选,
@@ -879,5 +921,5 @@ POSIX bootstrap `install.sh` 下载 tar(curl,缺则 wget)→ 校验 sha256(`sha2
 bootstrap 必须带内嵌公钥;host 可同时篡改 setup 与公钥,用户需从 README/tag 带外核对 fingerprint。
 失败即退出并清理临时目录。URL 写入 bootstrap 时必须是最终可用地址。
 
-**回读校验**:发布后必须从目标读回 tar(`local:` 读文件;`jeno:` GET;`gh:` GET asset,允许短暂重试),
+**回读校验**:发布后必须从目标读回 tar(`local:` 读文件;jeno layout 用 GET;`gh:` GET asset,允许短暂重试),
 sha256 与 manifest 一致才算成功;失败 exit 1 并报告具体 URL/文件。

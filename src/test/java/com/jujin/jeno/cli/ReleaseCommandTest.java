@@ -118,7 +118,7 @@ class ReleaseCommandTest {
     void aLocalTargetWritesTheVersionedAndStableLayouts() throws Exception {
         Path repo = dir.resolve("repo");
 
-        Result result = run("jeno:local:" + repo);
+        Result result = run("local:" + repo);
 
         assertEquals(0, result.exit(), result.out() + result.err());
         Path versioned = repo.resolve("app/1.0.0");
@@ -153,7 +153,7 @@ class ReleaseCommandTest {
     void dryRunWritesNothingToTheTarget() throws Exception {
         Path repo = dir.resolve("never");
 
-        Result result = run("--dry-run", "jeno:local:" + repo);
+        Result result = run("--dry-run", "local:" + repo);
 
         assertEquals(0, result.exit(), result.out() + result.err());
         assertFalse(Files.exists(repo), "dry-run never touches the target");
@@ -167,7 +167,7 @@ class ReleaseCommandTest {
         Path repo = dir.resolve("never-json");
 
         Result result = runRaw("--json", "--dry-run", "--allow-unsigned",
-                "jeno:local:" + repo);
+                "local:" + repo);
 
         assertEquals(0, result.exit(), result.err());
         assertFalse(Files.exists(repo));
@@ -197,7 +197,7 @@ class ReleaseCommandTest {
     @Test
     void jsonPrivateLanDryRunCarriesThePlainHttpWarning() throws Exception {
         Result result = runRaw("--json", "--dry-run", "--allow-unsigned",
-                "jeno:http://192.168.1.39:18080/upload/");
+                "http://192.168.1.39:18080/upload/");
 
         assertEquals(0, result.exit(), result.err());
         assertFalse(Files.exists(dir.resolve("target/dist/release")));
@@ -257,7 +257,7 @@ class ReleaseCommandTest {
             }
         });
         server.start();
-        String base = "jeno:http://localhost:" + server.getAddress().getPort() + "/repo/";
+        String base = "http://localhost:" + server.getAddress().getPort() + "/repo/";
         fakeSigner();
 
         Result result = runRaw(base);
@@ -325,7 +325,7 @@ class ReleaseCommandTest {
 
     @Test
     void notesFileRequiresGhAndMustExist() throws Exception {
-        assertEquals(2, run("jeno:local:" + dir.resolve("repo"),
+        assertEquals(2, run("local:" + dir.resolve("repo"),
                 "--notes-file", dir.resolve("missing.md").toString()).exit());
         assertEquals(2, run("gh:owner/repo",
                 "--notes-file", dir.resolve("missing.md").toString()).exit());
@@ -373,7 +373,7 @@ class ReleaseCommandTest {
         System.clearProperty("jeno.minisign.pubkey");
         Path repo = dir.resolve("derived-key");
 
-        Result result = runRaw("jeno:local:" + repo);
+        Result result = runRaw("local:" + repo);
 
         assertEquals(0, result.exit(), result.out() + result.err());
         Path pub = repo.resolve("app/1.0.0/minisign.pub");
@@ -387,7 +387,7 @@ class ReleaseCommandTest {
         fakeSigner();
         Path repo = dir.resolve("signed");
 
-        Result result = runRaw("jeno:local:" + repo);
+        Result result = runRaw("local:" + repo);
 
         assertEquals(0, result.exit(), result.out() + result.err());
         Path release = repo.resolve("app/1.0.0/release");
@@ -431,7 +431,7 @@ class ReleaseCommandTest {
         System.setProperty("jeno.minisign.bin", bin.toString());
         Path repo = dir.resolve("never");
 
-        Result result = runRaw("jeno:local:" + repo);
+        Result result = runRaw("local:" + repo);
 
         assertEquals(1, result.exit());
         assertTrue(result.err().contains("signing"), result.err());
@@ -531,7 +531,7 @@ class ReleaseCommandTest {
         server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         server.createContext("/", exchange -> respond(exchange, 500, "no"));
         server.start();
-        String base = "jeno:http://localhost:" + server.getAddress().getPort() + "/repo/";
+        String base = "http://localhost:" + server.getAddress().getPort() + "/repo/";
 
         Result result = run(base);
 

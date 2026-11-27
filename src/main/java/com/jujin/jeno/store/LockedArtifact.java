@@ -9,6 +9,12 @@ import com.jujin.jeno.resolve.Scope;
  * for production artifacts and {@link Scope#DEV} for test-only ones (the
  * lockfile writes {@code scope = "dev"} only for DEV rows — an absent scope
  * is MAIN, so pre-{@code [deps-dev]} lockfiles read unchanged).
+ *
+ * <p>{@link #source()} is the normalized internal canonical spelling, not
+ * necessarily the text in a v3 lock file. Lock v3 writes the jeno layout
+ * unmarked and Maven as {@code maven:...}, while this field keeps the older
+ * internal spelling so all in-process comparisons and resolver identities stay
+ * stable. Commands that display a source use {@code Repository.displaySource}.
  */
 public record LockedArtifact(
         String id,

@@ -27,7 +27,7 @@ jeno --version
 Both installers need JDK 25+. Windows appends `%USERPROFILE%\.jeno\bin` to the
 user PATH; `jeno upgrade` verifies sha256 before installing.
 
-**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D31, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
+**Docs** · [DESIGN.md](DESIGN.md) (ADR summary D1–D33, every decision traceable) · [SPEC.md](SPEC.md) (the contract: files, CLI, artifacts) · [RELEASE.md](RELEASE.md) (release runbook) · [REMINDS.md](REMINDS.md) (deliberate tradeoffs) · [docs/history-0.2.md](docs/history-0.2.md) (why the 0.2 line looks the way it does) · [docs/compat-matrix.md](docs/compat-matrix.md) (real POMs against Central) · [docs/pom-migration.md](docs/pom-migration.md) (init --pom on real projects; [java] + local/Central parents + BOM imports) · [docs/release-e2e.md](docs/release-e2e.md) (a real gh release + clean-HOME install) · [LESSONS.md](LESSONS.md) (what each incident taught)
 
 ---
 
@@ -116,6 +116,19 @@ the compile classpath; ordinary transitive implementation dependencies stay
 runtime-only. Maven POMs do not encode this distinction, so POM dependencies are
 never guessed as exported API.
 
+A native dependency from another jeno repository can be absolute, so a published
+descriptor does not need the publisher's local `[repos]` alias:
+
+```toml
+[deps]
+"freeway-commons" = "https://dzb.github.io/freeway/@2.0.2"
+```
+
+The final `@version` is a semver selector; the URL before it is the jeno
+repository base. The old bare version form remains a sibling of the descriptor's
+actual repository and is what makes a repository mirrorable. The `.jar` URL form
+is still a bare leaf, not this native-source form.
+
 In jeno's own manifest JUnit is a main dependency because `JenoTestFork` (part of
 the production CLI surface) compiles against the JUnit Platform API. Packaging
 metadata in `[toolchain]` marks those same artifacts as test machinery, so
@@ -192,28 +205,37 @@ mylib-1.2.0.jeno.toml     ← the descriptor: its own deps, java requirement, id
 mylib-1.2.0.sha256
 ```
 
-The layout is [SPEC.md](SPEC.md) §7; a Maven-layout target is refused because jeno writes no POM.
+The layout is [SPEC.md](SPEC.md) §7; an explicitly Maven-layout target is
+refused because jeno writes no POM.
 
 | Where | Consumed as | How it is published |
 |---|---|---|
 | GitHub Releases | `gh:owner/repo@v1.2.3` | `jeno publish gh:owner/repo` |
 | ~~Gitee Releases~~ | 已移除:附件匿名下载需令牌,违反零配置;用裸 URL 或自建主机 | — |
-| **your own host** — jeno layout | `[repos.mine]` `type = "jeno"`, `url = "https://my.host/"` (or a literal private-network `http://192.168.x.x/`, with a warning) + `"lib" = "mine:1.2.3"` | `jeno publish mine` (or the full URL) — two levels, no `group` needed |
-| **your own host** — Maven layout (the default type) | `[repos.corp]` `url = "https://nexus.corp/"` + `"com.corp:lib" = "corp:1.2.3"` | readable by jeno, but **not a publish target**: jeno writes no POM. Publish the layout with your own tooling, or use the jeno layout |
-| a local directory | `[repos.vend]` `type = "jeno"`, `url = "vendor"` (or the legacy `local:/path` string) | `jeno publish jeno:local:vendor` (writes the triple in place) |
+| **your own host** — jeno layout (default) | `[repos.mine]` `url = "https://my.host/"` (or a literal private-network `http://192.168.x.x/`, with a warning) + `"lib" = "mine:1.2.3"` | `jeno publish mine` (or the full URL) — two levels, no `group` needed |
+| **your own host** — Maven layout (explicit) | `[repos.corp]` `type = "maven"`, `url = "https://nexus.corp/"` + `"com.corp:lib" = "corp:1.2.3"` | readable by jeno, but **not a publish target**: jeno writes no POM. Publish the layout with your own tooling, or use the jeno layout |
+| a local directory | `[repos.vend]` `url = "vendor"` | `jeno publish local:vendor` (writes the triple in place) |
 | any static server | a bare `https://…/x.jar` leaf | upload the jar your way (a leaf carries no descriptor, so it is not a `publish` target) |
 
-The `jeno:` layout is the shortest one: `jeno publish mine`, where
-`[repos.mine]` declares `type = "jeno"` and its URL, writes
+The jeno-native layout is the default and the shortest one: `jeno publish mine`,
+where `[repos.mine]` declares its URL (and may omit `type`), writes
 `<name>/<version>/<name>-<version>.{jar,jeno.toml,sha256}` and needs no `[project].group`
-on either side. A Maven-layout target is **refused**: jeno generates no POM, so
+on either side. An explicitly Maven-layout target is **refused**: jeno generates no POM, so
 neither jeno nor Maven could read the triple back. Maven repositories remain
-readable (`[repos] type = "maven"`); publishing into one needs a POM generator,
+readable (`[repos.<name>] type = "maven"`); publishing into one needs a POM generator,
 which jeno does not have. A dependency names its repository in the value
 (`corp:1.2.3`); repository-group tables such as `[deps.corp]` are no longer
 accepted.
+
+When upgrading an existing manifest, add `type = "maven"` to structured
+`[repos.<name>]` entries that are Maven. Omitting `type` now means the native
+jeno layout. Old string repository declarations were removed; only structured
+`[repos.<name>]` tables are accepted.
 `gh` is a reserved name — the `gh:` prefix wins, so a repository cannot take it.
 `JENO_PUBLISH_TOKEN` adds a bearer token when the jeno-layout host wants one.
+A bare network/local publish target is interpreted as the default jeno layout;
+Maven must be declared explicitly with `type = "maven"` (or `maven:<declaration>`
+for a write target, which publish then refuses because it writes no POM).
 For a private-network cleartext repository, bind the exception to that repository:
 
 ```toml
@@ -261,13 +283,28 @@ budget exactly like a direct dependency. A bare jar with no descriptor is a
 leaf.
 
 Because a repository is just a URL, moving a library — from GitHub to your own
-server, from a company registry to a mirror — changes one line in `[repos]`. No
+server, from a company registry to a mirror — changes one `[repos.<name>]`
+entry. No
 account migration, no re-publishing under a new namespace.
 
 Determinism does not depend on the host. `jeno.lock` pins **two** digests per
 artifact — the bytes and the metadata. A release asset can be deleted,
 replaced, or served from a different CDN; the lockfile still defines what is
 correct, and a mismatch is a hard failure.
+
+Lock format v3 makes the native layout the default in the `source` field:
+
+```toml
+source = "https://dzb.github.io/freeway/"       # jeno layout
+source = "local:../vendor"                      # jeno layout, local transport
+source = "maven:https://nexus.corp/repository/" # Maven layout
+source = "maven:local:../maven-vendor"          # Maven layout, local transport
+```
+
+v1/v2 lock files are migration-only input: readers can inspect them, but the
+writer always emits v3 and the v3 file never contains `jeno:`. Regenerate an
+old lock with `jeno lock`; legacy lock grammar is not the supported current
+spelling.
 
 ## Self-hosting
 
@@ -373,14 +410,14 @@ jeno publish gh:owner/repo
 # applications: installer + bootstrap
 jeno bundle
 jeno release --dry-run                  # show the URLs it would upload
-jeno release jeno:local:../releases      # or gh:owner/repo / jeno:https://host/
-jeno release jeno:http://192.168.1.39:8080/upload/  # literal private IP only
+jeno release local:../releases         # or gh:owner/repo / https://host/
+jeno release http://192.168.1.39:8080/upload/  # literal private IP only
 curl -fsSL https://host/app/install.sh | bash
 ```
 
 ### Named jeno repository discovery
 
-A named `jeno:` repository may publish a per-artifact version index:
+A named jeno-native repository may publish a per-artifact version index:
 
 ```text
 <base>/<name>/index.jeno.toml
@@ -399,8 +436,8 @@ included in `jeno.lock`, and never overrides a descriptor or sha256.
 With a declared repository:
 
 ```toml
-[repos]
-mine = "jeno:https://repo.example/"
+[repos.mine]
+url = "https://repo.example/"
 ```
 
 version discovery is explicit about the repository:
@@ -426,8 +463,8 @@ minisign -G -W                      # CI/automation: unencrypted key (treat it a
 export JENO_MINISIGN_KEY=~/.minisign/minisign.key
 export JENO_MINISIGN_PUBKEY=~/.minisign/minisign.pub   # optional; derived if omitted
 jeno bundle
-jeno release jeno:https://my.host/
-# LAN: jeno release jeno:http://192.168.1.39:8080/upload/   (plain http, private IP only)
+jeno release https://my.host/
+# LAN: jeno release http://192.168.1.39:8080/upload/   (plain http, private IP only)
 ```
 
 `JENO_MINISIGN` points at the binary (default `minisign`). Every release carries
@@ -638,8 +675,8 @@ discovery and golden-path recipes.
 Publishing and releasing have side-effect-free dry-run plans:
 
 ```bash
-jeno --json publish --dry-run jeno:local:../repo
-jeno --json release --dry-run --allow-unsigned jeno:local:../releases
+jeno --json publish --dry-run local:../repo
+jeno --json release --dry-run --allow-unsigned local:../releases
 ```
 
 `publish --dry-run` reports the existing jar plus the descriptor/checksum it
@@ -649,7 +686,7 @@ installer, generated files, signing mode, and would-upload URLs. Neither writes
 request.
 
 `--offline` is target-aware for the publish path: no target and
-`jeno:local:` targets are allowed; `gh:` and remote jeno targets return structured
+`local:` targets are allowed; `gh:` and remote jeno targets return structured
 `OFFLINE_FORBIDDEN` before upload. Remote release targets follow the same rule.
 
 The current JSON commands are `tree`, `outdated`, `audit`, `doctor`, `verify`,

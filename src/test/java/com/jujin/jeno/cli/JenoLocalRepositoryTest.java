@@ -27,8 +27,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code jeno:local:<dir>} — the jeno layout on disk: two levels, no group, no
- * Maven pom. The lock keeps the declaration and relocatable {@code file:} URLs.
+ * A local directory with the default jeno layout: two levels, no group, no
+ * Maven pom. The lock keeps the source and relocatable {@code file:} URLs.
  */
 class JenoLocalRepositoryTest {
 
@@ -60,8 +60,8 @@ class JenoLocalRepositoryTest {
         Path vendor = root.resolve("vendor");
         publishArtifact(vendor, "lib", "1.0.0", "lib-bytes");
         Path project = project("proj", """
-            [repos]
-            cascade = "jeno:local:../vendor"
+            [repos.cascade]
+            url = "../vendor"
 
             [deps]
             "lib" = "cascade:1.0.0"
@@ -72,7 +72,10 @@ class JenoLocalRepositoryTest {
 
         LockedArtifact lib = only(project);
         assertEquals("jeno:local:../vendor", lib.source(),
-                "the declaration is recorded as written");
+                "LockedArtifact.source is the internal canonical spelling");
+        assertTrue(Files.readString(project.resolve("jeno.lock"))
+                        .contains("source = \"local:../vendor\""),
+                "the lock file itself uses the v3 default-jeno spelling");
         assertTrue(lib.url().contains("/vendor/lib/1.0.0/lib-1.0.0.jar"), lib.url());
         assertTrue(Files.exists(store.findByDigest(lib.sha256(), ArtifactStore.Kind.JAR)),
                 "the jar was read from the directory, not the network");
@@ -87,8 +90,8 @@ class JenoLocalRepositoryTest {
             "sib" = "0.5.0"
             """);
         Path project = project("proj", """
-            [repos]
-            cascade = "jeno:local:../vendor"
+            [repos.cascade]
+            url = "../vendor"
 
             [deps]
             "lib" = "cascade:1.0.0"
@@ -115,7 +118,7 @@ class JenoLocalRepositoryTest {
         assertEquals(0, new PackageCommand(store, producer).execute(List.of()));
 
         Path repository = root.resolve("local-repo");
-        String target = "jeno:local:" + repository;
+        String target = "local:" + repository;
         Result published = run(new PublishCommand(producer), target);
 
         assertEquals(0, published.exit(), published.out() + published.err());
@@ -127,8 +130,8 @@ class JenoLocalRepositoryTest {
                 "the checksum file matches the jar");
 
         Path consumer = project("consumer", """
-            [repos]
-            mine = "jeno:local:%s"
+            [repos.mine]
+            url = "%s"
 
             [deps]
             "widget" = "mine:0.1.0"
@@ -143,18 +146,17 @@ class JenoLocalRepositoryTest {
     }
 
     @Test
-    void malformedJenoRepositoriesNameBothLegalShapes() {
+    void malformedStructuredRepositoriesNameTheLegalShape() {
         ProjectException ftp = assertThrows(ProjectException.class, () ->
                 ProjectReader.parse("[project]\nname = \"x\"\nversion = \"1.0.0\"\n"
-                        + "[repos]\nbad = \"jeno:ftp://host/\"\n"));
-        assertTrue(ftp.getMessage().contains("jeno:https://"), ftp.getMessage());
-        assertTrue(ftp.getMessage().contains("jeno:local:"), ftp.getMessage());
+                        + "[repos.bad]\nurl = \"ftp://host/\"\n"));
+        assertTrue(ftp.getMessage().contains("url scheme"), ftp.getMessage());
 
-        ProjectException bare = assertThrows(ProjectException.class, () ->
+        ProjectException prefixed = assertThrows(ProjectException.class, () ->
                 ProjectReader.parse("[project]\nname = \"x\"\nversion = \"1.0.0\"\n"
-                        + "[repos]\nbad = \"jeno:../vendor\"\n"));
-        assertTrue(bare.getMessage().contains("jeno:https://"), bare.getMessage());
-        assertTrue(bare.getMessage().contains("jeno:local:"), bare.getMessage());
+                        + "[repos.bad]\nurl = \"jeno:../vendor\"\n"));
+        assertTrue(prefixed.getMessage().contains("without the jeno:/local: prefix"),
+                prefixed.getMessage());
     }
 
     @Test
@@ -164,15 +166,15 @@ class JenoLocalRepositoryTest {
         publishArtifact(a.resolve("vendor"), "lib", "1.0.0", "a-bytes");
         publishArtifact(b.resolve("vendor"), "lib", "2.0.0", "b-bytes");
         Path ma = module(a.resolve("m1"), "m1", """
-            [repos]
-            cascade = "jeno:local:../vendor"
+            [repos.cascade]
+            url = "../vendor"
 
             [deps]
             "lib" = "cascade:1.0.0"
             """);
         Path mb = module(b.resolve("m2"), "m2", """
-            [repos]
-            cascade = "jeno:local:../vendor"
+            [repos.cascade]
+            url = "../vendor"
 
             [deps]
             "lib" = "cascade:2.0.0"
@@ -196,16 +198,16 @@ class JenoLocalRepositoryTest {
     }
 
     @Test
-    void theOlderRepositoryShapesAreUnchanged() throws Exception {
-        // jeno:https:// is still a valid declaration (resolution is a network act,
-        // covered by the repository tests); local: still resolves a Maven layout
+    void remoteJenoAndLocalMavenLayoutsRemainDistinct() throws Exception {
+        // A structured URL with no type is jeno; a local Maven repository needs
+        // an explicit type = "maven".
         ProjectReader.parse("""
             [project]
             name = "x"
             version = "1.0.0"
 
-            [repos]
-            remote = "jeno:https://repo.example/"
+            [repos.remote]
+            url = "https://repo.example/"
             """);
 
         Path vendor = root.resolve("maven-vendor");
@@ -221,8 +223,9 @@ class JenoLocalRepositoryTest {
             """);
         writeJar(dir.resolve("lib-1.0.0.jar"), "maven-bytes");
         Path project = project("maven", """
-            [repos]
-            v = "local:../maven-vendor"
+            [repos.v]
+            type = "maven"
+            url = "../maven-vendor"
 
             [deps]
             "org.example:lib" = "v:1.0.0"

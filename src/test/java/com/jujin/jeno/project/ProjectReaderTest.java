@@ -174,14 +174,68 @@ class ProjectReaderTest {
     }
 
     @Test
+    void anAbsoluteNativeSourceIsSelfContainedAndUsesNoAlias() {
+        JenoProject project = ProjectReader.parse("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [deps]
+            "freeway-commons" = "https://dzb.github.io/freeway/@2.0.2"
+            "freeway-db" = "http://192.168.1.39:8080/repo/@2.0.2-rc1"
+            """);
+
+        Requirement commons = project.requirements().get(0);
+        assertEquals(Species.NAMED, commons.species());
+        assertNull(commons.repository(), "an absolute source has no consumer-local alias");
+        assertEquals("jeno:https://dzb.github.io/freeway/", commons.repositoryUrl());
+        assertEquals("2.0.2", commons.version());
+        assertEquals("named:jeno:https://dzb.github.io/freeway/freeway-commons",
+                commons.identity());
+
+        Requirement db = project.requirements().get(1);
+        assertEquals("jeno:http://192.168.1.39:8080/repo/", db.repositoryUrl());
+        assertEquals("2.0.2-rc1", db.version());
+    }
+
+    @Test
+    void absoluteNativeSourceErrorsNameTheBadPart() {
+        ProjectException version = assertThrows(ProjectException.class,
+                () -> ProjectReader.parse("""
+                    [project]
+                    name = "demo"
+                    version = "0.1.0"
+
+                    [deps]
+                    "freeway-commons" = "https://dzb.github.io/freeway/@latest"
+                    """));
+        assertTrue(version.getMessage().contains("version must be semver"),
+                version.getMessage());
+
+        ProjectException publicHttp = assertThrows(ProjectException.class,
+                () -> ProjectReader.parse("""
+                    [project]
+                    name = "demo"
+                    version = "0.1.0"
+
+                    [deps]
+                    "freeway-commons" = "http://8.8.8.8/freeway/@1.0.0"
+                    """));
+        assertTrue(publicHttp.getMessage().contains("private-network")
+                        || publicHttp.getMessage().contains("private network"),
+                publicHttp.getMessage());
+    }
+
+    @Test
     void aValueCanNameItsRepository() {
         JenoProject project = ProjectReader.parse("""
             [project]
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            corp = "https://nexus.corp.internal/repository/maven/"
+            [repos.corp]
+            type = "maven"
+            url = "https://nexus.corp.internal/repository/maven/"
 
             [deps]
             "com.corp:lib" = "corp:2.1.0"
@@ -206,15 +260,16 @@ class ProjectReaderTest {
                 name = "demo"
                 version = "0.1.0"
 
-                [repos]
-                gh = "https://mirror.example.com/gh/"
+                [repos.gh]
+                type = "maven"
+                url = "https://mirror.example.com/gh/"
 
                 [deps]
                 "com.example:lib" = "1.0.0"
                 """));
         assertTrue(gh.getMessage().contains("[repos.gh] is reserved for the gh: prefix"),
                 gh.getMessage());
-        assertTrue(gh.getMessage().contains("jeno.toml:6:1"),
+        assertTrue(gh.getMessage().contains("jeno.toml:5:1"),
                 "the position is named like every other schema error: " + gh.getMessage());
 
     }
@@ -227,8 +282,9 @@ class ProjectReaderTest {
                 name = "demo"
                 version = "0.1.0"
 
-                [repos]
-                gitee = "https://mirror.example.com/gitee/"
+                [repos.gitee]
+                type = "maven"
+                url = "https://mirror.example.com/gitee/"
                 """));
         assertTrue(error.getMessage().contains("[repos.gitee] is reserved"),
                 error.getMessage());
@@ -260,8 +316,9 @@ class ProjectReaderTest {
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            corp = "https://nexus.corp.internal/repository/maven/"
+            [repos.corp]
+            type = "maven"
+            url = "https://nexus.corp.internal/repository/maven/"
 
             [deps]
             "com.corp:lib" = "corp:2.0.0"
@@ -280,8 +337,8 @@ class ProjectReaderTest {
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            mine = "jeno:https://repo.example/"
+            [repos.mine]
+            url = "https://repo.example/"
 
             [deps]
             "widget" = "mine:1.2.3"
@@ -307,8 +364,8 @@ class ProjectReaderTest {
                 name = "demo"
                 version = "0.1.0"
 
-                [repos]
-                mine = "jeno:https://repo.example/"
+                [repos.mine]
+                url = "https://repo.example/"
 
                 [deps]
                 "com.corp:lib" = "mine:1.0.0"
@@ -319,14 +376,14 @@ class ProjectReaderTest {
 
     @Test
     void aJenoRepositoryIsEitherNetworkOrLocal() {
-        // jeno:local:<dir> is the jeno layout on disk — a legal repository now
+        // A local directory with no type is the default jeno layout.
         JenoProject local = ProjectReader.parse("""
             [project]
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            mine = "jeno:local:/tmp/repo"
+            [repos.mine]
+            url = "/tmp/repo"
             """);
         assertEquals(Repository.Layout.JENO, local.repos().get("mine").layout());
         assertEquals(Repository.Transport.LOCAL, local.repos().get("mine").transport());
@@ -336,8 +393,8 @@ class ProjectReaderTest {
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            mine = "jeno:http://repo.example/"
+            [repos.mine]
+            url = "http://repo.example/"
             """, "private network");
     }
 
@@ -349,8 +406,9 @@ class ProjectReaderTest {
                 name = "demo"
                 version = "0.1.0"
 
-                [repos]
-                corp = "https://nexus.corp.internal/repository/maven/"
+                [repos.corp]
+                type = "maven"
+                url = "https://nexus.corp.internal/repository/maven/"
 
                 [deps]
                 "com.other:lib" = "other:1.0.0"
@@ -369,8 +427,9 @@ class ProjectReaderTest {
                 name = "demo"
                 version = "0.1.0"
 
-                [repos]
-                corp = "https://nexus.corp.internal/repository/maven/"
+                [repos.corp]
+                type = "maven"
+                url = "https://nexus.corp.internal/repository/maven/"
 
                 [deps.corp]
                 "com.corp:lib" = "2.1.0"
@@ -554,8 +613,9 @@ class ProjectReaderTest {
             name = "demo"
             version = "0.1.0"
 
-            [repos]
-            corp = "https://nexus.corp.internal/repository/maven/"
+            [repos.corp]
+            type = "maven"
+            url = "https://nexus.corp.internal/repository/maven/"
 
             [deps]
             "com.example:lib-a" = "1.0.0"

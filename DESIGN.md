@@ -94,6 +94,8 @@ jeno 又用严格可见性约束用户项目的依赖边界——**这个工具�
 | D29 | `--locked` 关闭 workspace 本地替换 | workspace 的本地 classes 是开发态便利,不能作为发布证据。`--locked` 让 build/test/run/classpath/package/bundle/verify 只消费 `jeno.lock` + store,并让 info/tree/why 不再显示 local 替换,但仍保留 workspace 的拓扑编排;不改变 lock,不引入第二套发布模型 |
 | D30 | publish/release 接受 declared repository name,明文 token opt-in 绑定仓库 | target 先按 `[repos.<name>]` 解析再按 URL 解析,因此 `jeno publish mine` 能携带仓库的 `insecure = true` 策略;该布尔是写入策略,不进入 lock source。这样不把全局环境变量扩大成所有上传的默认豁免,也避免让用户在命令行重复 URL 与信任决策 |
 | D31 | tree/why 保留路径兼容字段并增加 API 边事实 | artifact 级 `api` 无法回答“哪条引用边导出了它”。`ResolvedGraph` 增加 `apiEdges`,但 tree 的 `children` 与 why 的 `paths` 不改形状;另加 `apiChildren`/`pathEdges`,人类输出用 `api`/`--api->` 标记。这样既不破坏 agent 的既有解析,也让 API 边可审计 |
+| D32 | descriptor 支持 absolute native source | 裸名+版本只表示当前 descriptor 所在仓库的 sibling;跨 jeno 仓库的 native 依赖必须能写成绝对 source,否则只能把所有依赖复制到同一 vendor。采用 `https://<jeno-base>/@<version>`:key 仍是 native artifact name,URL 是 repository base,末尾 `@` 后是 semver。它是 artifact 事实,不是 `[repos]` 规则;manifest alias 仍保留为用户书写便利,publish 时解析成 canonical source。lock 的 `source` 字段保持不变 |
+| D33 | jeno layout 是默认,lock 升到 v3 | jeno 是构建/包管理器的 native 默认,所以结构化 `[repos.<name>]` 省略 `type` 时为 jeno,Maven 才显式写 `type = "maven"`。lock v1/v2 的裸 https/local 历史上表示 Maven,不能原地翻转;v3 writer 改为 jeno 默认(`source = "https://…"`/`"local:…"`),Maven 写 `maven:https://…`/`maven:local:…`。v1/v2 只作为迁移输入被 reader 归一成内部 canonical source,新 lock 只写 v3 且永不出现 `jeno:`。publish/release 只写 jeno layout,因此裸 URL/local 在 write-target 上下文也按 jeno 解释;旧 `jeno:` 前缀不再作为用户 target/manifest 语法接受 |
 
 ---
 
@@ -204,16 +206,17 @@ Central 的元数据是 `pom.xml`;要拖库就绕不开它。jeno 把 XML 当作
 理由:**有描述符 = 完整公民**(可传递解析),无描述符的裸 jar = 叶子。描述符带
 `[retract]`(作者端撤回,SPEC §3.4),与消费端的 `[overrides]` 凑成一对:坏版本死得快、死得可见。
 
-发布目标只有 jeno 能回读的几种形式(`gh:`、`jeno:https:`、字面私有网络的 `jeno:http:`、
-`jeno:local:`);Maven 布局是只读源,不是发布目标——jeno 不写 POM(见 D15)。
+发布目标只有 jeno 能回读的几种形式(`gh:`、`https:`、字面私有网络的 `http:`、
+`local:`);Maven 布局是只读源,不是发布目标——
+jeno 不写 POM(见 D15)。
 
 ### 7.3 GitHub 后端(以及为什么不再是 Gitee)
 
 - **GitHub**:release 附件匿名可下载,消费方零配置
 - **Gitee**:2026-11-22 随 `gitee:` 物种移除——附件匿名下载需 Bearer 令牌,违背零配置。需要它时用裸 URL 叶子或自建主机
-- **自建主机是一等目标,但只发 jeno 布局**:`jeno publish jeno:https://my.host/`(LAN 可用字面私有 `jeno:http://<ip>/`,会警告明文传输)按两层布局 PUT 三件套,再 GET 回读并逐字节比对;Maven 布局(`https://host/`、`local:<dir>`)**不是发布目标**——jeno 不生成 POM,发出去两边都读不回来。Maven 仓库仍可读(`[repos] type = "maven"`),只是不往它发。用 PUT 而不是 POST,是因为最终 URL 确定、重试幂等;POST 需要 host 专属的上传协议,反而更窄
-- **仓内自举是一等目标**:`jeno publish jeno:local:<dir>` 直接把 jeno 布局三件套写进仓库内的目录(`name/version/`,建目录、原子写、不联网);`[repos] x = "jeno:local:<dir>"` 读它。不再需要手写 Maven pom 与 `jar --create` 来喂 `local:` 目录
-- 迁库只改一行 `[repos]`:从 GitHub 到自建服务器、从公司仓库到镜像,不需要账号迁移或重新发布
+- **自建主机是一等目标,但只发 jeno 布局**:`jeno publish https://my.host/`(LAN 可用字面私有 `http://<ip>/`,会警告明文传输)按两层布局 PUT 三件套,再 GET 回读并逐字节比对;Maven 布局(`maven:https://host/`、`maven:local:<dir>`)**不是发布目标**——jeno 不生成 POM,发出去两边都读不回来。Maven 仓库仍可读(`[repos.<name>] type = "maven"`),只是不往它发。用 PUT 而不是 POST,是因为最终 URL 确定、重试幂等;POST 需要 host 专属的上传协议,反而更窄
+- **仓内自举是一等目标**:`jeno publish local:<dir>` 直接把 jeno 布局三件套写进仓库内的目录(`name/version/`,建目录、原子写、不联网);结构化 `[repos.x] url = "<dir>"`(缺省 jeno)读它。不再需要手写 Maven pom 与 `jar --create` 来喂 Maven `local:` 目录
+- 迁库只改一个结构化 `[repos.<name>]`:从 GitHub 到自建服务器、从公司仓库到镜像,不需要账号迁移或重新发布
 - `jeno publish`:生成 `target/dist/` 三件套;可选目标会上传并回读校验
 - `jeno publish gh:owner/repo`(V1.1 代码就绪):原生上传,token 从 `JENO_GITHUB_TOKEN` 环境变量读
 - ~~`jeno publish gitee:owner/repo`~~:随 `gitee:` 物种一起移除(2026-11-22);附件需令牌,违反零配置
@@ -222,7 +225,7 @@ Central 的元数据是 `pom.xml`;要拖库就绕不开它。jeno 把 XML 当作
 ### 7.4 安全底线
 
 - sha256 双钉由锁持有,每次下载核对(SPEC §4.2);release asset 可变也不影响字节确定性
-- URL 依赖仅允许 https;本地自举走 `local:`/`jeno:local:` 的显式声明,不靠 HTTP 降级
+- URL 依赖仅允许 https;本地自举走 jeno 默认的 `local:` 声明,不靠 HTTP 降级
 - 仓库的**读**与**发布**是两条不同的信任线:Maven 仓库可以读,发布只写 jeno 布局,避免生成一份
   jeno 自己读不回来的产物
 

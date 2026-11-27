@@ -6,6 +6,7 @@ import com.jujin.freeway.commons.json.JsonUtils;
 import com.jujin.freeway.ioc.annotation.Inject;
 import com.jujin.jeno.project.JenoProject;
 import com.jujin.jeno.project.Repository;
+import com.jujin.jeno.project.Species;
 import com.jujin.jeno.project.ProjectReader;
 import com.jujin.jeno.project.Requirement;
 import com.jujin.jeno.resolve.ArtifactLocations;
@@ -27,18 +28,18 @@ import java.util.List;
  * <pre>
  *   jeno publish                    → target/dist/ + upload hint
  *   jeno publish gh:owner/repo     → target/dist/ + GitHub native upload
- *   jeno publish jeno:https://host/ → target/dist/ + jeno layout PUT (no group needed)
+ *   jeno publish https://host/     → target/dist/ + jeno layout PUT (no group needed)
  *                                  and GET-read-back verification of all three files
- *   jeno publish jeno:http://192.168.1.39:8080/upload/ → same, plain http on a
+ *   jeno publish http://192.168.1.39:8080/upload/ → same, plain http on a
  *                                 literal private-network address (warning: not encrypted)
- *   jeno publish jeno:local:<dir>   → target/dist/ + the same layout on disk
+ *   jeno publish local:<dir>       → target/dist/ + the same layout on disk
  *   jeno publish <declared-repo>   → target/dist/ + that [repos.<name>] jeno repository
  * </pre>
  *
- * <p>A Maven-layout target ({@code https://host/}, {@code local:<dir>}) is
- * refused: jeno writes no POM, so neither jeno nor Maven could read back the
- * triple. Reading Maven repositories stays supported; only publishing to one
- * is not.
+ * <p>publish only writes the native jeno layout, so a bare https/local target
+ * means that layout. Maven is an explicit exception ({@code maven:<declaration>})
+ * and is refused: jeno writes no POM. Reading Maven repositories stays
+ * supported; only publishing to one is not.
  *
  * <p>Authentication: {@code JENO_GITHUB_TOKEN} for gh: targets, and
  * {@code JENO_PUBLISH_TOKEN} for jeno-layout hosts that want one. Without a
@@ -63,21 +64,24 @@ public final class PublishCommand implements Command {
 
     @Override
     public String summary() {
-        return "write the release triple and upload it to gh:, a jeno URL, "
+        return "write the release triple and upload it to gh:, a jeno URL/directory, "
                 + "or a declared jeno repository";
     }
 
     @Override
     public String help() {
         return """
-               targets jeno can read back: gh:<owner>/<repo>, jeno:https://host/,
-               jeno:http://<private-ip>/, jeno:local:<dir>, or the name of a
-               declared [repos.<name>] with type = "jeno"; no target only prepares
+               targets jeno can read back: gh:<owner>/<repo>, https://host/,
+               http://<private-ip>/, local:<dir>, or the name of a declared
+               [repos.<name>] with type = "jeno"; no target only prepares
                target/dist/. --dry-run validates the plan without writing target/dist
                or uploading. plain http is for literal private addresses only
-               (LAN); public hosts need https.
-               a Maven-layout target (https://host/, local:<dir>) is refused:
-               jeno writes no POM, so neither jeno nor Maven could consume it.
+               (LAN); public hosts need https. a Maven-layout target (a declared
+               Maven repository, or
+               maven:<declaration>) is refused: jeno writes no POM.
+               dependencies from another jeno repository are written into the
+               descriptor as absolute https://repo.example/@version facts;
+               same-repository dependencies remain bare sibling versions.
                """ + "\n" + RepositoryHelp.INSECURE_TOKEN;
     }
     @Override
@@ -235,21 +239,22 @@ public final class PublishCommand implements Command {
         Repository publishTarget = null;
         if (target != null && !target.startsWith("gh:")) {
             try {
-                publishTarget = Repository.resolveTarget(project, target);
+                publishTarget = Repository.resolveJenoTarget(project, target);
             } catch (IllegalArgumentException e) {
                 System.err.println(Ui.errPrefix() + e.getMessage());
                 return 1;
             }
             if (publishTarget.layout() == Repository.Layout.MAVEN) {
-                System.err.println(Ui.errPrefix() + "cannot publish to a Maven-layout target — jeno writes "
-                        + "no POM, so neither jeno nor Maven can read it back; use "
-                        + "gh:<owner>/<repo>, jeno:https://host/,"
-                        + " jeno:http://<private-ip>/ (or jeno:local:<dir>)");
+                System.err.println(Ui.errPrefix() + "cannot publish to a Maven-layout target — "
+                        + "jeno writes no POM, so neither jeno nor Maven can read it back; "
+                        + "use gh:<owner>/<repo>, https://host/, "
+                        + "http://<private-ip>/ (or local:<dir>), or a declared "
+                        + "type = \"jeno\" repository");
                 return 1;
             }
             if (publishTarget.isPlainHttp() && !publishTarget.isLoopbackNetwork()) {
                 System.err.println("warning: publishing over plain HTTP ("
-                        + publishTarget.declaration() + ") — the traffic and JENO_PUBLISH_TOKEN"
+                        + publishTarget.location() + ") — the traffic and JENO_PUBLISH_TOKEN"
                         + " are not encrypted");
             }
         }
@@ -260,29 +265,53 @@ public final class PublishCommand implements Command {
                     + " requires network access — drop --offline or use a local target");
             return 2;
         }
-        // A dependency in the repository we are publishing to is a sibling: the
-        // descriptor can say "gadget, 0.9.0" and the consumer's resolver reads it
-        // back as another artifact in that same repository. Anything bound to a
-        // different repository stays a rule, and rules do not travel.
+        // Same-repository natives stay bare siblings; native dependencies from
+        // another network jeno repository are serialized as absolute source
+        // facts. Local sources and repository aliases cannot travel in a
+        // descriptor.
         String publishBase = publishTarget != null && publishTarget.isJenoLayout()
                 ? ArtifactLocations.canonicalLocation(publishTarget) : null;
         java.util.Set<String> siblings = new java.util.HashSet<>();
-        for (var requirement : project.requirements()) {
+        for (Requirement requirement : project.requirements()) {
+            if (requirement.species() == Species.NAMED) {
+                String source = namedSource(project, requirement);
+                Repository sourceRepository;
+                try {
+                    sourceRepository = Repository.parse(source);
+                } catch (IllegalArgumentException e) {
+                    System.err.println(Ui.errPrefix() + "cannot resolve source of '"
+                            + requirement.id() + "' (" + source + ") — " + e.getMessage());
+                    return 1;
+                }
+                if (publishBase != null
+                        && publishBase.equals(ArtifactLocations.canonicalLocation(sourceRepository))) {
+                    siblings.add(requirement.id());
+                    continue;
+                }
+                // A local source cannot travel in a descriptor: a descriptor must
+                // be replayable on a machine that does not have this checkout.
+                if (sourceRepository.transport() != Repository.Transport.NETWORK) {
+                    System.err.println(Ui.errPrefix() + "'" + requirement.id()
+                            + "' is a local jeno source (" + source + ") — a descriptor "
+                            + "cannot carry a filesystem path; publish it to a network jeno "
+                            + "repository or keep it in the same repository as the artifact");
+                    return 1;
+                }
+                // Network native sources are portable facts. descriptor() will
+                // emit an absolute source when it is not a sibling of the target.
+                continue;
+            }
             if (requirement.repository() == null) {
                 continue;
             }
+            // A named Maven repository cannot be serialized into a descriptor
+            // without exporting a repository alias. Keep the old safety refusal.
             Repository declared = project.repos().get(requirement.repository());
-            String where = ArtifactLocations.canonicalLocation(declared);
-            if (publishBase != null && publishBase.equals(where)) {
-                siblings.add(requirement.id());
-                continue;
-            }
-            System.err.println(Ui.errPrefix() + "'" + requirement.id() + "' belongs to repository '"
-                    + requirement.repository() + "' (" + where + ") — you are publishing to "
-                    + target
-                    + "; a descriptor can only name siblings in the repository it is "
-                    + "published to. Move that dependency to Central/GitHub, publish it to "
-                    + "this same repository first, or drop it");
+            String where = declared == null ? "unknown" : ArtifactLocations.canonicalLocation(declared);
+            System.err.println(Ui.errPrefix() + "'" + requirement.id()
+                    + "' belongs to Maven repository '" + requirement.repository() + "' ("
+                    + where + ") — a descriptor cannot carry that repository alias. Move the "
+                    + "dependency to Central or publish a jeno-native source");
             return 1;
         }
 
@@ -333,11 +362,11 @@ public final class PublishCommand implements Command {
         System.out.println("  " + dist.resolve(shaName));
 
         if (args.isEmpty()) {
-            System.out.println("upload the three files to a GitHub release or an jeno: "
+            System.out.println("upload the three files to a GitHub release or a jeno-native "
                     + "repository, then tell a teammate:");
             System.out.println("  jeno add \"" + name + "\" gh:<owner>/" + name + "@v" + version);
-            System.out.println("  (or publish jeno:https://host/ — or"
-                    + " jeno:http://<private-ip>/ on a LAN — to host it yourself)");
+            System.out.println("  (or publish https://host/ — or"
+                    + " http://<private-ip>/ on a LAN — to host it yourself)");
             return 0;
         }
 
@@ -389,7 +418,7 @@ public final class PublishCommand implements Command {
      */
     private int uploadToJenoRepository(Repository repository, JenoProject project, Path dist,
                                       String jarName, String descriptorName, String shaName) {
-        String target = repository.declaration();
+        String target = repository.location();
         String root = repository.networkBase();
         String directory = project.name() + "/" + project.version() + "/";
 
@@ -434,16 +463,14 @@ public final class PublishCommand implements Command {
         updateIndex(repository, project.name(), project.version());
 
         System.out.println(Ui.ok("published to " + target + " — consume it with:"));
-        System.out.println("  [repos]");
-        System.out.println("  mine = \"" + repository.declaration() + "\"");
-        System.out.println("  \"" + project.name() + "\" = \"mine:" + project.version() + "\"");
+        printConsumeHint(repository, project);
         return 0;
     }
 
     private int publishToLocalJenoRepository(Repository repository, JenoProject project, Path dist,
                                             String jarName, String descriptorName,
                                             String shaName) {
-        String target = repository.declaration();
+        String target = repository.location();
         Path directory;
         try {
             directory = ArtifactLocations.localDirectory(repository)
@@ -474,9 +501,7 @@ public final class PublishCommand implements Command {
         updateIndex(repository, project.name(), project.version());
 
         System.out.println(Ui.ok("published to " + target + " — consume it with:"));
-        System.out.println("  [repos]");
-        System.out.println("  mine = \"" + repository.declaration() + "\"");
-        System.out.println("  \"" + project.name() + "\" = \"mine:" + project.version() + "\"");
+        printConsumeHint(repository, project);
         return 0;
     }
 
@@ -557,10 +582,11 @@ public final class PublishCommand implements Command {
             if (target.startsWith("gh:")) {
                 network = true;
             } else {
-                repository = Repository.resolveTarget(project, target);
+                repository = Repository.resolveJenoTarget(project, target);
                 if (repository.layout() == Repository.Layout.MAVEN) {
                     throw new IllegalStateException("cannot publish to a Maven-layout target — "
-                            + "jeno writes no POM; use gh:<owner>/<repo> or jeno:https://host/");
+                            + "jeno writes no POM; use gh:<owner>/<repo>, https://host/, "
+                            + "or local:<dir>");
                 }
                 network = !repository.isLocal();
             }
@@ -771,7 +797,8 @@ public final class PublishCommand implements Command {
             out.append("\n[deps]\n");
             for (Requirement requirement : project.requirements()) {
                 out.append("\"").append(requirement.id()).append("\" = \"")
-                        .append(requirementValue(requirement, siblings.contains(requirement.id())))
+                        .append(requirementValue(project, requirement,
+                                siblings.contains(requirement.id())))
                         .append("\"\n");
             }
         }
@@ -782,7 +809,8 @@ public final class PublishCommand implements Command {
                     continue;
                 }
                 out.append("\"").append(requirement.id()).append("\" = \"")
-                        .append(requirementValue(requirement, siblings.contains(requirement.id())))
+                        .append(requirementValue(project, requirement,
+                                siblings.contains(requirement.id())))
                         .append("\"\n");
             }
         }
@@ -794,21 +822,54 @@ public final class PublishCommand implements Command {
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
-    private static String requirementValue(Requirement requirement, boolean sibling) {
+    private static String requirementValue(JenoProject project, Requirement requirement,
+                                           boolean sibling) {
         return switch (requirement.species()) {
             case CENTRAL -> requirement.version();
             case GH -> requirement.origin() + "@" + requirement.tag();
             case URL -> requirement.url();
-            // the bare name/version a descriptor is allowed to state; the
-            // resolver reads it back as an artifact of the publishing repository
-            case NAMED -> {
-                if (!sibling) {
-                    throw new IllegalStateException(
-                            "a non-sibling repo-bound dependency never reaches a descriptor");
-                }
-                yield requirement.version();
-            }
+            case NAMED -> sibling
+                    ? requirement.version()
+                    : nativeDescriptorValue(namedSource(project, requirement),
+                            requirement.version());
         };
+    }
+
+    /** Resolve a native requirement's canonical source for descriptor generation. */
+    private static String namedSource(JenoProject project, Requirement requirement) {
+        if (requirement.repositoryUrl() != null) {
+            return requirement.repositoryUrl();
+        }
+        if (requirement.repository() != null) {
+            Repository repository = project.repos().get(requirement.repository());
+            if (repository != null) {
+                return repository.declaration();
+            }
+        }
+        throw new IllegalStateException("native requirement '" + requirement.id()
+                + "' has no repository source");
+    }
+
+    /**
+     * Descriptor value for an absolute native dependency. The repository alias
+     * (if any) is deliberately not serialized; the canonical URL is the fact.
+     */
+    /** The structured [repos] hint for a jeno-native repository. */
+    private static void printConsumeHint(Repository repository, JenoProject project) {
+        String location = repository.location();
+        System.out.println("  [repos.mine]");
+        System.out.println("  url = \"" + escape(location) + "\"");
+        System.out.println("  \"" + project.name() + "\" = \"mine:" + project.version() + "\"");
+    }
+
+    private static String nativeDescriptorValue(String source, String version) {
+        Repository repository = Repository.parse(source);
+        if (repository.layout() != Repository.Layout.JENO
+                || repository.transport() != Repository.Transport.NETWORK) {
+            throw new IllegalStateException(
+                    "only network jeno sources can be serialized: " + source);
+        }
+        return repository.networkBase() + "@" + version;
     }
 
 

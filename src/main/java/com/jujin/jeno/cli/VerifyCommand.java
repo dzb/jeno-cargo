@@ -7,6 +7,7 @@ import com.jujin.jeno.project.Descriptor;
 import com.jujin.jeno.project.DescriptorReader;
 import com.jujin.jeno.project.JenoProject;
 import com.jujin.jeno.project.ProjectReader;
+import com.jujin.jeno.project.Repository;
 import com.jujin.jeno.project.Requirement;
 import com.jujin.jeno.project.Species;
 import com.jujin.jeno.store.ArtifactStore;
@@ -299,8 +300,9 @@ public final class VerifyCommand implements Command {
             String source = expectedSource(project, requirement);
             if (source != null && !row.source().equals(source)) {
                 checks.add(CheckResult.failed("declaration.source-mismatch",
-                        requirement.id() + ": jeno.toml source " + source
-                        + ", jeno.lock source " + row.source() + " — run jeno lock"));
+                        requirement.id() + ": jeno.toml source "
+                        + Repository.displaySource(source) + ", jeno.lock source "
+                        + Repository.displaySource(row.source()) + " — run jeno lock"));
             }
             if (row.scope() != com.jujin.jeno.resolve.Scope.MAIN) {
                 checks.add(CheckResult.failed("declaration.scope-mismatch",
@@ -324,8 +326,9 @@ public final class VerifyCommand implements Command {
                 String source = expectedSource(project, requirement);
                 if (source != null && !row.source().equals(source)) {
                     checks.add(CheckResult.failed("declaration.dev-source-mismatch",
-                            requirement.id() + ": dev jeno.toml source " + source
-                            + ", jeno.lock source " + row.source() + " — run jeno lock"));
+                            requirement.id() + ": dev jeno.toml source "
+                            + Repository.displaySource(source) + ", jeno.lock source "
+                            + Repository.displaySource(row.source()) + " — run jeno lock"));
                 }
             }
         }
@@ -344,8 +347,9 @@ public final class VerifyCommand implements Command {
                 String source = expectedSource(project, requirement);
                 if (source != null && !row.source().equals(source)) {
                     checks.add(CheckResult.failed("declaration.processor-source-mismatch",
-                            requirement.id() + ": processor jeno.toml source " + source
-                            + ", jeno.lock source " + row.source() + " — run jeno lock"));
+                            requirement.id() + ": processor jeno.toml source "
+                            + Repository.displaySource(source) + ", jeno.lock source "
+                            + Repository.displaySource(row.source()) + " — run jeno lock"));
                 }
             }
         }
@@ -435,8 +439,12 @@ public final class VerifyCommand implements Command {
                         + " — run jeno package, then jeno publish"));
             } else {
                 try {
+                    // A locally prepared descriptor can contain native siblings.
+                    // Verification only checks the file shape, not where the
+                    // eventual repository will live, so give the parser a
+                    // relative native context instead of rejecting a valid fact.
                     DescriptorReader.parse(Files.readString(descriptor),
-                            project.name(), project.version());
+                            project.name(), project.version(), "jeno:local:.");
                     String expected = artifactSha(Files.readString(sha), sha);
                     String actual = ArtifactStore.sha256(jar);
                     if (!actual.equals(expected)) {
@@ -537,6 +545,9 @@ public final class VerifyCommand implements Command {
             return "url";
         }
         if (requirement.species() == Species.NAMED) {
+            if (requirement.repositoryUrl() != null) {
+                return requirement.repositoryUrl();
+            }
             return project.repos().get(requirement.repository()).declaration();
         }
         return requirement.repository() == null
